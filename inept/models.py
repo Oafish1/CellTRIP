@@ -2,28 +2,7 @@ import torch
 import torch.nn as nn
 
 
-class Embedding(nn.Module):
-    def __init__(self, num_nodes, num_features):
-        super().__init__()
-
-        self.num_nodes = num_nodes
-        self.num_features = num_features
-
-        self.self_attention = nn.MultiheadAttention(self.embed_dim, self.num_heads)
-        self.decider = nn.Sequential(
-            nn.Linear(self.embed_dim, self.embed_dim),
-            nn.LeakyReLU(),
-            nn.Linear(self.embed_dim, self.output_dim),
-            nn.LeakyReLU(),
-        )
-
-    def forward(self, X, mask):
-        # mask: True if is included
-        attentions = self.self_attention(X, X, X, key_padding_mask=~mask)
-        average_embeddings = attentions[mask].sum(axis=0)
-
-
-class Node(nn.Module):
+class EntitySelfAttention(nn.Module):
     def __init__(self, num_features_per_node, output_dim, embed_dim=64, num_heads=4):
         super().__init__()
 
@@ -52,6 +31,37 @@ class Node(nn.Module):
 
         # Self attention across entities
         attentions = self.self_attention(embeds, embeds, embeds)[0]
-        average_embeddings = attentions.sum(dim=0)
+        embeddings = attentions.sum(dim=0)
 
         # Decision
+        actions = torch.clip(self.decider(embeddings), -1, 1)
+
+        return actions
+
+
+class PPO(nn.Module):
+    def __init__(self, num_features_per_node, output_dim, model=EntitySelfAttention, **kwargs):
+        super().__init__()
+
+        # New policy
+        self.actor = model(num_features_per_node, output_dim, **kwargs)
+        self.critic = model(num_features_per_node, 1, **kwargs)
+
+        # Old policy
+        self.actor_old = model(num_features_per_node, output_dim, **kwargs)
+        self.critic_old = model(num_features_per_node, 1, **kwargs)
+
+
+        self.update_old_policy()
+
+    def update_old_policy(self):
+        self.actor_old.load_state_dict(self.actor.state_dict())
+        self.critic_old.load_state_dict(self.critic.state_dict())
+
+    def forward(self, *args):
+        actions = self.actor(*args)
+        actions_old = self.actor_old(*args)
+        state_val = self.critic(*args)
+        state_val_old = self.critic_old(*args)
+
+        return actions, actions_old, state_val, state_val_old
