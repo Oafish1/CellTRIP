@@ -14,9 +14,8 @@ class trajectory:
         assert all(m.shape[0] == self.modalities[0].shape[0] for m in self.modalities)
         self.num_nodes = self.modalities[0].shape[0]
 
-        # Assign random positions and velocities
-        self.pos = self.pos_bound * 2*(torch.rand((self.num_nodes, self.dim))-.5)
-        self.vel = self.vel_bound * 2*(torch.rand((self.num_nodes, self.dim))-.5)
+        # Initialize
+        self.reset()
 
     ### Stepping functions
     def step(self, delta=None):
@@ -29,6 +28,14 @@ class trajectory:
         # Clip by bounds
         self.pos = torch.clamp(self.pos, -self.pos_bound, self.pos_bound)
 
+    def finished(self):
+        return False
+
+    def reset(self):
+        # Assign random positions and velocities
+        self.pos = self.pos_bound * 2*(torch.rand((self.num_nodes, self.dim))-.5)
+        self.vel = self.vel_bound * 2*(torch.rand((self.num_nodes, self.dim))-.5)
+
     ### Input functions
     def add_velocities(self, velocities, node_ids=None):
         # Add velocities
@@ -39,6 +46,10 @@ class trajectory:
 
         # Clip by bounds
         self.vel = torch.clamp(self.vel, -self.vel_bound, self.vel_bound)
+
+    ### Evaluation functions
+    def get_distance_from_origin(self):
+        return self.pos.norm(dim=1)
 
     ### Get-Set functions
     def set_modalities(self, modalities):
