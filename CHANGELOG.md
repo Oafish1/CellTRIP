@@ -1,3 +1,19 @@
+### 2023-12-18
+- Additional visualizations and statistics
+- Fix several reward bugs
+- Hyperparameter tuning
+- More advanced rewards
+- Utility module
+- Working distance-based alignment
+
+### 2023-12-17
+- Bugfix for attentions across batches
+- Implement residual self attention
+- Integrate reward calculation into environment
+- Several new rewards for environment
+- Successful runs with large modalities and complex objective
+- Training progress visualizations
+
 ### 2023-12-16
 - Add PPO
 - Add sample to README

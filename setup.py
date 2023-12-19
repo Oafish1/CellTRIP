@@ -16,8 +16,10 @@ setup(
     packages=find_packages(),
     install_requires=[
         'torch',
-        'numpy',
         'matplotlib',
+        'numpy',
+        'pandas',
+        # 'scipy',
         'seaborn',
     ],
     extras_require={

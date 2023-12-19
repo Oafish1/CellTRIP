@@ -40,9 +40,64 @@ class MemoryBuffer:
         del self.is_terminals[:]
 
 
+class ResidualSA(nn.Module):
+    def __init__(
+        self,
+        embed_dim,
+        num_heads,
+        activation=F.tanh,
+        num_mlps=1,
+        batch_first=True,
+        **kwargs
+    ):
+        super().__init__()
+
+        # Parameters
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.activation = activation
+        self.num_mlps = num_mlps
+        self.batch_first = batch_first
+
+        # Attention
+        self.attention = nn.MultiheadAttention(self.embed_dim, self.num_heads, batch_first=self.batch_first, **kwargs)
+
+        # MLP
+        self.mlps = nn.ModuleList([ nn.Linear(self.embed_dim, self.embed_dim) for _ in range(self.num_mlps) ])
+
+    def forward(self, x):
+        # Apply self attention
+        attention, _ = self.attention(x, x, x)
+        if self.num_mlps == 0: return attention
+
+        # Apply first residual mlp
+        activations = self.mlps[0](attention)
+        activations = self.activation(activations)
+        x = x + activations
+
+        # Apply further residual mlps
+        for i in range(1, self.num_mlps):
+            activations = self.activation(self.mlps[i](x))
+            x = x + activations
+
+        return x
+
+
+
+
 ### Policy classes
 class EntitySelfAttention(nn.Module):
-    def __init__(self, num_features_per_node, output_dim, embed_dim=64, num_heads=4, action_std_init=.6):
+    def __init__(
+        self,
+        num_features_per_node,
+        output_dim,
+        embed_dim=64,
+        num_heads=4,
+        action_std_init=.6,
+        activation=F.tanh,
+        num_mlps=1,
+        selfish=False,
+    ):
         super().__init__()
 
         # Base information
@@ -51,6 +106,9 @@ class EntitySelfAttention(nn.Module):
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.set_action_std(action_std_init)
+        self.activation = activation
+        self.num_mlps = num_mlps
+        self.selfish = selfish
 
         # Embedding
         self.self_embed = nn.Linear(self.num_features_per_node, self.embed_dim)
@@ -59,10 +117,10 @@ class EntitySelfAttention(nn.Module):
         self.node_embed = nn.Linear(self.embed_dim + self.num_features_per_node, self.embed_dim)
 
         # Self attention
-        self.self_attention = nn.MultiheadAttention(self.embed_dim, self.num_heads)
+        self.residual_self_attention = ResidualSA(self.embed_dim, self.num_heads, activation=self.activation, num_mlps=self.num_mlps)
 
         # Decision
-        self.decider = nn.Linear(self.embed_dim, self.output_dim)
+        self.decider = nn.Linear(2*self.embed_dim, self.output_dim)
 
     ### Training functions
     def set_action_std(self, new_action_std):
@@ -70,34 +128,33 @@ class EntitySelfAttention(nn.Module):
         self.action_var = torch.full((self.output_dim,), new_action_std**2)
 
     ### Calculation functions
-    def calculate_actions(self, state, selfish=True):
+    def calculate_actions(self, state):
         # Formatting
         self_entity, node_entities = state
         # TODO: Perhaps node modalities should be encoded separately first
 
-        # Debug
-        if selfish:
+        # Only consider self embedding, for debugging
+        if self.selfish:
             self_embed = self.self_embed(self_entity)
-            self_embed = F.tanh(self_embed)
-            actions = self.decider(self_embed)
-            actions = F.tanh(actions)
+            actions = self.activation(self_embed)
             return actions
 
         # Embed all entities
         self_embed = self.self_embed(self_entity).unsqueeze(-2)
-        self_embed = F.tanh(self_embed)
+        self_embed = self.activation(self_embed)
         node_embeds = self.node_embed(torch.concat((self_embed.expand(*node_entities.shape[:-1], self_embed.shape[-1]), node_entities), dim=-1))
-        node_embeds = F.tanh(node_embeds)
+        node_embeds = self.activation(node_embeds)
         embeds = torch.concat((self_embed, node_embeds), dim=-2)
 
         # Self attention across entities
-        attentions = self.self_attention(embeds, embeds, embeds)[0]
-        embeddings = attentions.sum(dim=1)  # Sum across entities
-        embeddings = F.tanh(embeddings)
+        # NOTE: Unsuccessful in cross-entity relationships with no residual
+        attentions = self.residual_self_attention(embeds)
+        attentions_pool = attentions.sum(dim=-2)  # Sum across entities
+        embedding = torch.concat((self_embed.squeeze(-2), attentions_pool), dim=-1)  # Concatenate self embedding to pooled embedding (pg. 24)
 
         # Decision
-        actions = self.decider(embeddings)
-        actions = F.tanh(actions)
+        actions = self.decider(embedding)
+        actions = self.activation(actions)
 
         return actions
 
@@ -220,7 +277,7 @@ class PPO(nn.Module):
     ### Backward functions
     def update(self):
         # Propagate and normalize rewards
-        rewards = self.memory.propagate_rewards()
+        rewards = self.memory.propagate_rewards().detach()
         rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-7)
 
         # Format inputs
@@ -233,6 +290,7 @@ class PPO(nn.Module):
         advantages = rewards - state_vals_old
 
         # Train
+        # TODO: Maybe subsample
         for _ in range(self.epochs):
             # Evaluate actions
             action_logs, dist_entropy = self.actor.evaluate_action(states_old, actions_old)
