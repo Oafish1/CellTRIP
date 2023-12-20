@@ -1,3 +1,10 @@
+### 2023-12-19
+- Add basic saving and loading
+- Add layer normalization
+- README updates
+- Remove `selfish` debugging tool
+- Tweak hyperparameters
+
 ### 2023-12-18
 - Additional visualizations and statistics
 - Fix several reward bugs

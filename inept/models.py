@@ -96,7 +96,6 @@ class EntitySelfAttention(nn.Module):
         action_std_init=.6,
         activation=F.tanh,
         num_mlps=1,
-        selfish=False,
     ):
         super().__init__()
 
@@ -108,7 +107,13 @@ class EntitySelfAttention(nn.Module):
         self.set_action_std(action_std_init)
         self.activation = activation
         self.num_mlps = num_mlps
-        self.selfish = selfish
+
+        # Layer normalization
+        self.layer_norm = nn.ModuleDict({
+            'self embedding': nn.LayerNorm(self.embed_dim),
+            'node embedding': nn.LayerNorm(self.embed_dim),  # Not across entities
+            'residual self attention': nn.LayerNorm(self.embed_dim),
+        })
 
         # Embedding
         self.self_embed = nn.Linear(self.num_features_per_node, self.embed_dim)
@@ -133,23 +138,21 @@ class EntitySelfAttention(nn.Module):
         self_entity, node_entities = state
         # TODO: Perhaps node modalities should be encoded separately first
 
-        # Only consider self embedding, for debugging
-        if self.selfish:
-            self_embed = self.self_embed(self_entity)
-            actions = self.activation(self_embed)
-            return actions
-
-        # Embed all entities
+        # Self embedding
         self_embed = self.self_embed(self_entity).unsqueeze(-2)
+        self_embed = self.layer_norm['self embedding'](self_embed)
         self_embed = self.activation(self_embed)
+
+        # Node embeddings
         node_embeds = self.node_embed(torch.concat((self_embed.expand(*node_entities.shape[:-1], self_embed.shape[-1]), node_entities), dim=-1))
+        node_embeds = self.layer_norm['node embedding'](node_embeds)
         node_embeds = self.activation(node_embeds)
-        embeds = torch.concat((self_embed, node_embeds), dim=-2)
 
         # Self attention across entities
-        # NOTE: Unsuccessful in cross-entity relationships with no residual
-        attentions = self.residual_self_attention(embeds)
-        attentions_pool = attentions.sum(dim=-2)  # Sum across entities
+        embeddings = torch.concat((self_embed, node_embeds), dim=-2)
+        attentions = self.residual_self_attention(embeddings)
+        attentions = self.layer_norm['residual self attention'](attentions)
+        attentions_pool = attentions.mean(dim=-2)  # Average across entities
         embedding = torch.concat((self_embed.squeeze(-2), attentions_pool), dim=-1)  # Concatenate self embedding to pooled embedding (pg. 24)
 
         # Decision

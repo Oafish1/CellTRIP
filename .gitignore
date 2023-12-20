@@ -1,3 +1,6 @@
 # Random python
 *.egg-info
 __pycache__
+
+# Models
+**/trained_models
