@@ -1,3 +1,6 @@
+### 2024-02-14
+- Figure 1 initial version
+
 ### 2023-12-19
 - Add basic saving and loading
 - Add layer normalization
