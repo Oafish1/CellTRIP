@@ -1,3 +1,6 @@
+### 2024-02-20
+- Figure 1 updates
+
 ### 2024-02-14
 - Figure 1 initial version
 
