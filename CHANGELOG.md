@@ -1,4 +1,11 @@
-### 2024-04-11
+### 1.0.0+2024-04-11.1
+- Add file integration for weights and biases
+- Recompile requirements
+- Revise changelog headers
+- Separate analysis and animation into new notebook
+- Several tuning runs
+
+### 1.0.0+2024-04-11
 - Add early decay and early stopping
 - Add GPU compatibility
 - Add gradient accumulation to policy update
@@ -15,28 +22,28 @@
 - Various bugfixes
 - Various optimizations
 
-### 2024-02-20
+### 1.0.0+2024-02-20
 - Figure 1 updates
 
-### 2024-02-14
+### 1.0.0+2024-02-14
 - Figure 1 initial version
 
-#### 2024-02-11
+### 1.0.0+2024-02-11
 - Add real data implementation
 
-### 2024-02-08
+### 1.0.0+2024-02-08
 - Environment optimizations
 - Monte carlo memory sampling
 - Testing on limited real data
 
-### 2023-12-19
+### 1.0.0+2023-12-19
 - Add basic saving and loading
 - Add layer normalization
 - README updates
 - Remove `selfish` debugging tool
 - Tweak hyperparameters
 
-### 2023-12-18
+### 1.0.0+2023-12-18
 - Additional visualizations and statistics
 - Fix several reward bugs
 - Hyperparameter tuning
@@ -44,7 +51,7 @@
 - Utility module
 - Working distance-based alignment
 
-### 2023-12-17
+### 1.0.0+2023-12-17
 - Bugfix for attentions across batches
 - Implement residual self attention
 - Integrate reward calculation into environment
@@ -52,7 +59,7 @@
 - Successful runs with large modalities and complex objective
 - Training progress visualizations
 
-### 2023-12-16
+### 1.0.0+2023-12-16
 - Add PPO
 - Add sample to README
 - Add test reward function
@@ -63,7 +70,7 @@
 - Standardize training layout
 - Working simulation
 
-### 2023-12-11
+### 1.0.0+2023-12-11
 - Add animations
 - Add `trajectory` environment
 - Develop PPO runtime flow
@@ -71,6 +78,6 @@
 - Implement modality embeddings
 - Revise argument structure
 
-### 2023-11-04 (1-2)
+### 1.0.0+2023-11-04 (1-2)
 - Implement centralized policy
 - Self attention and embedding framework

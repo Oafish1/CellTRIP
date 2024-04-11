@@ -23,11 +23,10 @@ setup(
             'pip-tools',
         ],
         'examples': [
-            'tqdm',
             'matplotlib',
             'pandas',
-            # 'scipy',
             'seaborn',
+            'wandb[importers]'
         ],
     },
 )

@@ -1,1 +1,1 @@
-jupyter nbconvert --execute --to notebook --inplace exploration.ipynb --ExecutePreprocessor.timeout=-1
+jupyter nbconvert --execute --to notebook --inplace train.ipynb --ExecutePreprocessor.timeout=-1

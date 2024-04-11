@@ -4,4 +4,4 @@ This repository is an implementation of proximal policy optimization (PPO) in a 
 
 ## Example
 
-![Run with 50 nodes, trying to maintain intra-modal distances](./plots/sample.gif)
+![Run with 30 nodes, trying to maintain intra-modal distances](./plots/sample.gif)
