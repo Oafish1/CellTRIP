@@ -1,8 +1,33 @@
+### 2024-04-11
+- Add early decay and early stopping
+- Add GPU compatibility
+- Add gradient accumulation to policy update
+- Add Monte Carlo sampling to policy update
+- Add scheduler for actor and critic lr
+- Add timer utility
+- Add weights and biases compatibility
+- Basic parameter searching
+- Cholesky and sampling optimizations, resulting in 5x speedup for action selection
+- Fix grad applications in state computation
+- Optimize GPU utilization and fix increasing memory usage
+- Recalculate environments
+- Run on larger data
+- Various bugfixes
+- Various optimizations
+
 ### 2024-02-20
 - Figure 1 updates
 
 ### 2024-02-14
 - Figure 1 initial version
+
+#### 2024-02-11
+- Add real data implementation
+
+### 2024-02-08
+- Environment optimizations
+- Monte carlo memory sampling
+- Testing on limited real data
 
 ### 2023-12-19
 - Add basic saving and loading

@@ -17,7 +17,7 @@ class trajectory:
     'euclidean': Nodes are rewarded for matching inter-node euclidean distances
         across all modalities.
     """
-    def __init__(self, *modalities, dim=2, pos_bound=1, vel_bound=1, delta=.1, reward_type='euclidean'):
+    def __init__(self, *modalities, dim=2, pos_bound=1, vel_bound=1, delta=.1, reward_type='euclidean', device='cpu'):
         # Record modal data
         self.modalities = modalities
         self.dim = dim
@@ -25,6 +25,7 @@ class trajectory:
         self.vel_bound = vel_bound
         self.delta = delta
         self.reward_type = reward_type
+        self.device = device
 
         # Storage
         self.dist = None
@@ -69,15 +70,15 @@ class trajectory:
         self.vel[bound_hit_mask] = 0
 
         # Boundary penalty
-        penalty_bound = torch.zeros_like(rwd)
+        penalty_bound = torch.zeros_like(rwd, device=self.device)
         penalty_bound[bound_hit_mask.sum(dim=1) > 0] = reward_scales['penalty_bound']
 
         # Velocity penalty
-        penalty_velocity = torch.zeros_like(rwd)
+        penalty_velocity = torch.zeros_like(rwd, device=self.device)
         penalty_velocity = reward_scales['penalty_velocity'] * self.vel.square().mean(dim=1)
 
         # Action penalty
-        penalty_action = torch.zeros_like(rwd)
+        penalty_action = torch.zeros_like(rwd, device=self.device)
         penalty_action = reward_scales['penalty_action'] * actions.square().mean(dim=1)
 
         # Distance Reward
@@ -94,8 +95,8 @@ class trajectory:
 
     def reset(self):
         # Assign random positions and velocities
-        self.pos = self.pos_bound * 2*(torch.rand((self.num_nodes, self.dim))-.5)
-        self.vel = self.vel_bound * 2*(torch.rand((self.num_nodes, self.dim))-.5)
+        self.pos = self.pos_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
+        self.vel = self.vel_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
 
     ### Input functions
     def add_velocities(self, velocities, node_ids=None):
@@ -134,7 +135,7 @@ class trajectory:
         pos_dist = measure(self.pos)
 
         # Calculate reward
-        running = torch.zeros(self.pos.shape[0])
+        running = torch.zeros(self.pos.shape[0], device=self.device)
         for dist in self.dist:
             square_ew = (pos_dist - dist)**2
             mean_square_ew = square_ew.mean(dim=1)

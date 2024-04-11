@@ -16,18 +16,18 @@ setup(
     packages=find_packages(),
     install_requires=[
         'torch',
-        'matplotlib',
         'numpy',
-        'pandas',
-        # 'scipy',
-        'seaborn',
     ],
     extras_require={
         'dev': [
             'pip-tools',
-            # 'tqdm',
         ],
         'examples': [
+            'tqdm',
+            'matplotlib',
+            'pandas',
+            # 'scipy',
+            'seaborn',
         ],
     },
 )

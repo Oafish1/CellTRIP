@@ -3,7 +3,6 @@ import torch
 from torch.distributions.multivariate_normal import MultivariateNormal
 import torch.nn as nn
 import torch.nn.functional as F
-from tqdm import tqdm
 
 
 ### Utility classes
@@ -16,6 +15,9 @@ class MemoryBuffer:
         self.state_vals = []
         self.rewards = []
         self.is_terminals = []
+
+    def __len__(self):
+        return len(self.keys)
 
     def propagate_rewards(self, gamma=.99):
         # Propagate rewards backwards with decay
@@ -104,9 +106,13 @@ class EntitySelfAttention(nn.Module):
         self.output_dim = output_dim
         self.embed_dim = embed_dim
         self.num_heads = num_heads
-        self.set_action_std(action_std_init)
         self.activation = activation
         self.num_mlps = num_mlps
+
+        # Set action std
+        self.action_var = nn.Parameter(torch.full((self.output_dim,), 0.), requires_grad=False)
+        self.scale_tril = nn.Parameter(torch.zeros((self.output_dim, self.output_dim)), requires_grad=False)
+        self.set_action_std(action_std_init)
 
         # Layer normalization
         self.layer_norm = nn.ModuleDict({
@@ -129,8 +135,9 @@ class EntitySelfAttention(nn.Module):
 
     ### Training functions
     def set_action_std(self, new_action_std):
-        self.action_std = new_action_std
-        self.action_var = torch.full((self.output_dim,), new_action_std**2)
+        self.action_var.fill_(new_action_std**2)  # Spent like a day+.5 trying to debug, realized I forgot **2
+        covariance = torch.diag(self.action_var).unsqueeze(dim=0)
+        self.scale_tril.data = torch.linalg.cholesky(covariance)  # Generally faster on CPU
 
     ### Calculation functions
     def calculate_actions(self, state):
@@ -169,8 +176,12 @@ class EntitySelfAttention(nn.Module):
         set_action = action is not None
 
         # Select continuous action
-        covariance = torch.diag(self.action_var).unsqueeze(dim=0)
-        dist = MultivariateNormal(actions, covariance)
+        dist = MultivariateNormal(
+            loc=actions,
+            # covariance_matrix=torch.diag(self.action_var).unsqueeze(dim=0),
+            scale_tril=self.scale_tril,  # Speeds up computation compared to using cov matrix
+            validate_args=False,  # Speeds up computation
+        )
 
         # Sample
         if not set_action: action = dist.sample()
@@ -206,6 +217,10 @@ class PPO(nn.Module):
             epsilon_clip=.2,
             actor_lr=3e-4,
             critic_lr=1e-3,
+            lr_gamma=1,
+            update_max_batch=torch.inf,
+            update_minibatch=4e4,
+            device='cpu',
             **kwargs,
     ):
         super().__init__()
@@ -216,6 +231,11 @@ class PPO(nn.Module):
         self.action_std_min = action_std_min
         self.epochs = epochs
         self.epsilon_clip = epsilon_clip
+
+        # Runtime management
+        self.update_max_batch = update_max_batch
+        self.update_minibatch = update_minibatch
+        self.device = device
 
         # New policy
         self.actor = model(num_features_per_node, output_dim, action_std_init=action_std_init, **kwargs)
@@ -230,12 +250,16 @@ class PPO(nn.Module):
             {'params': self.actor.parameters(), 'lr': actor_lr},
             {'params': self.critic.parameters(), 'lr': critic_lr},
         ])
+        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
 
         # Memory
         self.memory = MemoryBuffer()
 
         # Copy current weights
         self.update_old_policy()
+
+        # To device
+        self.to(self.device)
 
     ### Utility functions
     def update_old_policy(self):
@@ -261,10 +285,10 @@ class PPO(nn.Module):
         # Record
         for key in range(state[0].shape[0]):
             self.memory.keys.append(key)
-            self.memory.states.append([state[i][key] for i in range(len(state))])
-            self.memory.actions.append(action[key])
-            self.memory.action_logs.append(action_log[key])
-            self.memory.state_vals.append(state_val[key])
+            self.memory.states.append([state[i][key].cpu() for i in range(len(state))])
+            self.memory.actions.append(action[key].cpu())
+            self.memory.action_logs.append(action_log[key].cpu())
+            self.memory.state_vals.append(state_val[key].cpu())
         # NOTE: `reward` and `is_terminal` are added outside of the class, calculated
         # after stepping the environment
 
@@ -292,38 +316,69 @@ class PPO(nn.Module):
         # Calculate advantages
         advantages = rewards - state_vals_old
 
+        # Send to GPU
+        states_old = [states_old[i].to(self.device) for i in range(len(self.memory.states[0]))]  # remove .to(self.device) if too much
+        rewards = rewards.to(self.device)
+        advantages = advantages.to(self.device)
+        actions_old = actions_old.to(self.device)
+        action_logs_old = action_logs_old.to(self.device)
+        # state_vals_old = state_vals_old.to(self.device)
+
         # Train
-        # TODO: Maybe subsample
         for _ in range(self.epochs):
-            # Evaluate actions
-            action_logs, dist_entropy = self.actor.evaluate_action(states_old, actions_old)
+            # Monte carlo sampling
+            batch_idx = np.random.choice(len(self.memory), min(self.update_max_batch, len(self.memory)), replace=False)
 
-            # Evaluate states
-            state_vals = self.critic.evaluate_state(states_old)
+            # Gradient accumulation
+            # TODO: maybe spread out minibatches?
+            for min_idx in range(0, len(batch_idx), self.update_minibatch):
+                # Get minibatch idx
+                max_idx = min(min_idx + self.update_minibatch, len(batch_idx))
+                minibatch_idx = batch_idx[min_idx:max_idx]
 
-            # Ratio between new and old probabilities
-            ratios = torch.exp(action_logs - action_logs_old)
+                # Sample minibatches
+                states_old_sub = [states_old[i][minibatch_idx] for i in range(len(self.memory.states[0]))]  # .to(self.device)
+                rewards_sub = rewards[minibatch_idx]
+                advantages_sub = advantages[minibatch_idx]
+                actions_old_sub = actions_old[minibatch_idx]
+                action_logs_old_sub = action_logs_old[minibatch_idx]
 
-            # Calculate PPO loss
-            unclipped = ratios * advantages
-            clipped = torch.clamp(ratios, 1-self.epsilon_clip, 1+self.epsilon_clip) * advantages
-            loss_PPO = -torch.min(unclipped, clipped)
+                # Evaluate actions
+                action_logs, dist_entropy = self.actor.evaluate_action(states_old_sub, actions_old_sub)
 
-            # Calculate critic loss
-            loss_critic = .5 * F.mse_loss(state_vals, rewards)
+                # Evaluate states
+                state_vals = self.critic.evaluate_state(states_old_sub)
 
-            # Calculate entropy loss
-            # TODO: Figure out purpose
-            loss_entropy = -.01 * dist_entropy
+                # Ratio between new and old probabilities
+                ratios = torch.exp(action_logs - action_logs_old_sub)
 
-            # Calculate total loss
-            loss = loss_PPO + loss_critic + loss_entropy
-            loss = loss.mean()
+                # Calculate PPO loss
+                unclipped = ratios * advantages_sub
+                clipped = torch.clamp(ratios, 1-self.epsilon_clip, 1+self.epsilon_clip) * advantages_sub
+                loss_PPO = -torch.min(unclipped, clipped)
+
+                # Calculate critic loss
+                loss_critic = .5 * F.mse_loss(state_vals, rewards_sub)
+
+                # Calculate entropy loss
+                # TODO: Figure out purpose
+                loss_entropy = -.01 * dist_entropy
+
+                # Calculate total loss
+                loss = loss_PPO + loss_critic + loss_entropy
+                loss = loss.mean()
+
+                # Scale and calculate gradient
+                accumulation_frac = (max_idx - min_idx) / len(batch_idx)
+                loss = loss * accumulation_frac
+                loss.backward()  # Longest computation
 
             # Step
-            self.optimizer.zero_grad()
-            loss.backward()
             self.optimizer.step()
+            self.optimizer.zero_grad()
+
+        # Update scheduler
+        self.scheduler.step()
 
         # Copy current weights
         self.update_old_policy()

@@ -9,7 +9,9 @@ contourpy==1.2.0
 cycler==0.12.1
     # via matplotlib
 filelock==3.13.1
-    # via torch
+    # via
+    #   torch
+    #   triton
 fonttools==4.44.0
     # via matplotlib
 fsspec==2023.10.0
@@ -35,10 +37,43 @@ numpy==1.26.1
     #   matplotlib
     #   pandas
     #   seaborn
+nvidia-cublas-cu12==12.1.3.1
+    # via
+    #   nvidia-cudnn-cu12
+    #   nvidia-cusolver-cu12
+    #   torch
+nvidia-cuda-cupti-cu12==12.1.105
+    # via torch
+nvidia-cuda-nvrtc-cu12==12.1.105
+    # via torch
+nvidia-cuda-runtime-cu12==12.1.105
+    # via torch
+nvidia-cudnn-cu12==8.9.2.26
+    # via torch
+nvidia-cufft-cu12==11.0.2.54
+    # via torch
+nvidia-curand-cu12==10.3.2.106
+    # via torch
+nvidia-cusolver-cu12==11.4.5.107
+    # via torch
+nvidia-cusparse-cu12==12.1.0.106
+    # via
+    #   nvidia-cusolver-cu12
+    #   torch
+nvidia-nccl-cu12==2.18.1
+    # via torch
+nvidia-nvjitlink-cu12==12.4.127
+    # via
+    #   nvidia-cusolver-cu12
+    #   nvidia-cusparse-cu12
+nvidia-nvtx-cu12==12.1.105
+    # via torch
 packaging==23.2
     # via matplotlib
 pandas==2.1.2
-    # via seaborn
+    # via
+    #   inept (setup.py)
+    #   seaborn
 pillow==10.1.0
     # via matplotlib
 pyparsing==3.1.1
@@ -57,6 +92,10 @@ sympy==1.12
     # via torch
 torch==2.1.0
     # via inept (setup.py)
+tqdm==4.66.2
+    # via inept (setup.py)
+triton==2.1.0
+    # via torch
 typing-extensions==4.8.0
     # via torch
 tzdata==2023.3
