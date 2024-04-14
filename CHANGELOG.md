@@ -1,3 +1,15 @@
+### 1.0.0+2024-04-14
+- Add metadata coloring to animation
+- Add more environment hyperparameters
+- Add origin penalty to trajectory environment
+- Add itemized reward logging
+- Change animation export format to mp4
+- Logging changes
+- Optimize animation generation
+- Optimize memory usage in policy update
+- Runs on MMD-MA data
+- Runs on new hyperparameters
+
 ### 1.0.0+2024-04-11.1
 - Add file integration for weights and biases
 - Recompile requirements

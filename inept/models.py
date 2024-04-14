@@ -317,7 +317,9 @@ class PPO(nn.Module):
         advantages = rewards - state_vals_old
 
         # Send to GPU
-        states_old = [states_old[i].to(self.device) for i in range(len(self.memory.states[0]))]  # remove .to(self.device) if too much
+        memory_safe = True  # Sacrifice some performance for conserved memory
+        if memory_safe: states_old = [states_old[i] for i in range(len(self.memory.states[0]))]
+        else: states_old = [states_old[i].to(self.device) for i in range(len(self.memory.states[0]))]
         rewards = rewards.to(self.device)
         advantages = advantages.to(self.device)
         actions_old = actions_old.to(self.device)
@@ -337,7 +339,8 @@ class PPO(nn.Module):
                 minibatch_idx = batch_idx[min_idx:max_idx]
 
                 # Sample minibatches
-                states_old_sub = [states_old[i][minibatch_idx] for i in range(len(self.memory.states[0]))]  # .to(self.device)
+                states_old_sub = [states_old[i][minibatch_idx] for i in range(len(self.memory.states[0]))]
+                if memory_safe: states_old_sub = [states_old_sub[i].to(self.device) for i in range(len(self.memory.states[0]))]
                 rewards_sub = rewards[minibatch_idx]
                 advantages_sub = advantages[minibatch_idx]
                 actions_old_sub = actions_old[minibatch_idx]

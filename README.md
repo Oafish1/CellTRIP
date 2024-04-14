@@ -4,4 +4,4 @@ This repository is an implementation of proximal policy optimization (PPO) in a 
 
 ## Example
 
-![Run with 30 nodes, trying to maintain intra-modal distances](./plots/sample.gif)
+![INEPT trained on 50 cells of MMD-MA simulation data, generalized to 200 nodes and run for 200 steps](./plots/sample.gif)

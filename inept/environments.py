@@ -17,15 +17,41 @@ class trajectory:
     'euclidean': Nodes are rewarded for matching inter-node euclidean distances
         across all modalities.
     """
-    def __init__(self, *modalities, dim=2, pos_bound=1, vel_bound=1, delta=.1, reward_type='euclidean', device='cpu'):
+    def __init__(self,
+        # Data
+        *modalities,
+        # Params
+        dim=2,
+        pos_bound=1,
+        vel_bound=1,
+        delta=.1,
+        # Rewards
+        reward_distance=1,
+        # reward_origin=1,
+        penalty_bound=1,
+        penalty_velocity=1,
+        penalty_action=1,
+        reward_distance_type='euclidean',
+        # Device
+        device='cpu',
+    ):
         # Record modal data
         self.modalities = modalities
         self.dim = dim
         self.pos_bound = pos_bound
         self.vel_bound = vel_bound
         self.delta = delta
-        self.reward_type = reward_type
+        self.reward_distance_type = reward_distance_type
         self.device = device
+
+        # Weights
+        self.reward_scales = {
+            'reward_distance': reward_distance,     # Emulate distances of each modality
+            # 'reward_origin': reward_origin,         # Make sure the mean of positions is close to the origin
+            'penalty_bound': penalty_bound,         # Don't touch the bounds
+            'penalty_velocity': penalty_velocity,   # Don't move fast
+            'penalty_action': penalty_action,       # Don't take drastic action
+        }
 
         # Storage
         self.dist = None
@@ -38,27 +64,19 @@ class trajectory:
         self.reset()
 
     ### State functions
-    def step(self, actions=None, *, delta=None, reward_type=None):
+    def step(self, actions=None, *, delta=None, reward_distance_type=None, return_rewards=False):
         # Defaults
         if actions is None: actions = torch.zeros_like(self.vel)
         if delta is None: delta = self.delta
-        if reward_type is None: reward_type = self.reward_type
+        if reward_distance_type is None: reward_distance_type = self.reward_distance_type
 
-        # Params
-        reward_scales = {
-            'reward_distance': 10,
-            'penalty_bound': 1,
-            'penalty_velocity': 1,
-            'penalty_action': 1,
-        }
-        rwd = torch.zeros(self.pos.shape[0])
+        # Distance reward
+        if reward_distance_type == 'origin': reward_distance = self.get_distance_from_origin()
+        elif reward_distance_type == 'target': reward_distance = self.get_distance_from_targets()
+        elif reward_distance_type == 'cosine': reward_distance = self.get_distance_match(measure=utilities.cosine_similarity)
+        elif reward_distance_type == 'euclidean': reward_distance = self.get_distance_match(measure=utilities.euclidean_distance)
 
-        # Distance Reward
-        if reward_type == 'origin': reward_distance = self.get_distance_from_origin()
-        elif reward_type == 'target': reward_distance = self.get_distance_from_targets()
-        elif reward_type == 'cosine': reward_distance = self.get_distance_match(measure=utilities.cosine_similarity)
-        elif reward_type == 'euclidean': reward_distance = self.get_distance_match(measure=utilities.euclidean_distance)
-
+        ## Step positions
         # Add velocity
         self.add_velocities(delta * actions)
         # Iterate positions
@@ -69,29 +87,39 @@ class trajectory:
         bound_hit_mask = self.pos.abs() == self.pos_bound
         self.vel[bound_hit_mask] = 0
 
+        # Distance reward
+        if reward_distance_type == 'origin': reward_distance -= self.get_distance_from_origin()
+        elif reward_distance_type == 'target': reward_distance -= self.get_distance_from_targets()
+        elif reward_distance_type == 'cosine': reward_distance -= self.get_distance_match(measure=utilities.cosine_similarity)
+        elif reward_distance_type == 'euclidean': reward_distance -= self.get_distance_match(measure=utilities.euclidean_distance)
+        reward_distance *= self.reward_scales['reward_distance']
+
+        # Origin reward
+        # reward_origin = -self.reward_scales['reward_origin'] * self.pos.mean(dim=0).square().sum()
+        # reward_origin = -self.reward_scales['reward_origin'] * self.pos.square().sum(dim=1)
+
         # Boundary penalty
-        penalty_bound = torch.zeros_like(rwd, device=self.device)
-        penalty_bound[bound_hit_mask.sum(dim=1) > 0] = reward_scales['penalty_bound']
+        penalty_bound = torch.zeros(self.pos.shape[0], device=self.device)
+        penalty_bound[bound_hit_mask.sum(dim=1) > 0] = -self.reward_scales['penalty_bound']
 
         # Velocity penalty
-        penalty_velocity = torch.zeros_like(rwd, device=self.device)
-        penalty_velocity = reward_scales['penalty_velocity'] * self.vel.square().mean(dim=1)
+        penalty_velocity = -self.reward_scales['penalty_velocity'] * self.vel.square().mean(dim=1)
 
         # Action penalty
-        penalty_action = torch.zeros_like(rwd, device=self.device)
-        penalty_action = reward_scales['penalty_action'] * actions.square().mean(dim=1)
-
-        # Distance Reward
-        if reward_type == 'origin': reward_distance -= self.get_distance_from_origin()
-        elif reward_type == 'target': reward_distance -= self.get_distance_from_targets()
-        elif reward_type == 'cosine': reward_distance -= self.get_distance_match(measure=utilities.cosine_similarity)
-        elif reward_type == 'euclidean': reward_distance -= self.get_distance_match(measure=utilities.euclidean_distance)
-        reward_distance *= reward_scales['reward_distance']
+        penalty_action = -self.reward_scales['penalty_action'] * actions.square().mean(dim=1)
 
         # Compute total reward
-        rwd = reward_distance - penalty_bound - penalty_velocity - penalty_action
+        rwd = reward_distance + penalty_bound + penalty_velocity + penalty_action
 
-        return rwd, self.finished()
+        ret = (rwd, self.finished())
+        if return_rewards: ret += {
+            'distance': reward_distance,
+            # 'origin': reward_origin,
+            'bound': penalty_bound,
+            'velocity': penalty_velocity,
+            'action': penalty_action,
+        },
+        return ret
 
     def reset(self):
         # Assign random positions and velocities
@@ -140,8 +168,9 @@ class trajectory:
             square_ew = (pos_dist - dist)**2
             mean_square_ew = square_ew.mean(dim=1)
             running = running + mean_square_ew
+        running = running / len(self.dist)
 
-        return running
+        return running  # / self.pos_bound**2
 
     def finished(self):
         return False
