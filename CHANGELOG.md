@@ -1,3 +1,6 @@
+### 1.0.0+2024-04-14.1
+- Further generalization for MMD-MA
+
 ### 1.0.0+2024-04-14
 - Add metadata coloring to animation
 - Add more environment hyperparameters
