@@ -1,3 +1,6 @@
+### 1.0.0+2024-04-17.1
+- Change animations to include first environment state
+
 ### 1.0.0+2024-04-17
 - Add feature randomization analysis
 - Add trajectory analysis
