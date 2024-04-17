@@ -1,3 +1,7 @@
+### 1.0.0+2024-04-17
+- Add feature randomization analysis
+- Add trajectory analysis
+
 ### 1.0.0+2024-04-14.1
 - Further generalization for MMD-MA
 
