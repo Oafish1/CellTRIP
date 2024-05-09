@@ -1,3 +1,6 @@
+import os
+import tempfile
+
 import numpy as np
 import torch
 from torch.distributions.multivariate_normal import MultivariateNormal
@@ -317,7 +320,7 @@ class PPO(nn.Module):
         advantages = rewards - state_vals_old
 
         # Send to GPU
-        memory_safe = True  # Sacrifice some performance for conserved memory
+        memory_safe = True  # Sacrifice some performance for conserved GPU memory
         if memory_safe: states_old = [states_old[i] for i in range(len(self.memory.states[0]))]
         else: states_old = [states_old[i].to(self.device) for i in range(len(self.memory.states[0]))]
         rewards = rewards.to(self.device)

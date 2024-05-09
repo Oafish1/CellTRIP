@@ -1,3 +1,7 @@
+### 1.0.0+2024-05-08
+- Start performing memorybuffer optimizations
+- Runs on real data
+
 ### 1.0.0+2024-04-17.2
 - Change formatting for trajectory analysis
 
