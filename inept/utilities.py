@@ -1,7 +1,9 @@
 from time import perf_counter
 import tracemalloc
+import warnings
 
 import numpy as np
+import sklearn.decomposition
 import torch
 
 
@@ -132,3 +134,43 @@ class EarlyStopping:
 
     def calculate_threshold(self):
         self.threshold = self.best + (-1 if self.decreasing else 1) * self.delta
+
+
+def clean_return(ret):
+    "Clean return output for improved parsing"
+    if len(ret) == 1: return ret[0]
+    return ret
+
+
+def normalize(*MS):
+    "Normalize given modalities"
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        ret = [np.nan_to_num((M - M.mean(axis=0)) / M.std(axis=0)) for M in MS]
+    return clean_return(ret)
+
+
+def subsample_features(*MS, num_features):
+    "Subsample features in given modalities"
+    ret = []
+    for M, num in zip(MS, num_features):
+        idx = np.random.choice(M.shape[1], num, replace=False)
+        ret.append(M[:, idx])
+    return clean_return(ret)
+
+
+def pca_features(*MS, num_features):
+    "Compute PCA on features of given modalities"
+    ret = []
+    for M, num in zip(MS, num_features):
+        pca = sklearn.decomposition.PCA(num)
+        M = pca.fit_transform(M)
+        ret.append(M)
+    return clean_return(ret)
+
+
+def subsample_nodes(*DS, num_nodes):
+    "Subsample nodes of given arrays"
+    idx = np.random.choice(DS[0].shape[0], num_nodes, replace=False)
+    ret = [D[idx] for D in DS]
+    return clean_return(ret)

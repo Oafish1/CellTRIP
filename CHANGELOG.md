@@ -1,3 +1,8 @@
+### 1.0.0+2024-05-15
+- Figure updates
+- More runs on real data
+- Utility functions
+
 ### 1.0.0+2024-05-08
 - Start performing memorybuffer optimizations
 - Runs on real data

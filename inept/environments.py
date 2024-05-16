@@ -150,7 +150,7 @@ class trajectory:
 
         return dist.norm(dim=1)
 
-    def get_distance_match(self, measure=utilities.cosine_similarity):
+    def get_distance_match(self, measure=utilities.euclidean_distance):
         # Calculate modality distances
         # TODO: Perhaps scale this
         if self.dist is None:
