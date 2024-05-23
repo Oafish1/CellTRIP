@@ -23,10 +23,11 @@ class trajectory:
         # Params
         dim=2,
         pos_bound=1,
+        pos_rand_bound=1,
         vel_bound=1,
         delta=.1,
         # Rewards
-        reward_distance=1,
+        reward_distance=10,
         # reward_origin=1,
         penalty_bound=1,
         penalty_velocity=1,
@@ -39,6 +40,7 @@ class trajectory:
         self.modalities = modalities
         self.dim = dim
         self.pos_bound = pos_bound
+        self.pos_rand_bound = pos_rand_bound
         self.vel_bound = vel_bound
         self.delta = delta
         self.reward_distance_type = reward_distance_type
@@ -74,7 +76,7 @@ class trajectory:
         if reward_distance_type == 'origin': reward_distance = self.get_distance_from_origin()
         elif reward_distance_type == 'target': reward_distance = self.get_distance_from_targets()
         elif reward_distance_type == 'cosine': reward_distance = self.get_distance_match(measure=utilities.cosine_similarity)
-        elif reward_distance_type == 'euclidean': reward_distance = self.get_distance_match(measure=utilities.euclidean_distance)
+        elif reward_distance_type == 'euclidean': reward_distance = self.get_distance_match()
 
         ## Step positions
         # Add velocity
@@ -91,7 +93,7 @@ class trajectory:
         if reward_distance_type == 'origin': reward_distance -= self.get_distance_from_origin()
         elif reward_distance_type == 'target': reward_distance -= self.get_distance_from_targets()
         elif reward_distance_type == 'cosine': reward_distance -= self.get_distance_match(measure=utilities.cosine_similarity)
-        elif reward_distance_type == 'euclidean': reward_distance -= self.get_distance_match(measure=utilities.euclidean_distance)
+        elif reward_distance_type == 'euclidean': reward_distance -= self.get_distance_match()
         reward_distance *= self.reward_scales['reward_distance']
 
         # Origin reward
@@ -150,7 +152,7 @@ class trajectory:
 
         return dist.norm(dim=1)
 
-    def get_distance_match(self, measure=utilities.euclidean_distance):
+    def get_distance_match(self, measure=lambda x: utilities.euclidean_distance(x, scaled=True)):
         # Calculate modality distances
         # TODO: Perhaps scale this
         if self.dist is None:

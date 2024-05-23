@@ -1,3 +1,13 @@
+### 1.0.0+2024-05-22
+- Add caching for static prefix re-appending
+- Add environment argument for position randomization range
+- Add key argument in forward which is required for memories
+- Add normalization for euclidean distance calculation
+- Add static prefix for memory based on key
+- Figure updates
+- Ran full MMD-MA data
+- Reduce redundancy in state storage (also added required macro function in `PPO`) and add indexing
+
 ### 1.0.0+2024-05-15
 - Figure updates
 - More runs on real data

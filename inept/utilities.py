@@ -15,9 +15,11 @@ def cosine_similarity(a):
     return a_cos
 
 
-def euclidean_distance(a):
+def euclidean_distance(a, scaled=False):
     # Calculate euclidean distance
-    return torch.cdist(a, a, p=2)
+    dist = torch.cdist(a, a, p=2)
+    if scaled: dist /= np.sqrt(a.shape[1])
+    return dist
 
 
 class time_logger():
@@ -143,7 +145,7 @@ def clean_return(ret):
 
 
 def normalize(*MS):
-    "Normalize given modalities"
+    "Normalize given modalities by feature"
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         ret = [np.nan_to_num((M - M.mean(axis=0)) / M.std(axis=0)) for M in MS]
@@ -174,3 +176,28 @@ def subsample_nodes(*DS, num_nodes):
     idx = np.random.choice(DS[0].shape[0], num_nodes, replace=False)
     ret = [D[idx] for D in DS]
     return clean_return(ret)
+
+
+def split_state(state, idx=None):
+    "Split full state matrix into individual inputs, idx is an optional array"
+    # Parameters
+    if idx is None: idx = list(range(state.shape[0]))
+    if not isinstance(idx, list): idx = [idx]
+    # Get self features for each node
+    self_entity = state[idx]
+    # Get node features for each state
+    node_entities = state.unsqueeze(0).expand(len(idx), *state.shape)
+    mask = torch.zeros((len(idx), state.shape[0]), dtype=torch.bool)
+    for i, j in enumerate(idx): mask[i, j] = True
+    mask = ~mask
+    node_entities = node_entities[mask].reshape(len(idx), state.shape[0]-1, state.shape[1])
+    # Return
+    return self_entity, node_entities
+
+
+def is_list_like(l):
+    try:
+        len(l)
+        return True
+    except:
+        return False
