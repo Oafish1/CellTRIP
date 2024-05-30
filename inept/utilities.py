@@ -1,3 +1,4 @@
+from collections import deque
 from time import perf_counter
 import tracemalloc
 import warnings
@@ -18,6 +19,7 @@ def cosine_similarity(a):
 def euclidean_distance(a, scaled=False):
     # Calculate euclidean distance
     dist = torch.cdist(a, a, p=2)
+    # Scaled makes this equivalent to MSE
     if scaled: dist /= np.sqrt(a.shape[1])
     return dist
 
@@ -100,22 +102,62 @@ class time_logger():
 
 
 class EarlyStopping:
-    def __init__(self, buffer=50, delta=.01, decreasing=False):
+    """
+    Early stopping class with a few trigger methods
+
+    Methods
+    -------
+    'absolute': Takes absolute best values for comparison and thresholding
+    'average': Takes average values over a sliding window
+    """
+    def __init__(
+        self,
+        # Global parameters
+        method='absolute',
+        buffer=50,
+        delta=.01,
+        decreasing=False,
+
+        # `average` method parameters
+        window_size=10,
+
+        # `absolute` method parameters
+        # ...
+    ):
+        # Global parameters
+        self.method = method
         self.buffer = buffer
         self.delta = delta
         self.decreasing = decreasing
+
+        # `average` method parameters
+        self.window_size = window_size
+        self.history = deque([], window_size)
+
+        # `absolute` method parameters
+        # ...
+
+        # Checks
+        if self.method not in ('absolute', 'average'):
+            raise ValueError(f'`{self.method}` not found in methods')
 
         # Initialize
         self.reset()
 
     def __call__(self, objective):
         """Return `True` if stop, else `False`."""
-        # First entry
-        if self.best is None: self.set_best(objective); return False
+        # Record observation
+        self.record_observation(objective)
+
+        # Exit if not ready yet
+        if self.current is None: return False
+
+        # First observation
+        if self.best is None: self.set_best(self.current)
 
         # Check for new best
-        if self.decreasing and (objective < self.threshold): self.set_best(objective)
-        elif not self.decreasing and (objective > self.threshold): self.set_best(objective)
+        if self.decreasing and (self.current < self.threshold): self.set_best(self.current)
+        elif not self.decreasing and (self.current > self.threshold): self.set_best(self.current)
         else: self.lapses += 1
 
         # Check lapses
@@ -123,18 +165,35 @@ class EarlyStopping:
             return True
         return False
 
+    def record_observation(self, objective):
+        "Record observation into internal `current` var based on method"
+        if self.method == 'absolute':
+            self.current = objective
+
+        elif self.method == 'average':
+            self.history.append(objective)
+            if len(self.history) >= self.window_size:
+                self.current = np.mean(self.history)
+
+        else: raise ValueError(f'`{self.method}` not found in methods')
+
     def reset(self):
-        """Reset class to default state"""
+        "Reset class to default state"
+        # State variables
+        self.history.clear()
+        self.current = None
         self.best = None
         self.threshold = None
         self.lapses = 0
 
     def set_best(self, objective):
+        "Set current best"
         self.best = objective
         self.calculate_threshold()
         self.lapses = 0
 
     def calculate_threshold(self):
+        "Calculate threshold for improvement"
         self.threshold = self.best + (-1 if self.decreasing else 1) * self.delta
 
 
@@ -196,6 +255,7 @@ def split_state(state, idx=None):
 
 
 def is_list_like(l):
+    "Test if `l` has the `__len__` method`"
     try:
         len(l)
         return True

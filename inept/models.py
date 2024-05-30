@@ -12,14 +12,14 @@ from . import utilities
 ### Utility classes
 class AdvancedMemoryBuffer:
     "Memory-efficient implementation of memory"
-    def __init__(self, prefix_len):
+    def __init__(self, suffix_len):
         # User parameters
-        self.prefix_len = prefix_len
+        self.suffix_len = suffix_len
 
         # Storage variables
         self.storage = {
             'keys': [],             # Lists containing keys in the first dim of states
-            'states': [],           # State tensors of dim `keys x non-prefix features`
+            'states': [],           # State tensors of dim `keys x non-suffix features`
             'actions': [],          # Actions
             'action_logs': [],      # Action probabilities
             'state_vals': [],       # Critic evaluation of state
@@ -27,12 +27,12 @@ class AdvancedMemoryBuffer:
             'is_terminals': [],     # Booleans indicating if the terminal state has been reached
         }
         self.persistent_storage = {
-            'prefixes': {},         # Prefixes corresponding to keys
-            'prefix_matrices': {},  # Orderings of prefixes
+            'suffixes': {},         # Suffixes corresponding to keys
+            'suffix_matrices': {},  # Orderings of suffixes
         }
 
         # Cache
-        self.prefix_matrix = {}
+        self.suffix_matrix = {}
 
         # Maintenance variables
         self.recorded = {k: False for k in self.storage}
@@ -66,9 +66,9 @@ class AdvancedMemoryBuffer:
 
                     # Special cases
                     if k == 'states':
-                        # `_append_prefix` takes most time without caching, then `split_state`
-                        val = utilities.split_state(
-                            self._append_prefix(self.storage[k][list_num], keys=self.storage['keys'][list_num]),
+                        # `_append_suffix` takes most time without caching, then `split_state`
+                        val = utilities.split_state(  # BOTTLENECK
+                            self._append_suffix(self.storage[k][list_num], keys=self.storage['keys'][list_num]),  # BOTTLENECK
                             idx=local_idx,
                         )
 
@@ -100,25 +100,25 @@ class AdvancedMemoryBuffer:
     def __len__(self):
         return sum(len(keys) for keys in self.storage['keys'])
 
-    def _append_prefix(self, state, *, keys, cache=True):
-        "Append prefixes to state vector"
+    def _append_suffix(self, state, *, keys, cache=True):
+        "Append suffixes to state vector"
         # Read from cache
-        if cache and str(keys) in self.persistent_storage['prefix_matrices']:
-            prefix_matrix = self.persistent_storage['prefix_matrices'][str(keys)]
+        if cache and str(keys) in self.persistent_storage['suffix_matrices']:
+            suffix_matrix = self.persistent_storage['suffix_matrices'][str(keys)]
 
         else:
-            # Aggregate prefixes
-            prefix_matrix = None
+            # Aggregate suffixes
+            suffix_matrix = None
             for k in keys:
-                val = self.persistent_storage['prefixes'][k].unsqueeze(0)
-                if prefix_matrix is None: prefix_matrix = val
-                else: prefix_matrix = torch.concat((prefix_matrix, val), dim=0)
+                val = self.persistent_storage['suffixes'][k].unsqueeze(0)
+                if suffix_matrix is None: suffix_matrix = val
+                else: suffix_matrix = torch.concat((suffix_matrix, val), dim=0)
 
             # Add to cache
-            if cache: self.persistent_storage['prefix_matrices'][str(keys)] = prefix_matrix
+            if cache: self.persistent_storage['suffix_matrices'][str(keys)] = suffix_matrix
 
         # Append to state
-        return torch.concat((prefix_matrix, state), dim=1)
+        return torch.concat((state, suffix_matrix), dim=1)
 
     def _flat_index_to_index(self, idx):
         "Convert int index to grouped format that can be used on keys, state, etc."
@@ -150,13 +150,13 @@ class AdvancedMemoryBuffer:
 
         # Reset if all variables have been recorded
         if np.array([v for _, v in self.recorded.items()]).all():
-            # Gleam prefixes
+            # Gleam suffixes
             for j, k in enumerate(self.storage['keys'][-1]):
-                if k not in self.persistent_storage['prefixes']:
-                    self.persistent_storage['prefixes'][k] = self.storage['states'][-1][j][:self.prefix_len]
+                if k not in self.persistent_storage['suffixes']:
+                    self.persistent_storage['suffixes'][k] = self.storage['states'][-1][j][-self.suffix_len:].clone()
 
-            # Cut prefixes
-            self.storage['states'][-1] = self.storage['states'][-1][:, self.prefix_len:]
+            # Cut suffixes
+            self.storage['states'][-1] = self.storage['states'][-1][..., :-self.suffix_len]
 
             # Set all variables as unrecorded
             for k in self.recorded: self.recorded[k] = False
@@ -268,8 +268,8 @@ class ResidualSA(nn.Module):
 class EntitySelfAttention(nn.Module):
     def __init__(
         self,
-        modal_sizes,
         num_features_per_node,
+        modal_sizes,
         output_dim,
         feature_embed_dim=32,
         embed_dim=64,
@@ -281,8 +281,8 @@ class EntitySelfAttention(nn.Module):
         super().__init__()
 
         # Base information
-        self.modal_sizes = modal_sizes
         self.num_features_per_node = num_features_per_node
+        self.modal_sizes = modal_sizes
         self.output_dim = output_dim
         self.feature_embed_dim = feature_embed_dim
         self.embed_dim = embed_dim
@@ -326,23 +326,23 @@ class EntitySelfAttention(nn.Module):
 
     ### Calculation functions
     def embed_features(self, entities):
-        running_idx = 0
-        ret = []
+        running_idx = self.num_features_per_node
+        ret = [entities[..., :self.num_features_per_node]]
         for ms, fe in zip(self.modal_sizes, self.feature_embed):
             # Record embedded features
             val = fe(entities[..., running_idx:(running_idx + ms)])
+            val = self.activation(val)
             ret.append(val)
 
             # Increment start idx
             running_idx += ms
 
-        else:
-            # Add rest of state matrix
-            ret.append(entities[..., running_idx:])
+        # Check shape
+        assert running_idx == entities.shape[-1]
 
         # Construct full matrix
         ret = torch.concat(ret, dim=-1)
-        self.activation(ret)
+
         return ret
 
     def calculate_actions(self, state):
@@ -416,8 +416,8 @@ class EntitySelfAttention(nn.Module):
 class PPO(nn.Module):
     def __init__(
             self,
-            modal_sizes,
             num_features_per_node,
+            modal_sizes,
             output_dim,
             model=EntitySelfAttention,
             action_std_init=.6,
@@ -425,6 +425,7 @@ class PPO(nn.Module):
             action_std_min=.1,
             epochs=80,
             epsilon_clip=.2,
+            memory_gamma=.99,
             actor_lr=3e-4,
             critic_lr=1e-3,
             lr_gamma=1,
@@ -441,6 +442,7 @@ class PPO(nn.Module):
         self.action_std_min = action_std_min
         self.epochs = epochs
         self.epsilon_clip = epsilon_clip
+        self.memory_gamma = memory_gamma
 
         # Runtime management
         self.update_max_batch = update_max_batch
@@ -448,12 +450,12 @@ class PPO(nn.Module):
         self.device = device
 
         # New policy
-        self.actor = model(modal_sizes, num_features_per_node, output_dim, action_std_init=action_std_init, **kwargs)
-        self.critic = model(modal_sizes, num_features_per_node, 1, **kwargs)
+        self.actor = model(num_features_per_node=num_features_per_node, modal_sizes=modal_sizes, output_dim=output_dim, action_std_init=action_std_init, **kwargs)
+        self.critic = model(num_features_per_node=num_features_per_node, modal_sizes=modal_sizes, output_dim=1, **kwargs)
 
         # Old policy
-        self.actor_old = model(modal_sizes, num_features_per_node, output_dim, action_std_init=action_std_init, **kwargs)
-        self.critic_old = model(modal_sizes, num_features_per_node, 1, **kwargs)
+        self.actor_old = model(num_features_per_node=num_features_per_node, modal_sizes=modal_sizes, output_dim=output_dim, action_std_init=action_std_init, **kwargs)
+        self.critic_old = model(num_features_per_node=num_features_per_node, modal_sizes=modal_sizes, output_dim=1, **kwargs)
 
         # Optimizer
         self.optimizer = torch.optim.Adam([
@@ -473,8 +475,8 @@ class PPO(nn.Module):
 
     ### Base overloads
     def to(self, device):
-        super().to(device)
         self.device = device
+        return super().to(device)
 
     ### Utility functions
     def update_old_policy(self):
@@ -500,20 +502,38 @@ class PPO(nn.Module):
         if return_all: return action, action_log, state_val
         return action
 
-    def act_macro(self, state, *, keys):
+    def act_macro(self, state, *, keys=None, max_batch=None):
         # Act
-        action, action_log, state_val = self.act(*utilities.split_state(state), return_all=True)
+        if max_batch is not None:
+            # Compute `max_batch` at a time
+            initialized = False
+            for start_idx in range(0, state.shape[0], max_batch):
+                action_sub, action_log_sub, state_val_sub = self.act(*utilities.split_state(state, idx=list( range(start_idx, min(start_idx+max_batch, state.shape[0])) )), return_all=True)
+
+                # Concat
+                if not initialized:
+                    action, action_log, state_val = action_sub, action_log_sub, state_val_sub
+                    initialized = True
+                else:
+                    action = torch.concat((action, action_sub), dim=0)
+                    action_log = torch.concat((action_log, action_log_sub), dim=0)
+                    state_val = torch.concat((state_val, state_val_sub), dim=0)
+        else:
+            # Compute all at once
+            action, action_log, state_val = self.act(*utilities.split_state(state), return_all=True)
+
 
         # Record
         # NOTE: `reward` and `is_terminal` are added outside of the class, calculated
         # after stepping the environment
-        self.memory.record(
-            keys=keys,
-            states=state.cpu(),
-            actions=action.cpu(),
-            action_logs=action_log.cpu(),
-            state_vals=state_val.cpu(),
-        )
+        if keys is not None:
+            self.memory.record(
+                keys=keys,
+                states=state.cpu(),
+                actions=action.cpu(),
+                action_logs=action_log.cpu(),
+                state_vals=state_val.cpu(),
+            )
 
         return action
 
@@ -527,7 +547,7 @@ class PPO(nn.Module):
     ### Backward functions
     def update(self):
         # Propagate and normalize rewards
-        rewards = self.memory.propagate_rewards().detach()
+        rewards = self.memory.propagate_rewards(gamma=self.memory_gamma).detach()
         rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-7)
 
         # Train
@@ -536,7 +556,6 @@ class PPO(nn.Module):
             batch_idx = np.random.choice(len(self.memory), min(self.update_max_batch, len(self.memory)), replace=False)
 
             # Gradient accumulation
-            # TODO: maybe spread out minibatches?
             for min_idx in range(0, len(batch_idx), self.update_minibatch):
                 # Get minibatch idx
                 max_idx = min(min_idx + self.update_minibatch, len(batch_idx))
@@ -544,8 +563,8 @@ class PPO(nn.Module):
 
                 # Get subset data
                 # 'states', 'actions', 'action_logs', 'state_vals'
-                data = self.memory[minibatch_idx]  # This takes a long time, maybe a couple seconds
-                states_old_sub = [torch.concat([s[i] for s in data['states']], dim=0).to(self.device) for i in range(2)]
+                data = self.memory[minibatch_idx]  # BOTTLENECK
+                states_old_sub = [torch.concat([s[i] for s in data['states']], dim=0).to(self.device) for i in range(2)]  # BOTTLENECK
                 actions_old_sub = torch.stack(data['actions'], dim=0).to(self.device)
                 action_logs_old_sub = torch.stack(data['action_logs'], dim=0).to(self.device)
                 state_vals_old_sub = torch.stack(data['state_vals'], dim=0).to(self.device)

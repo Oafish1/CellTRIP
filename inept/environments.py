@@ -8,12 +8,9 @@ class trajectory:
     A bounded `dim`-dimensional area where agents control velocity changes
     for individual nodes.
 
-    Rewards
-    -------
-    'origin': Nodes are rewarded for approaching the origin.
+    Reward Distance Types
+    ---------------------
     'target': Nodes are rewarded for approaching a specified target.
-    'cosine': Nodes are rewarded for matching inter-node cosine similarities
-        across all modalities.
     'euclidean': Nodes are rewarded for matching inter-node euclidean distances
         across all modalities.
     """
@@ -27,11 +24,11 @@ class trajectory:
         vel_bound=1,
         delta=.1,
         # Rewards
-        reward_distance=10,
-        # reward_origin=1,
-        penalty_bound=1,
-        penalty_velocity=1,
-        penalty_action=1,
+        reward_distance=0,
+        reward_origin=0,
+        penalty_bound=0,
+        penalty_velocity=0,
+        penalty_action=0,
         reward_distance_type='euclidean',
         # Device
         device='cpu',
@@ -47,9 +44,10 @@ class trajectory:
         self.device = device
 
         # Weights
+        # NOTE: Rewards can and should go positive, penalties can't
         self.reward_scales = {
             'reward_distance': reward_distance,     # Emulate distances of each modality
-            # 'reward_origin': reward_origin,         # Make sure the mean of positions is close to the origin
+            'reward_origin': reward_origin,       # Make sure the mean of positions is close to the origin
             'penalty_bound': penalty_bound,         # Don't touch the bounds
             'penalty_velocity': penalty_velocity,   # Don't move fast
             'penalty_action': penalty_action,       # Don't take drastic action
@@ -66,19 +64,23 @@ class trajectory:
         self.reset()
 
     ### State functions
-    def step(self, actions=None, *, delta=None, reward_distance_type=None, return_rewards=False):
+    def step(self, actions=None, *, delta=None, return_rewards=False):
         # Defaults
         if actions is None: actions = torch.zeros_like(self.vel)
         if delta is None: delta = self.delta
-        if reward_distance_type is None: reward_distance_type = self.reward_distance_type
 
+        # Check dimensions
+        assert actions.shape == self.vel.shape
+
+        ### Pre-step calculations
         # Distance reward
-        if reward_distance_type == 'origin': reward_distance = self.get_distance_from_origin()
-        elif reward_distance_type == 'target': reward_distance = self.get_distance_from_targets()
-        elif reward_distance_type == 'cosine': reward_distance = self.get_distance_match(measure=utilities.cosine_similarity)
-        elif reward_distance_type == 'euclidean': reward_distance = self.get_distance_match()
+        if self.reward_distance_type == 'target': reward_distance = self.get_distance_from_targets()
+        elif self.reward_distance_type == 'euclidean': reward_distance = self.get_distance_match()
 
-        ## Step positions
+        # Origin penalty
+        reward_origin = self.get_distance_from_origin()
+
+        ### Step positions
         # Add velocity
         self.add_velocities(delta * actions)
         # Iterate positions
@@ -89,34 +91,47 @@ class trajectory:
         bound_hit_mask = self.pos.abs() == self.pos_bound
         self.vel[bound_hit_mask] = 0
 
+        ### Post-step calculations
         # Distance reward
-        if reward_distance_type == 'origin': reward_distance -= self.get_distance_from_origin()
-        elif reward_distance_type == 'target': reward_distance -= self.get_distance_from_targets()
-        elif reward_distance_type == 'cosine': reward_distance -= self.get_distance_match(measure=utilities.cosine_similarity)
-        elif reward_distance_type == 'euclidean': reward_distance -= self.get_distance_match()
-        reward_distance *= self.reward_scales['reward_distance']
+        if self.reward_distance_type == 'target': reward_distance -= self.get_distance_from_targets()
+        elif self.reward_distance_type == 'euclidean': reward_distance -= self.get_distance_match()
 
         # Origin reward
+        reward_origin -= self.get_distance_from_origin()
         # reward_origin = -self.reward_scales['reward_origin'] * self.pos.mean(dim=0).square().sum()
         # reward_origin = -self.reward_scales['reward_origin'] * self.pos.square().sum(dim=1)
 
         # Boundary penalty
         penalty_bound = torch.zeros(self.pos.shape[0], device=self.device)
-        penalty_bound[bound_hit_mask.sum(dim=1) > 0] = -self.reward_scales['penalty_bound']
+        penalty_bound[bound_hit_mask.sum(dim=1) > 0] = -1
 
         # Velocity penalty
-        penalty_velocity = -self.reward_scales['penalty_velocity'] * self.vel.square().mean(dim=1)
+        penalty_velocity = -self.vel.square().mean(dim=1)
 
         # Action penalty
-        penalty_action = -self.reward_scales['penalty_action'] * actions.square().mean(dim=1)
+        penalty_action = -actions.square().mean(dim=1)
+
+        ### Management
+        # Scale rewards
+        reward_distance *=  self.reward_scales['reward_distance']   * 100
+        reward_origin *=   self.reward_scales['reward_origin']    * 100
+        penalty_bound *=    self.reward_scales['penalty_bound']     * 2
+        penalty_velocity *= self.reward_scales['penalty_velocity']  * 10
+        penalty_action *=   self.reward_scales['penalty_action']    * 1
 
         # Compute total reward
-        rwd = reward_distance + penalty_bound + penalty_velocity + penalty_action
+        rwd = (
+            reward_distance
+            + reward_origin
+            + penalty_bound
+            + penalty_velocity
+            + penalty_action
+        )
 
         ret = (rwd, self.finished())
         if return_rewards: ret += {
             'distance': reward_distance,
-            # 'origin': reward_origin,
+            'origin': reward_origin,
             'bound': penalty_bound,
             'velocity': penalty_velocity,
             'action': penalty_action,
@@ -125,7 +140,7 @@ class trajectory:
 
     def reset(self):
         # Assign random positions and velocities
-        self.pos = self.pos_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
+        self.pos = self.pos_rand_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
         self.vel = self.vel_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
 
     ### Input functions
@@ -152,17 +167,17 @@ class trajectory:
 
         return dist.norm(dim=1)
 
-    def get_distance_match(self, measure=lambda x: utilities.euclidean_distance(x, scaled=True)):
+    def get_distance_match(self):
         # Calculate modality distances
-        # TODO: Perhaps scale this
+        # NOTE: Only scaled for `self.dist` calculation
         if self.dist is None:
             self.dist = []
             for m in self.modalities:
-                m_dist = measure(m)
+                m_dist = utilities.euclidean_distance(m, scaled=True)
                 self.dist.append(m_dist)
 
         # Calculate distance for position
-        pos_dist = measure(self.pos)
+        pos_dist = utilities.euclidean_distance(self.pos)
 
         # Calculate reward
         running = torch.zeros(self.pos.shape[0], device=self.device)
@@ -172,7 +187,7 @@ class trajectory:
             running = running + mean_square_ew
         running = running / len(self.dist)
 
-        return running  # / self.pos_bound**2
+        return running
 
     def finished(self):
         return False
@@ -180,6 +195,16 @@ class trajectory:
     ### Get-Set functions
     def set_modalities(self, modalities):
         self.modalities = modalities
+
+    def set_rewards(self, new_reward_scales):
+        # Check that all rewards are valid
+        for k, v in new_reward_scales.items():
+            if k not in self.reward_scales:
+                raise LookupError(f'`{k}` not found in rewards')
+
+        # Set new rewards
+        for k, v in new_reward_scales.items():
+            self.reward_scales[k] = v
 
     def set_positions(self, pos):
         self.pos = pos

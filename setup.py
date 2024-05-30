@@ -21,6 +21,7 @@ setup(
     extras_require={
         'dev': [
             'pip-tools',
+            'snakeviz',
         ],
         'examples': [
             'matplotlib',

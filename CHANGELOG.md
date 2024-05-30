@@ -1,3 +1,26 @@
+### 1.0.0+2024-05-30
+- Add `average` early stopping method with sliding window
+- Add batch calculation to `act_macro`
+- Add checkpoint model saves
+- Add function comments for ease of use
+- Add safety check to environment step for velocity shape
+- Add safety check to model forward for number of modalities
+- Add stage logging to wandb
+- Add stages to training
+- Add verbosity to animation creation
+- Change default weight scaling for environments
+- Fix activations for feature embedding
+- Fix `finish` variable not being properly recorded
+- Fix memory treating state vectors as `modal-pos-vel` rather than `pos-vel-modal`
+- Fix palette for `analysis`
+- Full runs for simulation data
+- Many small tweaks and optimizations
+- Plotting style revisions
+- Re-reverse reward sublists for `AdvancedMemoryBuffer`
+- Readd origin reward
+- Runs for developing brain data
+- Tune parameters
+
 ### 1.0.0+2024-05-22
 - Add caching for static prefix re-appending
 - Add environment argument for position randomization range
