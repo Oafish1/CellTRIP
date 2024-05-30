@@ -1,4 +1,4 @@
-### 1.0.0+2024-05-30
+### 1.0.0+2024-05-30 (1-2)
 - Add `average` early stopping method with sliding window
 - Add batch calculation to `act_macro`
 - Add checkpoint model saves
@@ -9,6 +9,7 @@
 - Add stages to training
 - Add verbosity to animation creation
 - Change default weight scaling for environments
+- Figure updates and add schematic
 - Fix activations for feature embedding
 - Fix `finish` variable not being properly recorded
 - Fix memory treating state vectors as `modal-pos-vel` rather than `pos-vel-modal`
