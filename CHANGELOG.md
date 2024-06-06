@@ -1,3 +1,6 @@
+### 1.0.0+2024-06-05
+- Figure and schematic updates
+
 ### 1.0.0+2024-05-30 (1-2)
 - Add `average` early stopping method with sliding window
 - Add batch calculation to `act_macro`
