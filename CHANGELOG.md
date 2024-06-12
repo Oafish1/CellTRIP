@@ -1,3 +1,6 @@
+### 1.0.0+2024-06-12
+- Figure and schematic updates
+
 ### 1.0.0+2024-06-05
 - Figure and schematic updates
 
