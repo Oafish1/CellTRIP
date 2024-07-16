@@ -1,3 +1,27 @@
+# %%
+## Checks
+# Check that rewards are normalized after (?) advantage
+
+## Training changes
+# Sample only some # of cells for each self-attention to save processing time
+
+## Analysis changes
+# Perturbation analysis (altering a single gene and observing the change) in a continual manner
+
+## Improvements
+# Fix off-center positioning in large environments
+# Revise distance reward - Maybe add cell attraction (all should be close to each other) and repulsion (repulsion based on distance in modality)
+# Revise velocity and action penalties to encourage early cell-type separation (i.e. sqrt of vec length or similar)
+# Try using running average early stopping
+# Add parallel envs of different sizes, with different data to help generality
+
+## QOL
+# Save every time early stopping occurs
+
+## Runs
+# Try full real data
+
+# %%
 
 # %%
 from collections import defaultdict
@@ -91,7 +115,7 @@ elif dataset_name == 'Random':
 else: assert False, 'No matching dataset found.'
 
 # Parameters
-num_nodes = 20  # M1.shape[0]
+num_nodes = 1_000  # M1.shape[0]
 
 # Modify data
 M1, M2 = inept.utilities.normalize(M1, M2)  # Normalize
@@ -102,7 +126,7 @@ M1, M2, T1, T2 = inept.utilities.subsample_nodes(M1, M2, T1, T2, num_nodes=num_n
 # Cast types
 M1 = torch.tensor(M1, dtype=torch.float32, device=DEVICE)
 M2 = torch.tensor(M2, dtype=torch.float32, device=DEVICE)
-modalities = (M1,)  # , M2
+modalities = (M1, M2)
 
 # %% [markdown]
 # ### Parameters
@@ -144,15 +168,30 @@ stages_kwargs = {
 }
 
 # Training parameters
+max_ep_timesteps = 1e3
+update_timesteps = 5 * max_ep_timesteps
+max_timesteps = 1e3 * update_timesteps
+MAX_BATCH = min( 500, data_kwargs['num_nodes'] )
+MAX_NODES = min( 50, data_kwargs['num_nodes'] )  # Larger means smaller minibatches but a fuller picture for each agent
+# MAX_BATCH = MAX_NODES = None  # Testing: Works with vars set!
 train_kwargs = {
-    'max_ep_timesteps': 1e3,  # Normal: 2e2
-    'max_timesteps': 1e6,
-    'update_timesteps': 5e3,  # Normal: 4e3
+    'max_ep_timesteps': max_ep_timesteps,
+    'max_timesteps': max_timesteps,
+    'update_timesteps': update_timesteps,
+    'max_batch': MAX_BATCH,  # Max number of nodes to calculate actions for at a time
+    'max_nodes': MAX_NODES,  # Max number of nodes to use as neighbors in action calculation
 }
 
 # Policy parameters
-update_minibatch = int( 1e4 * (2000 / sum(M.shape[1] for M in modalities)) * (20 / data_kwargs["num_nodes"]) )  # Optimized for 1080 Ti
-update_max_batch = int( 2e4 )
+# num_train_nodes = data_kwargs['num_nodes'] if train_kwargs['max_nodes'] is None else min(data_kwargs['num_nodes'], train_kwargs['max_nodes'])
+# GPU_MEMORY = 6; CPU_MEMORY = 16  # Optimized for 6Gb VRAM and 16Gb RAM
+# MAX_GPU_RUN_SAMPLES = int( .8 * (GPU_MEMORY / 6) * 1e4 * (2000 / sum(M.shape[1] for M in modalities)) * (20 / num_train_nodes) )
+# GPU_STORE_SAMPLES = int( 2 * MAX_GPU_RUN_SAMPLES )  # 3
+# MAX_CPU_SAMPLES = int( (CPU_MEMORY / GPU_MEMORY) * MAX_GPU_RUN_SAMPLES )
+# IDEAL_BATCH_SIZE = int( max_ep_timesteps )
+update_maxbatch = None  # `MAX_CPU_SAMPLES`, `None` takes slightly longer but is more reliable
+update_batch = int(1e3)  # Same or larger size as `update_maxbatch` skips GPU cast step inside epoch loop
+update_minibatch = int(1e3)
 policy_kwargs = {
     # Main arguments
     'num_features_per_node': 2*env_kwargs['dim'],
@@ -163,16 +202,19 @@ policy_kwargs = {
     'action_std_min': .1,
     'epochs': 80,
     'epsilon_clip': .2,
-    'memory_gamma': .99,
+    'memory_gamma': .95,
+    'memory_prune': 100,
     'actor_lr': 3e-4,
     'critic_lr': 1e-3,
     'lr_gamma': 1,
-    'update_minibatch': min( update_minibatch, update_max_batch ),  # If too high, the kernel will crash (can also often crash machine)
-    'update_max_batch': update_max_batch,  # All memories: int(train_kwargs['update_timesteps'] * data_kwargs["num_nodes"])
+    'update_maxbatch': update_maxbatch,  # Batch to load into RAM
+    'update_batch': update_batch,  # Batch to load into VRAM
+    'update_minibatch': update_minibatch,  # Batch to compute
     'device': DEVICE,
     # Layer arguments
     'embed_dim': 64,
     'feature_embed_dim': 32,
+    'rs_nset': 1e5,  # Inversely proportional to influence of individual reward on moving statistics
 }
 
 # Early stopping parameters
@@ -193,11 +235,17 @@ es_kwargs = {
 # Tracking parameters
 # Use `watch -d -n 0.5 nvidia-smi` to watch CUDA memory usage
 # Use `top` to watch system memory usage
-use_wandb = False
+# Run script and put following above function to profile
+#    from memory_profiler import profile
+#    @profile
+# Use cProfiler to profile timing:
+#    python -m cProfile -s time -o profile.prof train.py
+#    snakeviz profile.prof
+use_wandb = True
 
 # Initialize classes
 env = inept.environments.trajectory(*modalities, **env_kwargs, **stages_kwargs['env'][0], device=DEVICE)  # Set to first stage
-policy = inept.models.PPO(**policy_kwargs)
+policy = inept.models.PPO(**policy_kwargs).train()
 early_stopping = inept.utilities.EarlyStopping(**es_kwargs)
 
 # Initialize wandb
@@ -221,7 +269,22 @@ timestep = 0; episode = 1; stage = 0
 
 # CLI
 print('Beginning training')
-print(f'Subsampling {policy_kwargs["update_max_batch"]} states with minibatches of size {policy_kwargs["update_minibatch"]} from {int(train_kwargs["update_timesteps"] * data_kwargs["num_nodes"])} total.')
+num_train_nodes = data_kwargs['num_nodes'] if train_kwargs['max_nodes'] is None else min(data_kwargs['num_nodes'], train_kwargs['max_nodes'])
+print(
+    f'Training using {num_train_nodes} nodes out of a'
+    f' total {data_kwargs["num_nodes"]} with batches of'
+    f' size {train_kwargs["max_batch"]}.'
+)
+update_maxbatch_print = (
+    policy_kwargs["update_maxbatch"]
+    if policy_kwargs["update_maxbatch"] is not None else 
+    'all'
+)
+print(
+    f'Training on {update_maxbatch_print} states'
+    f' with batches of size {policy_kwargs["update_batch"]}'
+    f' and minibatches of size {policy_kwargs["update_minibatch"]}'
+    f' from {int(train_kwargs["update_timesteps"] * data_kwargs["num_nodes"])} total.')
 
 # Simulation loop
 while timestep < train_kwargs['max_timesteps']:
@@ -238,7 +301,12 @@ while timestep < train_kwargs['max_timesteps']:
             timer.log('Environment Setup')
 
             # Get actions from policy
-            actions = policy.act_macro(state, keys=list(range(num_nodes))).detach()
+            actions = policy.act_macro(
+                state,
+                keys=list(range(num_nodes)),
+                max_batch=train_kwargs['max_batch'],
+                max_nodes=train_kwargs['max_nodes'],
+            ).detach()
             timer.log('Calculate Actions')
 
             # Step environment and get reward
@@ -270,7 +338,6 @@ while timestep < train_kwargs['max_timesteps']:
             print(f' ({torch.cuda.max_memory_allocated() / 1024**3:.2f} GB CUDA)')
             torch.cuda.reset_peak_memory_stats()
             timer.log('Update Policy')
-            exit()
 
         # Escape if finished
         if finished: break
@@ -340,3 +407,5 @@ timer.aggregate('sum')
 
 # Finish wandb
 if use_wandb: wandb.finish()
+
+

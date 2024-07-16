@@ -1,3 +1,22 @@
+### 1.0.0+2024-07-15
+- Add batch acting and sampling
+- Add memory profiling script and instructions
+- Add pruning to training states based on number of future states
+- Add running statistics to rewards
+- Extensive testing and bugfixes
+- Further time optimizations
+- Move reward normalization inside memory class
+- Sanitize hyperparameters
+
+### 1.0.0+2024-07-12
+- Fix memory optimization with sliced tensors remaining unsliced in memory
+- State subsampling implemented for forward computation
+
+### 1.0.0+2024-06-25
+- Intense memory optimizations, mainly with policy update
+- Optional `Sampler` class for varied memory and GPU management
+- Timing optimizations, mainly with policy update
+
 ### 1.0.0+2024-06-19
 - Figure updates
 

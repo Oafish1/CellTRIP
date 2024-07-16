@@ -47,7 +47,7 @@ class trajectory:
         # NOTE: Rewards can and should go positive, penalties can't
         self.reward_scales = {
             'reward_distance': reward_distance,     # Emulate distances of each modality
-            'reward_origin': reward_origin,       # Make sure the mean of positions is close to the origin
+            'reward_origin': reward_origin,         # Make sure the mean of positions is close to the origin
             'penalty_bound': penalty_bound,         # Don't touch the bounds
             'penalty_velocity': penalty_velocity,   # Don't move fast
             'penalty_action': penalty_action,       # Don't take drastic action

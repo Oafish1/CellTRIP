@@ -12,7 +12,7 @@ from . import utilities
 ### Utility classes
 class AdvancedMemoryBuffer:
     "Memory-efficient implementation of memory"
-    def __init__(self, suffix_len):
+    def __init__(self, suffix_len, rs_nset=1e5):
         # User parameters
         self.suffix_len = suffix_len
 
@@ -36,6 +36,9 @@ class AdvancedMemoryBuffer:
 
         # Maintenance variables
         self.recorded = {k: False for k in self.storage}
+
+        # Moving statistics
+        self.running_statistics = utilities.RunningStatistics(n_set=rs_nset)
 
     def __getitem__(self, idx):
         # Parameters
@@ -67,8 +70,8 @@ class AdvancedMemoryBuffer:
                     # Special cases
                     if k == 'states':
                         # `_append_suffix` takes most time without caching, then `split_state`
-                        val = utilities.split_state(  # BOTTLENECK
-                            self._append_suffix(self.storage[k][list_num], keys=self.storage['keys'][list_num]),  # BOTTLENECK
+                        val = utilities.split_state(  # TIME BOTTLENECK
+                            self._append_suffix(self.storage[k][list_num], keys=self.storage['keys'][list_num]),  # TIME BOTTLENECK
                             idx=local_idx,
                         )
 
@@ -91,9 +94,16 @@ class AdvancedMemoryBuffer:
         # Catch if not all found
         if current_index < len(idx): raise IndexError(f'Index {sorted_idx[current_index]} out of range')
 
-        # Sort to indexing order
+        # Sort to indexing order and stack
         for k in ret:
+            # Sort
             ret[k] = [ret[k][i] for i in sort_inverse_idx]
+
+            # Stack
+            if k == 'states':
+                ret[k] = [torch.concat([s[i] for s in ret[k]], dim=0) for i in range(2)]
+            else:
+                ret[k] = torch.stack(ret[k], dim=0)
 
         return dict(ret)
 
@@ -153,70 +163,50 @@ class AdvancedMemoryBuffer:
             # Gleam suffixes
             for j, k in enumerate(self.storage['keys'][-1]):
                 if k not in self.persistent_storage['suffixes']:
-                    self.persistent_storage['suffixes'][k] = self.storage['states'][-1][j][-self.suffix_len:].clone()
+                    self.persistent_storage['suffixes'][k] = self.storage['states'][-1][j][-self.suffix_len:].clone().cpu()
 
             # Cut suffixes
-            self.storage['states'][-1] = self.storage['states'][-1][..., :-self.suffix_len]
+            # Note: MUST BE CLONED otherwise stores whole unsliced tensor
+            self.storage['states'][-1] = self.storage['states'][-1][..., :-self.suffix_len].clone().cpu()
 
             # Set all variables as unrecorded
             for k in self.recorded: self.recorded[k] = False
 
-    def propagate_rewards(self, gamma=.99):
+    def propagate_rewards(self, gamma=.95, normalize=True, prune=None):
         "Propagate rewards with decay"
         ret = []
+        if prune is not None: ret_prune = []
         running_rewards = {k: 0 for k in np.unique(self.storage['keys'])}
+        running_prune = {k: 0 for k in np.unique(self.storage['keys'])}
         for keys, rewards, is_terminal in zip(self.storage['keys'][::-1], self.storage['rewards'][::-1], self.storage['is_terminals'][::-1]):
             for key, reward in zip(keys[::-1], rewards[::-1]):
-                if is_terminal: running_rewards[key] = 0  # Reset at terminal state
+                if is_terminal:
+                    running_rewards[key] = 0  # Reset at terminal state
+                    if prune is not None: running_prune[key] = 0
                 running_rewards[key] = reward + gamma * running_rewards[key]
                 ret.append(running_rewards[key])
+                if prune is not None:
+                    running_prune[key] += 1
+                    ret_prune.append(running_prune[key] > prune)
         ret = ret[::-1]
-        return torch.tensor(ret, dtype=torch.float32)
+        ret = torch.tensor(ret, dtype=torch.float32)
+        if prune is not None:
+            ret_prune = ret_prune[::-1]
+            ret_prune = torch.tensor(ret_prune, dtype=torch.bool)
+
+        # Need to normalize AFTER propagation
+        for r in ret: self.running_statistics.update(r)
+        ret = (ret - self.running_statistics.mean()) / (torch.sqrt(self.running_statistics.variance() + 1e-8))
+
+        if prune is not None:
+            return ret, ret_prune
+        return ret
 
     def clear(self, clear_persistent=False):
         "Clear memory"
         for k in self.storage: self.storage[k].clear()
         if clear_persistent:
             for k in self.persistent_storage: self.persistent_storage[k].clear()
-
-
-class MemoryBuffer:
-    """
-    Naïve implementation of memory
-    """
-    def __init__(self):
-        self.keys = []  # Entity key
-        self.states = []
-        self.actions = []
-        self.action_logs = []
-        self.state_vals = []
-        self.rewards = []
-        self.is_terminals = []
-
-    def __len__(self):
-        return len(self.keys)
-
-    def propagate_rewards(self, gamma=.99):
-        # Propagate rewards backwards with decay
-        rewards = []
-        running_rewards = {k: 0 for k in np.unique(self.keys)}
-        for key, reward, is_terminal in zip(self.keys[::-1], self.rewards[::-1], self.is_terminals[::-1]):
-            if is_terminal: running_rewards[key] = 0  # Reset at terminal state
-            running_rewards[key] = reward + gamma * running_rewards[key]
-            rewards.append(running_rewards[key])
-        rewards = rewards[::-1]
-        rewards = torch.tensor(rewards, dtype=torch.float32)
-
-        return rewards
-
-    def clear(self):
-        del self.keys[:]
-        del self.states[:]
-        del self.actions[:]
-        del self.action_logs[:]
-        del self.state_vals[:]
-        del self.rewards[:]
-        del self.is_terminals[:]
 
 
 class ResidualSA(nn.Module):
@@ -332,6 +322,7 @@ class EntitySelfAttention(nn.Module):
             # Record embedded features
             val = fe(entities[..., running_idx:(running_idx + ms)])
             val = self.activation(val)
+            # val = entities[..., running_idx:(running_idx + ms)][..., :self.feature_embed_dim]  # TEST
             ret.append(val)
 
             # Increment start idx
@@ -372,7 +363,8 @@ class EntitySelfAttention(nn.Module):
 
         # Decision
         actions = self.decider(embedding)
-        # TODO: Should layer norm be added here and for feature embedding?
+        # TODO (Minor): Should layer norm be added here and for feature embedding?
+        # TODO (Major): Maybe remove activation here for critic?
         actions = self.activation(actions)
 
         return actions
@@ -425,12 +417,15 @@ class PPO(nn.Module):
             action_std_min=.1,
             epochs=80,
             epsilon_clip=.2,
-            memory_gamma=.99,
+            memory_gamma=.95,
+            memory_prune=100,
             actor_lr=3e-4,
             critic_lr=1e-3,
             lr_gamma=1,
-            update_max_batch=torch.inf,
-            update_minibatch=4e4,
+            update_maxbatch=torch.inf,
+            update_batch=torch.inf,
+            update_minibatch=torch.inf,
+            rs_nset=1e5,
             device='cpu',
             **kwargs,
     ):
@@ -443,9 +438,11 @@ class PPO(nn.Module):
         self.epochs = epochs
         self.epsilon_clip = epsilon_clip
         self.memory_gamma = memory_gamma
+        self.memory_prune = memory_prune
 
         # Runtime management
-        self.update_max_batch = update_max_batch
+        self.update_maxbatch = update_maxbatch
+        self.update_batch = update_batch
         self.update_minibatch = update_minibatch
         self.device = device
 
@@ -465,7 +462,7 @@ class PPO(nn.Module):
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
 
         # Memory
-        self.memory = AdvancedMemoryBuffer(sum(modal_sizes))
+        self.memory = AdvancedMemoryBuffer(sum(modal_sizes), rs_nset=rs_nset)
 
         # Copy current weights
         self.update_old_policy()
@@ -502,13 +499,21 @@ class PPO(nn.Module):
         if return_all: return action, action_log, state_val
         return action
 
-    def act_macro(self, state, *, keys=None, max_batch=None):
+    def act_macro(self, state, *, keys=None, max_batch=None, max_nodes=None):
         # Act
         if max_batch is not None:
-            # Compute `max_batch` at a time
+            # Compute `max_batch` at a time with randomized `max_nodes`
             initialized = False
             for start_idx in range(0, state.shape[0], max_batch):
-                action_sub, action_log_sub, state_val_sub = self.act(*utilities.split_state(state, idx=list( range(start_idx, min(start_idx+max_batch, state.shape[0])) )), return_all=True)
+                action_sub, action_log_sub, state_val_sub = self.act(
+                    *utilities.split_state(
+                        state,
+                        idx=list( range(start_idx, min(start_idx+max_batch, state.shape[0])) ),
+                        max_nodes=max_nodes,
+                    ),
+                    return_all=True,
+                )
+                # TODO (Major): Record the split for use during update
 
                 # Concat
                 if not initialized:
@@ -520,16 +525,15 @@ class PPO(nn.Module):
                     state_val = torch.concat((state_val, state_val_sub), dim=0)
         else:
             # Compute all at once
-            action, action_log, state_val = self.act(*utilities.split_state(state), return_all=True)
-
+            action, action_log, state_val = self.act(*utilities.split_state(state, max_nodes=max_nodes), return_all=True)
 
         # Record
         # NOTE: `reward` and `is_terminal` are added outside of the class, calculated
         # after stepping the environment
-        if keys is not None:
+        if keys is not None and self.training:
             self.memory.record(
                 keys=keys,
-                states=state.cpu(),
+                states=state,  # Will cast to cpu after
                 actions=action.cpu(),
                 action_logs=action_log.cpu(),
                 state_vals=state_val.cpu(),
@@ -546,32 +550,90 @@ class PPO(nn.Module):
 
     ### Backward functions
     def update(self):
-        # Propagate and normalize rewards
-        rewards = self.memory.propagate_rewards(gamma=self.memory_gamma).detach()
-        rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-7)
+        # Calculate rewards
+        rewards, rewards_mask = self.memory.propagate_rewards(gamma=self.memory_gamma, prune=self.memory_prune)
+        rewards, rewards_mask = rewards.detach(), rewards_mask.detach()
+
+        # Figure out sizes
+        use_maxbatch = self.update_maxbatch is not None
+        maxbatch_size = int( min(self.update_maxbatch if use_maxbatch else self.update_batch, len(self.memory)) )
+        batch_size = int( min(self.update_batch, maxbatch_size) )
+        minibatch_size = int( min(self.update_minibatch, batch_size) )
+
+        # Create sampler
+        # sampler = utilities.Sampler(
+        #     self.memory,
+        #     rewards,
+        #     (maxbatch_size, batch_size, minibatch_size),
+        #     'maxbatch',  # Mem stage
+        #     'maxbatch',  # GPU stage
+        #     self.device
+        # )
+
+        # Activate sampler stage
+        # maxbatch_data, maxbatch_rewards = sampler.stage('maxbatch')
+
+        # Load maxbatch
+        # NOTE: Is slightly faster, but can be less reliable if maxbatch_size is not sufficiently large
+        if use_maxbatch:
+            maxbatch_idx = np.random.choice(
+                np.arange(len(self.memory))[rewards_mask],  # Only consider states which have rewards with significant future samples
+                maxbatch_size,
+                replace=False
+            )
+            maxbatch_data = self.memory[maxbatch_idx]
+            maxbatch_rewards = rewards[maxbatch_idx]
+            if batch_size >= maxbatch_size:
+                maxbatch_data = utilities.dict_map_recursive_tensor_idx_to(maxbatch_data, None, self.device)
+                maxbatch_rewards = maxbatch_rewards.to(self.device)
 
         # Train
-        for _ in range(self.epochs):
-            # Monte carlo sampling
-            batch_idx = np.random.choice(len(self.memory), min(self.update_max_batch, len(self.memory)), replace=False)
+        for epoch in range(self.epochs):
+            # Activate sampler stage
+            # batch_data, batch_rewards = sampler.stage('batch')
+
+            # Load batch
+            # TODO (Minor): Add option to load within minibatch, in the case that not all constructed tensors can be stored in GPU
+            if use_maxbatch and batch_size < maxbatch_size:
+                # NOTE: Will randomize order in place to save memory
+                batch_idx = np.random.choice(maxbatch_size, batch_size, replace=False)
+                batch_data = utilities.dict_map_recursive_tensor_idx_to(maxbatch_data, batch_idx, self.device)
+                batch_rewards = maxbatch_rewards[batch_idx].to(self.device)
+            elif not use_maxbatch:
+                # Sample from whole memory, at the time cost of ~1 update per 6 cycles
+                batch_idx = np.random.choice(
+                    np.arange(len(self.memory))[rewards_mask],  # Only consider states which have rewards with significant future samples
+                    batch_size,
+                    replace=False
+                )
+                batch_data = self.memory[batch_idx]
+                batch_rewards = rewards[batch_idx]
+                batch_data = utilities.dict_map_recursive_tensor_idx_to(batch_data, None, self.device)
+                batch_rewards = batch_rewards.to(self.device)
+            else:
+                batch_data = maxbatch_data
+                batch_rewards = maxbatch_rewards
 
             # Gradient accumulation
-            for min_idx in range(0, len(batch_idx), self.update_minibatch):
-                # Get minibatch idx
-                max_idx = min(min_idx + self.update_minibatch, len(batch_idx))
-                minibatch_idx = batch_idx[min_idx:max_idx]
+            for minibatch, min_idx in enumerate(range(0, batch_size, minibatch_size)):
+                # Load minibatch
+                max_idx = min(min_idx + minibatch_size, batch_size)
+                subfunc = lambda y: y[min_idx:max_idx]
+                minibatch_data = utilities.dict_map(batch_data, lambda x: utilities.recursive_tensor_func(x, subfunc))
+                minibatch_rewards = batch_rewards[min_idx:max_idx]
+
+                # Activate sampler stage
+                # max_idx = min(min_idx + minibatch_size, batch_size)
+                # minibatch_data, minibatch_rewards = sampler.stage('minibatch', idx=list(range(min_idx, max_idx)))
 
                 # Get subset data
-                # 'states', 'actions', 'action_logs', 'state_vals'
-                data = self.memory[minibatch_idx]  # BOTTLENECK
-                states_old_sub = [torch.concat([s[i] for s in data['states']], dim=0).to(self.device) for i in range(2)]  # BOTTLENECK
-                actions_old_sub = torch.stack(data['actions'], dim=0).to(self.device)
-                action_logs_old_sub = torch.stack(data['action_logs'], dim=0).to(self.device)
-                state_vals_old_sub = torch.stack(data['state_vals'], dim=0).to(self.device)
+                states_old_sub = minibatch_data['states']
+                actions_old_sub = minibatch_data['actions']
+                action_logs_old_sub = minibatch_data['action_logs']
+                state_vals_old_sub = minibatch_data['state_vals']
 
                 # Get subset rewards
-                rewards_sub = rewards[minibatch_idx].to(self.device)
-                advantages_sub = rewards_sub - state_vals_old_sub
+                advantages_sub = minibatch_rewards - state_vals_old_sub
 
                 # Evaluate actions
                 action_logs, dist_entropy = self.actor.evaluate_action(states_old_sub, actions_old_sub)
@@ -588,18 +650,23 @@ class PPO(nn.Module):
                 loss_PPO = -torch.min(unclipped, clipped)
 
                 # Calculate critic loss
-                loss_critic = .5 * F.mse_loss(state_vals, rewards_sub)
+                loss_critic = .5 * F.mse_loss(state_vals, minibatch_rewards)
 
                 # Calculate entropy loss
-                # TODO: Figure out purpose
+                # TODO (Minor): Figure out purpose
                 loss_entropy = -.01 * dist_entropy
+
+                # CLI
+                # print(f'Epoch {epoch+1:02} - Minibatch {minibatch+1:01}')
+                # print(f'PPO: {loss_PPO.mean():.3f}, critic: {loss_critic.mean():.3f}, entropy: {loss_entropy.mean():.3f}')
+                # print()
 
                 # Calculate total loss
                 loss = loss_PPO + loss_critic + loss_entropy
                 loss = loss.mean()
 
                 # Scale and calculate gradient
-                accumulation_frac = (max_idx - min_idx) / len(batch_idx)
+                accumulation_frac = (max_idx - min_idx) / batch_size
                 loss = loss * accumulation_frac
                 loss.backward()  # Longest computation
 

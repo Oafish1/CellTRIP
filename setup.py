@@ -21,6 +21,7 @@ setup(
     extras_require={
         'dev': [
             'pip-tools',
+            'memory-profiler',
             'snakeviz',
         ],
         'examples': [
