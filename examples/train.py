@@ -1,46 +1,23 @@
 # %%
-## Checks
+## To Check
 # Check that rewards are normalized after (?) advantage
 
-## Training changes
-# Sample only some # of cells for each self-attention to save processing time
+## High Priority Training Changes
+# Make backward (MAX_NODES, MAX_BATCH) batching work
+# Add multithreading to forward and distributed to backward
+# Add compatibility for env being on CPU, check for timing changes
 
-## Analysis changes
-# Perturbation analysis (altering a single gene and observing the change) in a continual manner
-
-## Improvements
+## Backburner Priority Training Changes
+# Add compatibility for cells with missing modalities (add mask to distance reward)
+# Try imitation learning to better learn CT trajectories
+# Add parallel envs of different sizes, with different data to help generality
 # Fix off-center positioning in large environments
 # Revise distance reward - Maybe add cell attraction (all should be close to each other) and repulsion (repulsion based on distance in modality)
 # Revise velocity and action penalties to encourage early cell-type separation (i.e. sqrt of vec length or similar)
-# Try using running average early stopping
-# Add parallel envs of different sizes, with different data to help generality
 
-## QOL
+## Bookkeeping and QOL
 # Save every time early stopping occurs
-
-## Runs
-# Try full real data
-
-# %%
-
-# %%
-from collections import defaultdict
-import os
-
-import inept
-import numpy as np
-import pandas as pd
-import torch
-import wandb
-
-# Set params
-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-DATA_FOLDER = os.path.join(os.path.abspath(''), '../data')
-MODEL_FOLDER = os.path.join(os.path.abspath(''), 'temp/trained_models')
-
-# Script arguments
-# import sys
-# arg1 = int(sys.argv[1])
+# Hook up sweeps API for wandb
 
 # %%
 # Original paper (pg 24)
@@ -62,6 +39,27 @@ MODEL_FOLDER = os.path.join(os.path.abspath(''), 'temp/trained_models')
 # https://github.com/openai/multi-agent-emergence-environments/blob/bafaf1e11e6398624116761f91ae7c93b136f395/ma_policy/layers.py#L89
 
 # %%
+
+# %%
+from collections import defaultdict
+import os
+
+import inept
+import numpy as np
+import pandas as pd
+import torch
+import wandb
+
+# Set params
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+DATA_FOLDER = os.path.join(os.path.abspath(''), '../data')
+MODEL_FOLDER = os.path.join(os.path.abspath(''), 'temp/trained_models')
+
+# Script arguments
+import sys
+arg1 = int(sys.argv[1])
+
+# %%
 # Reproducibility
 seed = 42
 torch.manual_seed(seed)
@@ -75,10 +73,21 @@ note_kwargs = {'seed': seed}
 
 # %%
 # Dataset loading
-dataset_name = 'BrainChromatin'
-if dataset_name == 'BrainChromatin':
-    M1 = pd.read_csv(os.path.join(DATA_FOLDER, 'brainchromatin/multiome_rna_counts.tsv'), delimiter='\t', nrows=2_000).transpose()  # TODO: Raise number of features
-    M2 = pd.read_csv(os.path.join(DATA_FOLDER, 'brainchromatin/multiome_atac_gene_activities.tsv'), delimiter='\t', nrows=2_000).transpose()  # TODO: Raise number of features
+dataset_name = 'scNMT'
+
+if dataset_name == 'scNMT':
+    dataset_dir = os.path.join(DATA_FOLDER, 'UnionCom/scNMT')
+    M1 = pd.read_csv(os.path.join(dataset_dir, 'Paccessibility_300.txt'), delimiter=' ', header=None).to_numpy()
+    M2 = pd.read_csv(os.path.join(dataset_dir, 'Pmethylation_300.txt'), delimiter=' ', header=None).to_numpy()
+    M3 = pd.read_csv(os.path.join(dataset_dir, 'RNA_300.txt'), delimiter=' ', header=None).to_numpy()
+    T1 = pd.read_csv(os.path.join(dataset_dir, 'type1.txt'), delimiter=' ', header=None).to_numpy().flatten()
+    T2 = pd.read_csv(os.path.join(dataset_dir, 'type2.txt'), delimiter=' ', header=None).to_numpy().flatten()
+    T3 = pd.read_csv(os.path.join(dataset_dir, 'type3.txt'), delimiter=' ', header=None).to_numpy().flatten()
+
+elif dataset_name == 'BrainChromatin':
+    nrows = None  # 2_000
+    M1 = pd.read_csv(os.path.join(DATA_FOLDER, 'brainchromatin/multiome_rna_counts.tsv'), delimiter='\t', nrows=nrows).transpose()  # 4.6 Gb in memory
+    M2 = pd.read_csv(os.path.join(DATA_FOLDER, 'brainchromatin/multiome_atac_gene_activities.tsv'), delimiter='\t', nrows=nrows).transpose()  # 2.6 Gb in memory
     M2 = M2.transpose()[M1.index].transpose()
     meta = pd.read_csv(os.path.join(DATA_FOLDER, 'brainchromatin/multiome_cell_metadata.txt'), delimiter='\t')
     meta_names = pd.read_csv(os.path.join(DATA_FOLDER, 'brainchromatin/multiome_cluster_names.txt'), delimiter='\t')
@@ -115,18 +124,19 @@ elif dataset_name == 'Random':
 else: assert False, 'No matching dataset found.'
 
 # Parameters
-num_nodes = 1_000  # M1.shape[0]
+num_nodes = 100  # M1.shape[0]
+modalities = [[M1, M2, M3][arg1]]
+types = [[T1, T2, T3][arg1]]
 
 # Modify data
-M1, M2 = inept.utilities.normalize(M1, M2)  # Normalize
-# M1, M2 = inept.utilities.pca_features(M1, M2, num_features=(16, 16))  # PCA features
-M1, M2, T1, T2 = inept.utilities.subsample_nodes(M1, M2, T1, T2, num_nodes=num_nodes)  # Subsample nodes
-# M1, M2 = inept.utilities.subsample_features(M1, M2, num_features=(16, 16))  # Subsample features
+modalities = inept.utilities.normalize(*modalities, keep_array=True)  # Normalize
+# modalities = inept.utilities.pca_features(*modalities, num_features=(512, 512), keep_array=True)  # PCA features (2 min for 8k x 35+k)
+subsample = inept.utilities.subsample_nodes(*modalities, *types, num_nodes=num_nodes, keep_array=True)  # Subsample nodes
+modalities, types = subsample[:len(modalities)], subsample[len(modalities):]
+# modalities = inept.utilities.subsample_features(*modalities, num_features=(16, 16), keep_array=True)  # Subsample features
 
 # Cast types
-M1 = torch.tensor(M1, dtype=torch.float32, device=DEVICE)
-M2 = torch.tensor(M2, dtype=torch.float32, device=DEVICE)
-modalities = (M1, M2)
+modalities = [torch.tensor(Mx, dtype=torch.float32, device=DEVICE) for Mx in modalities]
 
 # %% [markdown]
 # ### Parameters
@@ -141,7 +151,7 @@ data_kwargs = {
 # Environment parameters
 env_kwargs = {
     'dim': 2,  # x, y, vx, vy
-    'pos_bound': 5,
+    'pos_bound': 10,
     'pos_rand_bound': 1,
     'vel_bound': 1,
     'delta': .1,
@@ -171,9 +181,9 @@ stages_kwargs = {
 max_ep_timesteps = 1e3
 update_timesteps = 5 * max_ep_timesteps
 max_timesteps = 1e3 * update_timesteps
-MAX_BATCH = min( 500, data_kwargs['num_nodes'] )
+MAX_BATCH = min( 500, data_kwargs['num_nodes'] )  # NOTE: value should be similar to update_minibatch, if a bit larger
 MAX_NODES = min( 50, data_kwargs['num_nodes'] )  # Larger means smaller minibatches but a fuller picture for each agent
-# MAX_BATCH = MAX_NODES = None  # Testing: Works with vars set!
+MAX_BATCH = MAX_NODES = None  # TODO: Currently values other than `None` do not work with update
 train_kwargs = {
     'max_ep_timesteps': max_ep_timesteps,
     'max_timesteps': max_timesteps,

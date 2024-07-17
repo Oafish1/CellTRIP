@@ -197,44 +197,44 @@ class EarlyStopping:
         self.threshold = self.best + (-1 if self.decreasing else 1) * self.delta
 
 
-def clean_return(ret):
+def clean_return(ret, keep_array=False):
     "Clean return output for improved parsing"
-    if len(ret) == 1: return ret[0]
+    if not keep_array and len(ret) == 1: return ret[0]
     return ret
 
 
-def normalize(*MS):
+def normalize(*MS, **kwargs):
     "Normalize given modalities by feature"
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         ret = [np.nan_to_num((M - M.mean(axis=0)) / M.std(axis=0)) for M in MS]
-    return clean_return(ret)
+    return clean_return(ret, **kwargs)
 
 
-def subsample_features(*MS, num_features):
+def subsample_features(*MS, num_features, **kwargs):
     "Subsample features in given modalities"
     ret = []
     for M, num in zip(MS, num_features):
         idx = np.random.choice(M.shape[1], num, replace=False)
         ret.append(M[:, idx])
-    return clean_return(ret)
+    return clean_return(ret, **kwargs)
 
 
-def pca_features(*MS, num_features):
+def pca_features(*MS, num_features, **kwargs):
     "Compute PCA on features of given modalities"
     ret = []
     for M, num in zip(MS, num_features):
         pca = sklearn.decomposition.PCA(num)
         M = pca.fit_transform(M)
         ret.append(M)
-    return clean_return(ret)
+    return clean_return(ret, **kwargs)
 
 
-def subsample_nodes(*DS, num_nodes):
+def subsample_nodes(*DS, num_nodes, **kwargs):
     "Subsample nodes of given arrays"
     idx = np.random.choice(DS[0].shape[0], num_nodes, replace=False)
     ret = [D[idx] for D in DS]
-    return clean_return(ret)
+    return clean_return(ret, **kwargs)
 
 
 def split_state(state, idx=None, max_nodes=None):

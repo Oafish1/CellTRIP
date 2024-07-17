@@ -195,7 +195,9 @@ class AdvancedMemoryBuffer:
             ret_prune = torch.tensor(ret_prune, dtype=torch.bool)
 
         # Need to normalize AFTER propagation
-        for r in ret: self.running_statistics.update(r)
+        for r, p in zip(ret, ret_prune):
+            # Don't include pruned rewards in update
+            if p: self.running_statistics.update(r)
         ret = (ret - self.running_statistics.mean()) / (torch.sqrt(self.running_statistics.variance() + 1e-8))
 
         if prune is not None:

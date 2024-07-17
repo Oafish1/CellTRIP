@@ -1,6 +1,17 @@
+### 1.0.0+2024-07-16
+- Add `scNMT` dataset
+- Additional reporting for trajectory analysis
+- Customize `clean_return` behavior
+- Extend data loading capabilities to any number of modalities
+- Modify feature perturbation analysis to randomize more features
+- Modify feature perturbation analysis to start from steady state
+- Remove pruned rewards from running statistics calculation
+- Use all features with PCA for `BrainChromatin` dataset
+
 ### 1.0.0+2024-07-15
 - Add batch acting and sampling
 - Add memory profiling script and instructions
+- Add option to disable smart memory loading for backward subsampling
 - Add pruning to training states based on number of future states
 - Add running statistics to rewards
 - Extensive testing and bugfixes
