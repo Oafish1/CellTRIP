@@ -1,3 +1,6 @@
+### 1.0.0+2024-07-18
+- Figure updates
+
 ### 1.0.0+2024-07-16
 - Add `scNMT` dataset
 - Additional reporting for trajectory analysis
