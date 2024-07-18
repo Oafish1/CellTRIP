@@ -1,5 +1,6 @@
-### 1.0.0+2024-07-18
+### 1.0.0+2024-07-18 (1-2)
 - Figure updates
+- Requirement recompile for profilers
 
 ### 1.0.0+2024-07-16
 - Add `scNMT` dataset
