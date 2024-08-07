@@ -1,3 +1,7 @@
+### 1.0.0+2024-08-07
+- Figure folder reorganization
+- Major figure updates
+
 ### 1.0.0+2024-07-18 (1-2)
 - Figure updates
 - Requirement recompile for profilers
