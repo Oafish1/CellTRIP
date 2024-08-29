@@ -1,3 +1,6 @@
+### 1.0.0+2024-08-28
+- Figure changes
+
 ### 1.0.0+2024-08-21
 - Figure changes
 
