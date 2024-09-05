@@ -1,3 +1,8 @@
+### 1.0.0+2024-09-04
+- Add poster
+- Figure changes
+- Runs for scNMT and developing brain datasets
+
 ### 1.0.0+2024-08-28
 - Figure changes
 
