@@ -1,3 +1,7 @@
+### 1.0.0+2024-09-10
+- Additional runs
+- Figure updates
+
 ### 1.0.0+2024-09-04
 - Add poster
 - Figure changes
