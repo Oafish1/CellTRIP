@@ -1,3 +1,16 @@
+### 1.0.0+2024-09-15
+- Substantial figure changes
+- Tuning and additional runs
+
+### 1.0.0+2024-09-13
+- Additional runs
+- Animation optimizations
+- Animation UMAP implementation
+- Clean code and sanitize user arguments
+- Optimize batch loading and casting across all configurations
+- Parameter tweaks
+- Processing fixes
+
 ### 1.0.0+2024-09-11
 - Additional runs
 - Figure updates

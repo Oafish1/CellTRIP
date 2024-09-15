@@ -20,16 +20,17 @@ setup(
     ],
     extras_require={
         'dev': [
-            'pip-tools',
             'memory-profiler',
+            'pip-tools',
             'snakeviz',
+            'umap-learn',
         ],
         'examples': [
             'matplotlib',
             'pandas',
             'scikit-learn',
             'seaborn',
-            'wandb[importers]'
+            'wandb[importers]',
         ],
     },
 )

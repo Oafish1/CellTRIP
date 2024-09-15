@@ -172,7 +172,7 @@ class AdvancedMemoryBuffer:
             # Set all variables as unrecorded
             for k in self.recorded: self.recorded[k] = False
 
-    def propagate_rewards(self, gamma=.95, normalize=True, prune=None):
+    def propagate_rewards(self, gamma=.95, prune=None):
         "Propagate rewards with decay"
         ret = []
         if prune is not None: ret_prune = []
@@ -319,7 +319,7 @@ class EntitySelfAttention(nn.Module):
     ### Calculation functions
     def embed_features(self, entities):
         running_idx = self.num_features_per_node
-        ret = [entities[..., :self.num_features_per_node]]
+        ret = [entities[..., :running_idx]]
         for ms, fe in zip(self.modal_sizes, self.feature_embed):
             # Record embedded features
             val = fe(entities[..., running_idx:(running_idx + ms)])
@@ -427,6 +427,8 @@ class PPO(nn.Module):
             update_maxbatch=torch.inf,
             update_batch=torch.inf,
             update_minibatch=torch.inf,
+            update_load_level='batch',
+            update_cast_level='minibatch',
             rs_nset=1e5,
             device='cpu',
             **kwargs,
@@ -446,6 +448,8 @@ class PPO(nn.Module):
         self.update_maxbatch = update_maxbatch
         self.update_batch = update_batch
         self.update_minibatch = update_minibatch
+        self.update_load_level = update_load_level
+        self.update_cast_level = update_cast_level
         self.device = device
 
         # New policy
@@ -553,80 +557,69 @@ class PPO(nn.Module):
     ### Backward functions
     def update(self):
         # Calculate rewards
-        rewards, rewards_mask = self.memory.propagate_rewards(gamma=self.memory_gamma, prune=self.memory_prune)
+        rewards = self.memory.propagate_rewards(gamma=self.memory_gamma, prune=self.memory_prune)
+        if self.memory_prune is not None: rewards, rewards_mask = rewards
+        else: rewards_mask = torch.ones(len(rewards), dtype=bool)
         rewards, rewards_mask = rewards.detach(), rewards_mask.detach()
 
-        # Figure out sizes
-        use_maxbatch = self.update_maxbatch is not None
-        maxbatch_size = int( min(self.update_maxbatch if use_maxbatch else self.update_batch, len(self.memory)) )
-        batch_size = int( min(self.update_batch, maxbatch_size) )
-        minibatch_size = int( min(self.update_minibatch, batch_size) )
+        # Batch parameters
+        level_dict = {'maxbatch': 0, 'batch': 1, 'minibatch': 2}
+        load_level = level_dict[self.update_load_level]  # 0, 1, 2 : max, batch, mini
+        cast_level = level_dict[self.update_cast_level]  # 0, 1, 2 : max, batch, mini
+        assert cast_level >= load_level, 'Cannot cast without first loading'
 
-        # Create sampler
-        # sampler = utilities.Sampler(
-        #     self.memory,
-        #     rewards,
-        #     (maxbatch_size, batch_size, minibatch_size),
-        #     'maxbatch',  # Mem stage
-        #     'maxbatch',  # GPU stage
-        #     self.device
-        # )
-
-        # Activate sampler stage
-        # maxbatch_data, maxbatch_rewards = sampler.stage('maxbatch')
+        # Determine batch sizes
+        memory_size = sum(rewards_mask)
+        maxbatch_size = self.update_maxbatch if self.update_maxbatch is not None else memory_size
+        maxbatch_size = int(min(maxbatch_size, memory_size))
+        batch_size = self.update_batch if self.update_batch is not None else maxbatch_size
+        batch_size = int(min(batch_size, maxbatch_size))
+        minibatch_size = self.update_minibatch if self.update_minibatch is not None else batch_size
+        minibatch_size = int(min(minibatch_size, batch_size))
 
         # Load maxbatch
-        # NOTE: Is slightly faster, but can be less reliable if maxbatch_size is not sufficiently large
-        if use_maxbatch:
-            maxbatch_idx = np.random.choice(
-                np.arange(len(self.memory))[rewards_mask],  # Only consider states which have rewards with significant future samples
-                maxbatch_size,
-                replace=False
-            )
+        maxbatch_idx = np.random.choice(
+            np.arange(len(self.memory))[rewards_mask],  # Only consider states which have rewards with significant future samples
+            maxbatch_size,
+            replace=False,
+        )
+        if load_level == 0:
             maxbatch_data = self.memory[maxbatch_idx]
             maxbatch_rewards = rewards[maxbatch_idx]
-            if batch_size >= maxbatch_size:
-                maxbatch_data = utilities.dict_map_recursive_tensor_idx_to(maxbatch_data, None, self.device)
-                maxbatch_rewards = maxbatch_rewards.to(self.device)
+        if cast_level == 0:
+            maxbatch_data = utilities.dict_map_recursive_tensor_idx_to(maxbatch_data, None, self.device)
+            maxbatch_rewards = maxbatch_rewards.to(self.device)
 
         # Train
-        for epoch in range(self.epochs):
-            # Activate sampler stage
-            # batch_data, batch_rewards = sampler.stage('batch')
-
+        for _ in range(self.epochs):
             # Load batch
-            # TODO (Minor): Add option to load within minibatch, in the case that not all constructed tensors can be stored in GPU
-            if use_maxbatch and batch_size < maxbatch_size:
-                # NOTE: Will randomize order in place to save memory
-                batch_idx = np.random.choice(maxbatch_size, batch_size, replace=False)
-                batch_data = utilities.dict_map_recursive_tensor_idx_to(maxbatch_data, batch_idx, self.device)
-                batch_rewards = maxbatch_rewards[batch_idx].to(self.device)
-            elif not use_maxbatch:
-                # Sample from whole memory, at the time cost of ~1 update per 6 cycles
-                batch_idx = np.random.choice(
-                    np.arange(len(self.memory))[rewards_mask],  # Only consider states which have rewards with significant future samples
-                    batch_size,
-                    replace=False
-                )
-                batch_data = self.memory[batch_idx]
-                batch_rewards = rewards[batch_idx]
+            batch_idx = np.random.choice(maxbatch_size, batch_size, replace=False)
+            batch_absolute_idx = maxbatch_idx[batch_idx]
+            if load_level == 1:
+                batch_data = self.memory[batch_absolute_idx]
+                batch_rewards = rewards[batch_absolute_idx]
+            elif load_level < 1:
+                batch_data = utilities.dict_map_recursive_tensor_idx_to(maxbatch_data, batch_idx, None)
+                batch_rewards = maxbatch_rewards[batch_idx]
+            if cast_level == 1:
                 batch_data = utilities.dict_map_recursive_tensor_idx_to(batch_data, None, self.device)
                 batch_rewards = batch_rewards.to(self.device)
-            else:
-                batch_data = maxbatch_data
-                batch_rewards = maxbatch_rewards
 
             # Gradient accumulation
-            for minibatch, min_idx in enumerate(range(0, batch_size, minibatch_size)):
+            for _, min_idx in enumerate(range(0, batch_size, minibatch_size)):
                 # Load minibatch
                 max_idx = min(min_idx + minibatch_size, batch_size)
-                subfunc = lambda y: y[min_idx:max_idx]
-                minibatch_data = utilities.dict_map(batch_data, lambda x: utilities.recursive_tensor_func(x, subfunc))
-                minibatch_rewards = batch_rewards[min_idx:max_idx]
-
-                # Activate sampler stage
-                # max_idx = min(min_idx + minibatch_size, batch_size)
-                # minibatch_data, minibatch_rewards = sampler.stage('minibatch', idx=list(range(min_idx, max_idx)))
+                minibatch_idx = np.arange(min_idx, max_idx)
+                minibatch_absolute_idx = batch_absolute_idx[minibatch_idx]
+                if load_level == 2:
+                    minibatch_data = self.memory[minibatch_absolute_idx]
+                    minibatch_rewards = rewards[minibatch_absolute_idx]
+                if load_level < 2:
+                    minibatch_data = utilities.dict_map_recursive_tensor_idx_to(batch_data, minibatch_idx, None)
+                    minibatch_rewards = batch_rewards[minibatch_idx]
+                if cast_level == 2:
+                    minibatch_data = utilities.dict_map_recursive_tensor_idx_to(minibatch_data, None, self.device)
+                    minibatch_rewards = minibatch_rewards.to(self.device)
 
                 # Get subset data
                 states_old_sub = minibatch_data['states']
