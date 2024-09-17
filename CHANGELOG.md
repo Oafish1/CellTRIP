@@ -1,3 +1,7 @@
+### 1.0.0+2024-09-17
+- Additional runs
+- Figure changes
+
 ### 1.0.0+2024-09-15
 - Substantial figure changes
 - Tuning and additional runs
