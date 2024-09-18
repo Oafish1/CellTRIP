@@ -12,3 +12,10 @@
 \quad
 \delta_i^t = \sum_{k=1}^{n_m} \sum_{j=1 \ne i}^{n_c} (D_{ij}^{(k)} - D_{ij}^t)^2, \\
 R^t = R_D^t + R_B^t + R_V^t + R_A^t
+
+\vec x_i, \vec v_i \\
+\vec a_i, \vec b_{ij} \\
+\vec s_i, \Delta \vec v_i \\
+M^{(k)}, E^{(k)} \\
+D^{(k)}, D_{ij} \\
+E_a, E_b, E_s

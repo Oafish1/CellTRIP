@@ -1,3 +1,7 @@
+### 1.0.0+2024-09-18
+- Additional runs
+- Major figure revisions
+
 ### 1.0.0+2024-09-17
 - Additional runs
 - Figure changes
