@@ -1,6 +1,7 @@
-### 1.0.0+2024-09-18 (1-2)
+### 1.0.0+2024-09-18 (1-3)
 - Additional runs
 - Major figure revisions
+- Poster revisions
 
 ### 1.0.0+2024-09-17
 - Additional runs
