@@ -28,6 +28,7 @@ setup(
         'examples': [
             'matplotlib',
             'pandas',
+            'scanpy',
             'scikit-learn',
             'seaborn',
             'wandb[importers]',

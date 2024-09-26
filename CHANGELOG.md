@@ -1,3 +1,12 @@
+### 1.0.0+2024-09-26
+- Add legend to analysis
+- Better analysis step configurability
+- Enhance CLI reporting for analysis progress
+- Fix dependencies
+- Fix trajectory centering behavior
+- Poster updates
+- Various bugfixes
+
 ### 1.0.0+2024-09-25
 - Add `copy` argument to PCA utility function for memory saving
 - Add scGLUE dataset
