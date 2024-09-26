@@ -1,3 +1,24 @@
+### 1.0.0+2024-09-25
+- Add `copy` argument to PCA utility function for memory saving
+- Add scGLUE dataset
+- Increast leniency of early stopping, fixing non-convergence for high dimensionality
+- Poster updates
+- Reduce required user input for analysis
+
+### 1.0.0+2024-09-24
+- Additional runs
+- Figure revisions
+- Many additions to analysis functionality, including several arguments and tuning
+- Poster revisions
+
+### 1.0.0+2024-09-23
+- Change `max_nodes` argument to be more intuitive
+
+### 1.0.0+2024-09-20
+- Additional runs
+- Enhanced plotting functionality for analyses
+- Script organization
+
 ### 1.0.0+2024-09-18 (1-3)
 - Additional runs
 - Major figure revisions

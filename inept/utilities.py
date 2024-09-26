@@ -220,11 +220,11 @@ def subsample_features(*MS, num_features, **kwargs):
     return clean_return(ret, **kwargs)
 
 
-def pca_features(*MS, num_features, **kwargs):
+def pca_features(*MS, num_features, copy=True, **kwargs):
     "Compute PCA on features of given modalities"
     ret = []
     for M, num in zip(MS, num_features):
-        pca = sklearn.decomposition.PCA(num)
+        pca = sklearn.decomposition.PCA(n_components=num, copy=copy)
         M = pca.fit_transform(M)
         ret.append(M)
     return clean_return(ret, **kwargs)
@@ -255,7 +255,7 @@ def split_state(state, idx=None, max_nodes=None):
     num_nodes = state.shape[0] - 1
     if max_nodes is not None and max_nodes < num_nodes:
         # Filter nodes to `max_nodes` per idx
-        num_nodes = max_nodes
+        num_nodes = max_nodes - 1
         probs = torch.rand_like(mask, dtype=torch.get_default_dtype())
         probs[~mask] = 0
         selected_idx = probs.argsort(dim=-1)[..., -num_nodes:]  # Take `num_nodes` highest values
