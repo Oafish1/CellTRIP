@@ -1,9 +1,10 @@
-### 1.0.0+2024-09-27 (1-2)
+### 1.0.0+2024-09-27 (1-3)
 - Analysis tuning and exploration
 - File structure cleanup
 - Final poster visualizations and layout
 - More analysis configurability
 - New thumbnail/logo
+- Poster updates
 - Results for BrainChromatin dataset
 - Results for scGLUE dataset
 
