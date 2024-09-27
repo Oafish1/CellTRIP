@@ -1,4 +1,4 @@
-### 1.0.0+2024-09-27
+### 1.0.0+2024-09-27 (1-2)
 - Analysis tuning and exploration
 - File structure cleanup
 - Final poster visualizations and layout
