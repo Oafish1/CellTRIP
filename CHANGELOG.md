@@ -1,3 +1,12 @@
+### 1.0.0+2024-09-27
+- Analysis tuning and exploration
+- File structure cleanup
+- Final poster visualizations and layout
+- More analysis configurability
+- New thumbnail/logo
+- Results for BrainChromatin dataset
+- Results for scGLUE dataset
+
 ### 1.0.0+2024-09-26
 - Add legend to analysis
 - Better analysis step configurability
