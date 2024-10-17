@@ -203,11 +203,12 @@ def clean_return(ret, keep_array=False):
     return ret
 
 
-def normalize(*MS, **kwargs):
-    "Normalize given modalities by feature"
+def normalize(*MS, all=False, **kwargs):
+    "Normalize given modalities by feature or by whole matrix"
+    axis = None if all else 0
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        ret = [np.nan_to_num((M - M.mean(axis=0)) / M.std(axis=0)) for M in MS]
+        ret = [np.nan_to_num((M - M.mean(axis=axis)) / M.std(axis=axis)) for M in MS]
     return clean_return(ret, **kwargs)
 
 

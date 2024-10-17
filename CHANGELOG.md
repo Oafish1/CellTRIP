@@ -1,4 +1,21 @@
-### 1.0.0+2024-09-27 (1-3)
+### 1.0.0+2024-10-17
+- Additional arguments for normalization/standardization
+- Adjust stages to not have penalty explosion
+- Apply standardization to running datasets
+- Bugfix for default env weights
+- Bugfix for reward calculation flipped sign
+- Concurrent runs
+- Fix standardization issue
+
+### 1.0.0+2024-10-16
+- Add visual cortex dataset for spatial data
+- Rerun requirements
+- Revise `trajectory` environment to support imputation
+
+### 1.0.0+2024-09-30
+- Poster thumbnail updates
+
+### 1.0.0+2024-09-27 (1-4)
 - Analysis tuning and exploration
 - File structure cleanup
 - Final poster visualizations and layout

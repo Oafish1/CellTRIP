@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 
 from . import utilities
@@ -24,12 +25,14 @@ class trajectory:
         vel_bound=1,
         delta=.1,
         # Rewards
-        reward_distance=0,
-        reward_origin=0,
-        penalty_bound=0,
-        penalty_velocity=0,
-        penalty_action=0,
-        reward_distance_type='euclidean',
+        reward_distance=None,
+        reward_origin=None,
+        penalty_bound=None,
+        penalty_velocity=None,
+        penalty_action=None,
+        # Targets
+        modalities_to_return=None,  # Which modalities are given as input
+        reward_distance_target=None,  # Which modalities are targets
         # Device
         device='cpu',
     ):
@@ -40,8 +43,26 @@ class trajectory:
         self.pos_rand_bound = pos_rand_bound
         self.vel_bound = vel_bound
         self.delta = delta
-        self.reward_distance_type = reward_distance_type
+        self.modalities_to_return = modalities_to_return
+        self.reward_distance_target = reward_distance_target
         self.device = device
+
+        # Defaults
+        all_modalities = list(range(len(self.modalities)))
+        if self.reward_distance_target is None:
+            # By default, all modalities will be targets
+            self.reward_distance_target = all_modalities
+        elif type(self.reward_distance_target) == int:
+            # Make sure that input is of the correct type
+            self.reward_distance_target = [self.reward_distance_target]
+
+        if self.modalities_to_return is None:
+            if len(self.reward_distance_target) == len(self.modalities):
+                # By default, all modalities will be inputs if all modalities are targeted
+                self.modalities_to_return = all_modalities
+            else:
+                # If some modalities aren't targets, they are inputs (imputation)
+                self.modalities_to_return = list(set(all_modalities) - set(self.reward_distance_target))
 
         # Weights
         # NOTE: Rewards can and should go positive, penalties can't
@@ -52,6 +73,22 @@ class trajectory:
             'penalty_velocity': penalty_velocity,   # Don't move fast
             'penalty_action': penalty_action,       # Don't take drastic action
         }
+
+        # Default weights
+        reward_not_set = {k: r is None for k, r in self.reward_scales.items()}
+        if np.array(list(reward_not_set.values())).all():
+            # If all rewards are unset to zero, turn on default final rewards
+            self.reward_scales = {
+                'reward_distance': 1,
+                'reward_origin': 0,
+                'penalty_bound': 1,
+                'penalty_velocity': 1,
+                'penalty_action': 1,
+            }
+        else:
+            # Otherwise, set `None` rewards to zero
+            for k in reward_not_set:
+                if reward_not_set[k]: self.reward_scales[k] = 0
 
         # Storage
         self.dist = None
@@ -74,8 +111,12 @@ class trajectory:
 
         ### Pre-step calculations
         # Distance reward
-        if self.reward_distance_type == 'target': reward_distance = self.get_distance_from_targets()
-        elif self.reward_distance_type == 'euclidean': reward_distance = self.get_distance_match()
+        if self.reward_distance_target == 'debug':
+            # Debugging mode to test that PPO works, each cell goes to the position of its first `dim` modal features
+            reward_distance = self.get_distance_from_targets()
+        else:
+            # Emulate combined intra-modal distances
+            reward_distance = self.get_distance_match()
 
         # Origin penalty
         reward_origin = self.get_distance_from_origin()
@@ -93,8 +134,12 @@ class trajectory:
 
         ### Post-step calculations
         # Distance reward
-        if self.reward_distance_type == 'target': reward_distance -= self.get_distance_from_targets()
-        elif self.reward_distance_type == 'euclidean': reward_distance -= self.get_distance_match()
+        if self.reward_distance_target == 'debug':
+            # Debugging mode to test that PPO works, each cell goes to the position of its first `dim` modal features
+            reward_distance -= self.get_distance_from_targets()
+        else:
+            # Emulate combined intra-modal distances
+            reward_distance -= self.get_distance_match()
 
         # Origin reward
         reward_origin -= self.get_distance_from_origin()
@@ -160,19 +205,23 @@ class trajectory:
 
     def get_distance_from_targets(self, targets=None):
         # Defaults
-        if targets is None: targets = self.modalities[0][:, :2]
+        if targets is None: targets = self.modalities[0][:, :self.dim]
 
         # Calculate distance
         dist = self.pos - targets
 
         return dist.norm(dim=1)
 
-    def get_distance_match(self):
+    def get_distance_match(self, targets=None):
+        # Defaults
+        if targets is None: targets = self.reward_distance_target
+
         # Calculate modality distances
         # NOTE: Only scaled for `self.dist` calculation
         if self.dist is None:
             self.dist = []
-            for m in self.modalities:
+            for target in targets:
+                m = self.modalities[target]
                 m_dist = utilities.euclidean_distance(m, scaled=True)
                 self.dist.append(m_dist)
 
@@ -218,11 +267,17 @@ class trajectory:
     def get_velocities(self):
         return self.vel
 
+    def get_target_modalities(self):
+        return [m for i, m in enumerate(self.modalities) if i in self.reward_distance_target]
+
+    def get_return_modalities(self):
+        return [m for i, m in enumerate(self.modalities) if i in self.modalities_to_return]
+
     def get_modalities(self):
         return self.modalities
 
     def get_state(self, include_modalities=False):
         if include_modalities:
-            return torch.cat((self.pos, self.vel, *self.modalities), dim=1)
+            return torch.cat((self.pos, self.vel, *self.get_return_modalities()), dim=1)
         else:
             return torch.cat((self.pos, self.vel), dim=1)
