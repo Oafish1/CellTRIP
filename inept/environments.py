@@ -20,7 +20,7 @@ class trajectory:
         *modalities,
         # Params
         dim=2,
-        pos_bound=1,
+        pos_bound=10,
         pos_rand_bound=1,
         vel_bound=1,
         delta=.1,
@@ -101,7 +101,7 @@ class trajectory:
         self.reset()
 
     ### State functions
-    def step(self, actions=None, *, delta=None, return_rewards=False):
+    def step(self, actions=None, *, delta=None, return_itemized_rewards=False):
         # Defaults
         if actions is None: actions = torch.zeros_like(self.vel)
         if delta is None: delta = self.delta
@@ -174,7 +174,7 @@ class trajectory:
         )
 
         ret = (rwd, self.finished())
-        if return_rewards: ret += {
+        if return_itemized_rewards: ret += {
             'distance': reward_distance,
             'origin': reward_origin,
             'bound': penalty_bound,

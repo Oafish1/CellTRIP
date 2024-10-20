@@ -1,3 +1,29 @@
+### 1.0.0+2024-10-20
+- Add silhouette coefficient per cell type
+- Add simulation optimal length detection
+- Additional runs
+- More TODOs for training algorithm
+
+### 1.0.0+2024-10-19
+- Add legends to visualization
+- Add modal-relationship lines to new animation
+- Add velocity arrows to new animation
+- Change environment return argument key
+- New runs
+- Reformat visualization
+
+### 1.0.0+2024-10-18
+- Add data loading module
+- Change environment defaults
+- Change normalize to standardize for accuracy
+- Change plot file naming scheme
+- Clean formatting in training notebook(s)
+- Cleaner utility functions
+- Data adjustment utility functions
+- Moved temp files to OS temp directory
+- New animation notebook
+- Remove unnecessary/unchanged arguments from parameters
+
 ### 1.0.0+2024-10-17
 - Additional arguments for normalization/standardization
 - Adjust stages to not have penalty explosion

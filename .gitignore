@@ -3,7 +3,7 @@
 __pycache__
 
 # Models
-**/trained_models/
+**/models/*
 
 # Wandb
 **/wandb/

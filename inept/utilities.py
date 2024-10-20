@@ -113,13 +113,13 @@ class EarlyStopping:
     def __init__(
         self,
         # Global parameters
-        method='absolute',
-        buffer=50,
-        delta=.01,
+        method='average',
+        buffer=30,
+        delta=1e-3,
         decreasing=False,
 
         # `average` method parameters
-        window_size=10,
+        window_size=15,
 
         # `absolute` method parameters
         # ...
@@ -203,8 +203,8 @@ def clean_return(ret, keep_array=False):
     return ret
 
 
-def normalize(*MS, all=False, **kwargs):
-    "Normalize given modalities by feature or by whole matrix"
+def standardize_features(*MS, all=False, **kwargs):
+    "Standardize given modalities by feature or by whole matrix"
     axis = None if all else 0
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -491,3 +491,52 @@ class RunningStatistics:
         else: return self.m2 / (self.n - 1)
 
     
+def modify_data(
+        # Data
+        modalities,
+        types=None,
+        # Modifications
+        standardize=False,
+        pca_dim=None,
+        num_nodes=None,
+        num_features=None,
+        device=None,
+        **kwargs,
+    ):
+    "Apply modifications to input modalities based on given arguments"
+
+    # Modify data
+    if standardize:
+        modalities = standardize_features(*modalities, keep_array=True)
+
+    # Apply PCA
+    if pca_dim is not None:
+        modalities = pca_features(*modalities, num_features=pca_dim, copy=(max(*[M.shape[1] for M in modalities]) < 50_000), keep_array=True)
+
+    # Subsample nodes
+    if num_nodes is not None:
+        subsample = subsample_nodes(*modalities, *types, num_nodes=num_nodes, keep_array=True)
+        modalities, types = subsample[:len(modalities)], subsample[len(modalities):]
+
+    # Subsample features (expects tuple of ints for each modality)
+    if num_features is not None:
+        modalities = subsample_features(*modalities, num_features=num_features, keep_array=True)
+
+    # Cast types
+    if device is not None:
+        modalities = [torch.tensor(Mx, dtype=torch.float32, device=device) for Mx in modalities]
+
+    # Return modified data
+    ret = (modalities,)
+    if types is not None: ret += (types,)
+    return clean_return(ret)
+
+
+def overwrite_dict(original, modification):
+    "Overwrite dictionary values based on provided modification dictionary"
+
+    new = original.copy()
+    for k, v in modification.items():
+        new[k] = v
+
+    return new

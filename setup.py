@@ -26,11 +26,13 @@ setup(
             'umap-learn',
         ],
         'examples': [
+            'ipympl',
             'matplotlib',
             'pandas',
             'scanpy',
             'scikit-learn',
             'seaborn',
+            'tqdm',
             'wandb[importers]',
         ],
     },
