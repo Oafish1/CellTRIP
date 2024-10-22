@@ -4,6 +4,6 @@ This repository is an implementation of proximal policy optimization (PPO) in a 
 
 ## Examples
 
-![INEPT trained on 50 cells of MMD-MA simulation data, generalized to the whole dataset (300 cells) and run for 200 steps](./plots/MMD-MA_integration.gif)
+![Policy trained on 100 cells of spatial data, shown in 3D with layer separation measurements and reward visualizations](./plots/MouseVisual_integration.gif)
 
-![Same simulation with single perturbed cell traced from steady-state position](./plots/MMD-MA_trajectory.gif)
+![Policy trained on 50 cells of MMD-MA simulation data, generalized to the whole dataset (300 cells) with single cell perturbed and traced from steady-state position](./plots/MMD-MA_trajectory.gif)

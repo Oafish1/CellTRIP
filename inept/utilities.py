@@ -203,41 +203,6 @@ def clean_return(ret, keep_array=False):
     return ret
 
 
-def standardize_features(*MS, all=False, **kwargs):
-    "Standardize given modalities by feature or by whole matrix"
-    axis = None if all else 0
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        ret = [np.nan_to_num((M - M.mean(axis=axis)) / M.std(axis=axis)) for M in MS]
-    return clean_return(ret, **kwargs)
-
-
-def subsample_features(*MS, num_features, **kwargs):
-    "Subsample features in given modalities"
-    ret = []
-    for M, num in zip(MS, num_features):
-        idx = np.random.choice(M.shape[1], num, replace=False)
-        ret.append(M[:, idx])
-    return clean_return(ret, **kwargs)
-
-
-def pca_features(*MS, num_features, copy=True, **kwargs):
-    "Compute PCA on features of given modalities"
-    ret = []
-    for M, num in zip(MS, num_features):
-        pca = sklearn.decomposition.PCA(n_components=num, copy=copy)
-        M = pca.fit_transform(M)
-        ret.append(M)
-    return clean_return(ret, **kwargs)
-
-
-def subsample_nodes(*DS, num_nodes, **kwargs):
-    "Subsample nodes of given arrays"
-    idx = np.random.choice(DS[0].shape[0], num_nodes, replace=False)
-    ret = [D[idx] for D in DS]
-    return clean_return(ret, **kwargs)
-
-
 def split_state(state, idx=None, max_nodes=None):
     "Split full state matrix into individual inputs, idx is an optional array"
     # Parameters
@@ -490,46 +455,167 @@ class RunningStatistics:
         if n < 2: return 0
         else: return self.m2 / (self.n - 1)
 
-    
-def modify_data(
-        # Data
-        modalities,
-        types=None,
-        # Modifications
+
+def standardize_features(*MS, all=False, **kwargs):
+    "Standardize given modalities by feature or by whole matrix"
+    axis = None if all else 0
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        ret = [np.nan_to_num((M - M.mean(axis=axis)) / M.std(axis=axis)) for M in MS]
+    return clean_return(ret, **kwargs)
+
+
+def subsample_features(*MS, num_features, **kwargs):
+    "Subsample features in given modalities"
+    ret = []
+    for M, num in zip(MS, num_features):
+        idx = np.random.choice(M.shape[1], num, replace=False)
+        ret.append(M[:, idx])
+    return clean_return(ret, **kwargs)
+
+
+def pca_features(*MS, num_features, copy=True, **kwargs):
+    "Compute PCA on features of given modalities"
+    ret = []
+    for M, num in zip(MS, num_features):
+        pca = sklearn.decomposition.PCA(n_components=num, copy=copy)
+        M = pca.fit_transform(M)
+        ret.append(M)
+    return clean_return(ret, **kwargs)
+
+
+def subsample_nodes(*DS, num_nodes, **kwargs):
+    "Subsample nodes of given arrays"
+    idx = np.random.choice(DS[0].shape[0], num_nodes, replace=False)
+    ret = [D[idx] for D in DS]
+    return clean_return(ret, **kwargs)
+
+
+class Preprocessing(
+
+    ):
+    "Apply modifications to input modalities based on given arguments. Takes np.array as input"
+
+    def __init__(
+        self,
+        # Standardize
         standardize=False,
+        # PCA
         pca_dim=None,
+        pca_copy=True,  # Set to false if too much memory being used
+        # Subsampling
         num_nodes=None,
         num_features=None,
+        # End cast
         device=None,
         **kwargs,
     ):
-    "Apply modifications to input modalities based on given arguments"
+        self.standardize = standardize
+        self.pca_dim = pca_dim
+        self.pca_copy = pca_copy
+        self.num_nodes = num_nodes
+        self.num_features = num_features
+        self.device = device
 
-    # Modify data
-    if standardize:
-        modalities = standardize_features(*modalities, keep_array=True)
+        # Initialize persistent vars
 
-    # Apply PCA
-    if pca_dim is not None:
-        modalities = pca_features(*modalities, num_features=pca_dim, copy=(max(*[M.shape[1] for M in modalities]) < 50_000), keep_array=True)
+    
+    def fit(self, modalities, **kwargs):
+        self.modalities = modalities
 
-    # Subsample nodes
-    if num_nodes is not None:
-        subsample = subsample_nodes(*modalities, *types, num_nodes=num_nodes, keep_array=True)
-        modalities, types = subsample[:len(modalities)], subsample[len(modalities):]
+        # Standardize
+        if self.standardize:
+            self.standardize_mean = [m.mean(axis=0, keepdims=True) for m in modalities]
+            self.standardize_std = [m.std(axis=0, keepdims=True) for m in modalities]
 
-    # Subsample features (expects tuple of ints for each modality)
-    if num_features is not None:
-        modalities = subsample_features(*modalities, num_features=num_features, keep_array=True)
+        # PCA
+        if self.pca_dim is not None:
+            self.pca_class = [
+                sklearn.decomposition.PCA(n_components=dim, copy=self.pca_copy).fit(m)
+                for m, dim in zip(modalities, self.pca_dim)]
 
-    # Cast types
-    if device is not None:
-        modalities = [torch.tensor(Mx, dtype=torch.float32, device=device) for Mx in modalities]
 
-    # Return modified data
-    ret = (modalities,)
-    if types is not None: ret += (types,)
-    return clean_return(ret)
+    def transform(self, modalities, copy=True, **kwargs):
+        if copy: modalities = modalities.copy()
+
+        # Standardize
+        if self.standardize:
+            modalities = [
+                (m - m_mean) / m_std
+                for m, m_mean, m_std in zip(modalities, self.standardize_mean, self.standardize_std)]
+
+        # PCA
+        if self.pca_dim is not None:
+            modalities = [p.transform(m) for m, p in zip(modalities, self.pca_class)]
+
+        return modalities
+
+
+    def inverse_transform(self, modalities, copy=True, **kwargs):
+        if copy: modalities = modalities.copy()
+
+        # PCA
+        if self.pca_dim is not None:
+            modalities = [p.inverse_transform(m) for m, p in zip(modalities, self.pca_class)]
+
+        # Standardize
+        if self.standardize:
+            modalities = [
+                m_std * m + m_mean
+                for m, m_mean, m_std in zip(modalities, self.standardize_mean, self.standardize_std)]
+
+        return modalities
+
+    
+    def fit_transform(self, *args, **kwargs):
+        self.fit(*args, **kwargs)
+        return self.transform(*args, **kwargs)
+    
+
+    def cast(self, modalities, copy=True):
+        assert self.device is not None, '`device` must be set to call `self.cast`'
+        if copy: modalities = modalities.copy()
+
+        # Cast types
+        modalities = [torch.tensor(m, dtype=torch.float32, device=self.device) for m in modalities]
+
+        return modalities
+    
+
+    def inverse_cast(self, modalities, copy=True):
+        if copy: modalities = modalities.copy()
+
+        # Inverse cast
+        modalities = [m.detach().cpu().numpy() for m in modalities]
+
+        return modalities
+    
+    
+    def subsample(self, modalities, types=None, return_idx=False, copy=True, **kwargs):
+        if copy:
+            modalities = modalities.copy()
+            if types is not None: types = types.copy()
+
+        # Subsample features
+        # NOTE: Incompatible with inverse transform
+        if self.num_features is not None:
+            feature_idx = [np.random.choice(m.shape[1], nf, replace=False) for m, nf in zip(modalities, self.num_features)]
+            modalities = [m[:, idx] for m, idx in zip(modalities, feature_idx)]
+
+        # Subsample nodes
+        if self.num_nodes is not None:
+            assert np.array([m.shape[0] for m in modalities]).var() == 0, 'Nodes in all modalities must be equal to use node subsampling'
+
+            node_idx = np.random.choice(modalities[0].shape[0], self.num_nodes, replace=False)
+            modalities = [m[node_idx] for m in modalities]
+            if types is not None: types = [t[node_idx] for t in types]
+
+        ret = (modalities,)
+        if types is not None: ret += (types,)
+        if return_idx:
+            if self.num_features is not None: ret += (feature_idx,)
+            if self.num_nodes is not None: ret += (node_idx,)
+        return clean_return(ret)
 
 
 def overwrite_dict(original, modification):

@@ -245,6 +245,10 @@ class trajectory:
     def set_modalities(self, modalities):
         self.modalities = modalities
 
+        # Assert all modalities share the first dimension and reset num_nodes
+        assert all(m.shape[0] == self.modalities[0].shape[0] for m in self.modalities)
+        self.num_nodes = self.modalities[0].shape[0]
+
     def set_rewards(self, new_reward_scales):
         # Check that all rewards are valid
         for k, v in new_reward_scales.items():

@@ -31,9 +31,6 @@ class AdvancedMemoryBuffer:
             'suffix_matrices': {},  # Orderings of suffixes
         }
 
-        # Cache
-        self.suffix_matrix = {}
-
         # Maintenance variables
         self.recorded = {k: False for k in self.storage}
 
@@ -111,10 +108,11 @@ class AdvancedMemoryBuffer:
         return sum(len(keys) for keys in self.storage['keys'])
 
     def _append_suffix(self, state, *, keys, cache=True):
-        "Append suffixes to state vector"
+        "Append suffixes to state vector with optional cache for common key layouts"
         # Read from cache
-        if cache and str(keys) in self.persistent_storage['suffix_matrices']:
-            suffix_matrix = self.persistent_storage['suffix_matrices'][str(keys)]
+        # NOTE: Strings from numpy arrays are slower as keys
+        if cache and keys in self.persistent_storage['suffix_matrices']:
+            suffix_matrix = self.persistent_storage['suffix_matrices'][keys]
 
         else:
             # Aggregate suffixes
@@ -125,7 +123,7 @@ class AdvancedMemoryBuffer:
                 else: suffix_matrix = torch.concat((suffix_matrix, val), dim=0)
 
             # Add to cache
-            if cache: self.persistent_storage['suffix_matrices'][str(keys)] = suffix_matrix
+            if cache: self.persistent_storage['suffix_matrices'][keys] = suffix_matrix
 
         # Append to state
         return torch.concat((state, suffix_matrix), dim=1)
@@ -154,6 +152,10 @@ class AdvancedMemoryBuffer:
 
         # Store new variables
         for k, v in kwargs.items():
+            # Special cases
+            # NOTE: For some god-forsaken reason, traeating this as an np array or non-sequential list brings unimaginable problems (2x backwards time)
+            if k == 'keys': v = tuple(v)
+
             # Record
             self.storage[k].append(v)
             self.recorded[k] = True

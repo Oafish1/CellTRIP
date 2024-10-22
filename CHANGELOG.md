@@ -1,3 +1,14 @@
+### 1.0.0+2024-10-21
+- Add inverse to preprocessing methods
+- Bugfix for non-sequential or non-list `keys` inputs causing slowdowns
+- Clean file storage
+- Enhance and generalize running/profiling scripts
+- Many additional runs
+- Randomize nodes in each training episode
+- README update
+- Replace `modify_data` function with `Preprocessing` class
+- Runtime profiling and optimization
+
 ### 1.0.0+2024-10-20
 - Add silhouette coefficient per cell type
 - Add simulation optimal length detection

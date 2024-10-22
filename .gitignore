@@ -5,6 +5,9 @@ __pycache__
 # Models
 **/models/*
 
+# Profiling
+*.prof
+
 # Wandb
 **/wandb/
 
