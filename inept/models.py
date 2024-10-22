@@ -262,8 +262,8 @@ class ResidualSA(nn.Module):
 class EntitySelfAttention(nn.Module):
     def __init__(
         self,
-        num_features_per_node,
-        modal_sizes,
+        positional_dim,
+        modal_dims,
         output_dim,
         feature_embed_dim=32,
         embed_dim=64,
@@ -275,8 +275,8 @@ class EntitySelfAttention(nn.Module):
         super().__init__()
 
         # Base information
-        self.num_features_per_node = num_features_per_node
-        self.modal_sizes = modal_sizes
+        self.positional_dim = positional_dim
+        self.modal_dims = modal_dims
         self.output_dim = output_dim
         self.feature_embed_dim = feature_embed_dim
         self.embed_dim = embed_dim
@@ -297,10 +297,10 @@ class EntitySelfAttention(nn.Module):
         })
 
         # Feature embedding
-        self.feature_embed = nn.ModuleList([ nn.Linear(self.modal_sizes[i], self.feature_embed_dim) for i in range(len(self.modal_sizes)) ])
+        self.feature_embed = nn.ModuleList([ nn.Linear(self.modal_dims[i], self.feature_embed_dim) for i in range(len(self.modal_dims)) ])
 
         # Embedding
-        solo_features_len = self.feature_embed_dim * len(self.modal_sizes) + self.num_features_per_node
+        solo_features_len = self.feature_embed_dim * len(self.modal_dims) + self.positional_dim
         self.self_embed = nn.Linear(solo_features_len, self.embed_dim)
         # This could be wrong, but I couldn't think of another interpretation.
         # Also backed by https://glouppe.github.io/info8004-advanced-machine-learning/pdf/pleroy-hide-and-seek.pdf
@@ -320,9 +320,9 @@ class EntitySelfAttention(nn.Module):
 
     ### Calculation functions
     def embed_features(self, entities):
-        running_idx = self.num_features_per_node
+        running_idx = self.positional_dim
         ret = [entities[..., :running_idx]]
-        for ms, fe in zip(self.modal_sizes, self.feature_embed):
+        for ms, fe in zip(self.modal_dims, self.feature_embed):
             # Record embedded features
             val = fe(entities[..., running_idx:(running_idx + ms)])
             val = self.activation(val)
@@ -412,8 +412,8 @@ class EntitySelfAttention(nn.Module):
 class PPO(nn.Module):
     def __init__(
             self,
-            num_features_per_node,
-            modal_sizes,
+            positional_dim,
+            modal_dims,
             output_dim,
             model=EntitySelfAttention,
             action_std_init=.6,
@@ -455,12 +455,12 @@ class PPO(nn.Module):
         self.device = device
 
         # New policy
-        self.actor = model(num_features_per_node=num_features_per_node, modal_sizes=modal_sizes, output_dim=output_dim, action_std_init=action_std_init, **kwargs)
-        self.critic = model(num_features_per_node=num_features_per_node, modal_sizes=modal_sizes, output_dim=1, **kwargs)
+        self.actor = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=output_dim, action_std_init=action_std_init, **kwargs)
+        self.critic = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=1, **kwargs)
 
         # Old policy
-        self.actor_old = model(num_features_per_node=num_features_per_node, modal_sizes=modal_sizes, output_dim=output_dim, action_std_init=action_std_init, **kwargs)
-        self.critic_old = model(num_features_per_node=num_features_per_node, modal_sizes=modal_sizes, output_dim=1, **kwargs)
+        self.actor_old = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=output_dim, action_std_init=action_std_init, **kwargs)
+        self.critic_old = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=1, **kwargs)
 
         # Optimizer
         self.optimizer = torch.optim.Adam([
@@ -470,7 +470,7 @@ class PPO(nn.Module):
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
 
         # Memory
-        self.memory = AdvancedMemoryBuffer(sum(modal_sizes), rs_nset=rs_nset)
+        self.memory = AdvancedMemoryBuffer(sum(modal_dims), rs_nset=rs_nset)
 
         # Copy current weights
         self.update_old_policy()

@@ -1,8 +1,16 @@
+### 1.0.0+2024-10-22
+- Add camera rotation during visualization
+- Add stage detection and loading for analysis
+- Argument naming consistency for policy class
+- Fix incorrect coloration for reward preview lines in analysis
+- README update
+
 ### 1.0.0+2024-10-21
 - Add inverse to preprocessing methods
 - Bugfix for non-sequential or non-list `keys` inputs causing slowdowns
 - Clean file storage
 - Enhance and generalize running/profiling scripts
+- Increase reliability of environment modality changes
 - Many additional runs
 - Randomize nodes in each training episode
 - README update
