@@ -16,3 +16,6 @@ __pycache__
 
 # Temp
 **/temp/
+
+# Hidden
+**/hidden_*

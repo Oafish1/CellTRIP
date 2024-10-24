@@ -271,6 +271,7 @@ class EntitySelfAttention(nn.Module):
         action_std_init=.6,
         activation=F.tanh,
         num_mlps=1,
+        **kwargs,
     ):
         super().__init__()
 

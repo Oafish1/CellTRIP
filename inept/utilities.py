@@ -618,10 +618,13 @@ class Preprocessing(
         return clean_return(ret)
 
 
-def overwrite_dict(original, modification):
+def overwrite_dict(original, modification, copy=True):
     "Overwrite dictionary values based on provided modification dictionary"
 
-    new = original.copy()
+    # Copy if requested
+    new = original.copy() if copy else original
+
+    # Write over old keys/Add new keys
     for k, v in modification.items():
         new[k] = v
 

@@ -1,8 +1,14 @@
-### 1.0.0+2024-10-22
+### 1.0.0+2024-10-23
+- More runs on spatial data
+- Naming and file structure changes for plot outputs
+- QOL for model arguments and utility functions
+
+### 1.0.0+2024-10-22 (1-2)
 - Add camera rotation during visualization
 - Add stage detection and loading for analysis
 - Argument naming consistency for policy class
 - Fix incorrect coloration for reward preview lines in analysis
+- Fix zorder configuration to better emulate 3D
 - README update
 
 ### 1.0.0+2024-10-21
