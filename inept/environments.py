@@ -243,7 +243,9 @@ class trajectory:
 
     ### Get-Set functions
     def set_modalities(self, modalities):
+        # Set modalities and reset pre-calculated inter-node dist
         self.modalities = modalities
+        self.dist = None
 
         # Assert all modalities share the first dimension and reset num_nodes
         assert all(m.shape[0] == self.modalities[0].shape[0] for m in self.modalities)
@@ -285,3 +287,8 @@ class trajectory:
             return torch.cat((self.pos, self.vel, *self.get_return_modalities()), dim=1)
         else:
             return torch.cat((self.pos, self.vel), dim=1)
+        
+    def set_state(self, state):
+        # Non-compatible with `include_modalities`
+        self.set_positions(state[..., :self.dim])
+        self.set_velocities(state[..., self.dim:])

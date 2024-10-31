@@ -1,3 +1,14 @@
+### 1.0.0+2024-10-31
+- Add random node generation to analysis
+- Additional runs for spatial and scGLUE data
+- Additional state setting functionality for environment class
+- Figure changes including model flowchart
+- File cleanup
+- Improve movement detection and false early stopping for integration analysis
+- Name change
+- New analyses for spatial data
+- New visualizations
+
 ### 1.0.0+2024-10-23
 - More runs on spatial data
 - Naming and file structure changes for plot outputs
