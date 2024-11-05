@@ -1,3 +1,6 @@
+### 1.0.0+2024-11-5
+- Figure updates
+
 ### 1.0.0+2024-10-31
 - Add random node generation to analysis
 - Additional runs for spatial and scGLUE data
