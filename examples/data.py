@@ -5,8 +5,13 @@ import pandas as pd
 
 
 def load_data(dataset_name, data_folder):
-    if dataset_name == 'MouseVisual':
-        dataset_dir = os.path.join(data_folder, 'mouseVisual')
+    spatial_dataset_name_dict = {
+        'MouseVisual': 'mouseVisual',
+        'ISS': 'ISS',
+    }
+
+    if dataset_name in spatial_dataset_name_dict:
+        dataset_dir = os.path.join(data_folder, spatial_dataset_name_dict[dataset_name])
         M1 = pd.read_csv(os.path.join(dataset_dir, 's3_cell_by_gene.csv'), delimiter=',', header=1).rename(columns={'gene_name': 'sample_name'})
         # spot_data = pd.read_csv(os.path.join(dataset_dir, 's3_spot_table.csv'), delimiter=',', header=0).drop(columns=['Unnamed: 0', 'Unnamed: 0.1'])
         M2 = pd.read_csv(os.path.join(dataset_dir, 's3_mapped_cell_table.csv'), delimiter=',', header=0).drop(columns=['Unnamed: 0'])

@@ -1,4 +1,17 @@
-### 1.0.0+2024-11-5
+### 1.0.0+2024-11-13
+- File reorganization
+- New figures
+- Runs for `ISS` and older data
+
+### 1.0.0+2024-11-07
+- Additional runs
+- Bugfix for unmatched dimensions in env and data when using PCA
+- New `ISS` spatial data
+
+### 1.0.0+2024-11-06
+- Flowchart updates
+
+### 1.0.0+2024-11-05
 - Figure updates
 
 ### 1.0.0+2024-10-31

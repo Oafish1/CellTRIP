@@ -35,6 +35,8 @@ class trajectory:
         reward_distance_target=None,  # Which modalities are targets
         # Device
         device='cpu',
+        # Extras
+        **kwargs,
     ):
         # Record modal data
         self.modalities = modalities
