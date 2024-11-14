@@ -6,18 +6,29 @@ import pandas as pd
 
 def load_data(dataset_name, data_folder):
     spatial_dataset_name_dict = {
-        'MouseVisual': 'mouseVisual',
-        'ISS': 'ISS',
+        'MouseVisual': 'BARISTASeq',
+        'BARISTASeq': 'BARISTASeq',
+        'ISS': 'ISS',  # TODO: Mixed species.  Also, make sure samples line up! i.e. same time!
+        'MERFISH': 'MERFISH',
+        'smFISH': 'smFISH',
+        'ExSeq': 'ExSeq',
     }
 
     if dataset_name in spatial_dataset_name_dict:
         dataset_dir = os.path.join(data_folder, spatial_dataset_name_dict[dataset_name])
-        M1 = pd.read_csv(os.path.join(dataset_dir, 's3_cell_by_gene.csv'), delimiter=',', header=1).rename(columns={'gene_name': 'sample_name'})
-        # spot_data = pd.read_csv(os.path.join(dataset_dir, 's3_spot_table.csv'), delimiter=',', header=0).drop(columns=['Unnamed: 0', 'Unnamed: 0.1'])
-        M2 = pd.read_csv(os.path.join(dataset_dir, 's3_mapped_cell_table.csv'), delimiter=',', header=0).drop(columns=['Unnamed: 0'])
+
+        # Special handling
+        if dataset_name not in ('ExSeq',):
+            M1 = pd.read_csv(os.path.join(dataset_dir, 's3_cell_by_gene.csv'), delimiter=',', header=1).rename(columns={'gene_name': 'sample_name'})
+            # spot_data = pd.read_csv(os.path.join(dataset_dir, 's3_spot_table.csv'), delimiter=',', header=0).drop(columns=['Unnamed: 0', 'Unnamed: 0.1'])
+            M2 = pd.read_csv(os.path.join(dataset_dir, 's3_mapped_cell_table.csv'), delimiter=',', header=0).drop(columns=['Unnamed: 0'])
+        else:
+            M1 = pd.read_csv(os.path.join(dataset_dir, 's3_cell_by_gene.csv'), delimiter=',', header=0).rename(columns={'Unnamed: 0': 'sample_name'})
+            # spot_data = pd.read_csv(os.path.join(dataset_dir, 's3_spot_table.csv'), delimiter=',', header=0).drop(columns=['Unnamed: 0', 'Unnamed: 0.1'])
+            M2 = pd.read_csv(os.path.join(dataset_dir, 's3_mapped_cell_table.csv'), delimiter=',', header=0).drop(columns=['Unnamed: 0']).rename(columns={'cell': 'sample_name', 'cluster': 'layer'})  # Not really a layer, just for consistency
 
         # Check all samples line up
-        assert (M1['sample_name'] == M2['sample_name']).all()
+        assert (M1['sample_name'].reset_index(drop=True) == M2['sample_name'].reset_index(drop=True)).all()
 
         # Get final formatted data
         M1 = M1.drop(columns='sample_name')

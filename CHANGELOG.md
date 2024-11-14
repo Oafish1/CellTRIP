@@ -1,7 +1,10 @@
-### 1.0.0+2024-11-13
-- File reorganization
+### 1.0.0+2024-11-13 (1-2)
+- Bugfix for disabled episode random node sampling
+- Bugfixes and generality improvements for dataloading
+- Datasets for `ExSeq`, `MERFISH`, and `smFISH`
+- Figure and data reorganization
 - New figures
-- Runs for `ISS` and older data
+- Runs for all spatial datasets aside from `BARISTASeq`
 
 ### 1.0.0+2024-11-07
 - Additional runs
