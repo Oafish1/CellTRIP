@@ -1,4 +1,15 @@
-### 1.0.0+2024-11-13 (1-2)
+### 1.0.0+2024-11-20
+- Extra default arguments
+
+### 1.0.0+2024-11-18
+- Add default `num_nodes` to analysis notebook
+- Many additional runs
+
+### 1.0.0+2024-11-15
+- Additional runs and tweaked hyperparameters
+- Updated bugfix for episode random node sampling
+
+### 1.0.0+2024-11-13 (1-3)
 - Bugfix for disabled episode random node sampling
 - Bugfixes and generality improvements for dataloading
 - Datasets for `ExSeq`, `MERFISH`, and `smFISH`
