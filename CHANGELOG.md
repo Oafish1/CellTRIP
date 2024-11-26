@@ -1,3 +1,12 @@
+### 1.0.0+2024-11-26
+- Add frame skipping to analysis output
+- Add time-dependent analysis and discrepancy evaluation
+- Begin implementing new dataset
+- Generalize deployment and temporal configuration(s)
+- Many additional runs
+- Scripts for running many analyses at a time
+- Standardize running format for analysis notebook
+
 ### 1.0.0+2024-11-20
 - Extra default arguments
 
