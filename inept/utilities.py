@@ -203,7 +203,13 @@ def clean_return(ret, keep_array=False):
     return ret
 
 
-def split_state(state, idx=None, max_nodes=None):
+def split_state(
+    state,
+    idx=None,
+    max_nodes=None,
+    sample_strategy='random',
+    return_mask=False,
+):
     "Split full state matrix into individual inputs, idx is an optional array"
     # Parameters
     if idx is None: idx = list(range(state.shape[0]))
@@ -213,30 +219,41 @@ def split_state(state, idx=None, max_nodes=None):
     self_entity = state[idx]
 
     # Get node features for each state
-    mask = torch.zeros((len(idx), state.shape[0]), dtype=torch.bool)
-    for i, j in enumerate(idx): mask[i, j] = True
-    mask = ~mask
+    node_mask = torch.zeros((len(idx), state.shape[0]), dtype=torch.bool)
+    for i, j in enumerate(idx): node_mask[i, j] = True
+    node_mask = ~node_mask
 
     # Enforce max nodes
     num_nodes = state.shape[0] - 1
-    if max_nodes is not None and max_nodes < num_nodes:
-        # Filter nodes to `max_nodes` per idx
-        num_nodes = max_nodes - 1
-        probs = torch.rand_like(mask, dtype=torch.get_default_dtype())
-        probs[~mask] = 0
-        selected_idx = probs.argsort(dim=-1)[..., -num_nodes:]  # Take `num_nodes` highest values
+    use_mask = max_nodes is not None and max_nodes < num_nodes
+    if use_mask:
+        # Random sample `num_nodes` to `max_nodes`
+        # NOTE: Not reproducible between forward and backward, at the moment
+        if sample_strategy == 'random':
+            # Filter nodes to `max_nodes` per idx
+            num_nodes = max_nodes - 1
+            probs = torch.rand_like(node_mask, dtype=torch.get_default_dtype())
+            probs[~node_mask] = 0
+            selected_idx = probs.argsort(dim=-1)[..., -num_nodes:]  # Take `num_nodes` highest values
 
-        # Create new mask
-        mask = torch.zeros((len(idx), state.shape[0]), dtype=torch.bool)
-        for i in range(mask.shape[0]):
-            mask[i, selected_idx[i]] = True
+            # Create new mask
+            node_mask = torch.zeros((len(idx), state.shape[0]), dtype=torch.bool)
+            for i in range(node_mask.shape[0]):
+                node_mask[i, selected_idx[i]] = True
+
+        # Sample closest nodes
+        elif sample_strategy == 'closest':
+            # TODO
+            pass
 
     # Final formation
     node_entities = state.unsqueeze(0).expand(len(idx), *state.shape)
-    node_entities = node_entities[mask].reshape(len(idx), num_nodes, state.shape[1])
+    node_entities = node_entities[node_mask].reshape(len(idx), num_nodes, state.shape[1])
 
     # Return
-    return self_entity, node_entities
+    ret = (self_entity, node_entities)
+    if return_mask: ret += (node_mask,)
+    return ret
 
 
 def is_list_like(l):
@@ -541,7 +558,7 @@ class Preprocessing(
         # Standardize
         if self.standardize:
             modalities = [
-                (m - m_mean) / m_std
+                (m - m_mean) / np.where(m_std == 0, 1, m_std)
                 for m, m_mean, m_std in zip(modalities, self.standardize_mean, self.standardize_std)]
 
         # PCA
@@ -603,6 +620,7 @@ class Preprocessing(
             modalities = [m[:, idx] for m, idx in zip(modalities, feature_idx)]
 
         # Subsample nodes
+        node_idx = np.arange(modalities[0].shape[0])
         if self.num_nodes is not None:
             assert np.array([m.shape[0] for m in modalities]).var() == 0, 'Nodes in all modalities must be equal to use node subsampling'
 
@@ -612,9 +630,8 @@ class Preprocessing(
 
         ret = (modalities,)
         if types is not None: ret += (types,)
-        if return_idx:
-            if self.num_features is not None: ret += (feature_idx,)
-            if self.num_nodes is not None: ret += (node_idx,)
+        if return_idx: ret += (node_idx,)
+        # if self.num_features is not None: ret += (feature_idx,)
         return clean_return(ret)
 
 

@@ -12,9 +12,10 @@ from . import utilities
 ### Utility classes
 class AdvancedMemoryBuffer:
     "Memory-efficient implementation of memory"
-    def __init__(self, suffix_len, rs_nset=1e5):
+    def __init__(self, suffix_len, rs_nset=1e5, split_args={}):
         # User parameters
         self.suffix_len = suffix_len
+        self.split_args = split_args
 
         # Storage variables
         self.storage = {
@@ -70,6 +71,7 @@ class AdvancedMemoryBuffer:
                         val = utilities.split_state(  # TIME BOTTLENECK
                             self._append_suffix(self.storage[k][list_num], keys=self.storage['keys'][list_num]),  # TIME BOTTLENECK
                             idx=local_idx,
+                            **self.split_args,
                         )
 
                     # Main case
@@ -427,6 +429,7 @@ class PPO(nn.Module):
             actor_lr=3e-4,
             critic_lr=1e-3,
             lr_gamma=1,
+            max_nodes=None,
             update_maxbatch=torch.inf,
             update_batch=torch.inf,
             update_minibatch=torch.inf,
@@ -448,6 +451,7 @@ class PPO(nn.Module):
         self.memory_prune = memory_prune
 
         # Runtime management
+        self.split_args = {'max_nodes': max_nodes}
         self.update_maxbatch = update_maxbatch
         self.update_batch = update_batch
         self.update_minibatch = update_minibatch
@@ -471,7 +475,7 @@ class PPO(nn.Module):
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
 
         # Memory
-        self.memory = AdvancedMemoryBuffer(sum(modal_dims), rs_nset=rs_nset)
+        self.memory = AdvancedMemoryBuffer(sum(modal_dims), rs_nset=rs_nset, split_args=self.split_args)
 
         # Copy current weights
         self.update_old_policy()
@@ -508,7 +512,7 @@ class PPO(nn.Module):
         if return_all: return action, action_log, state_val
         return action
 
-    def act_macro(self, state, *, keys=None, max_batch=None, max_nodes=None):
+    def act_macro(self, state, *, keys=None, max_batch=None):
         # Act
         if max_batch is not None:
             # Compute `max_batch` at a time with randomized `max_nodes`
@@ -518,7 +522,7 @@ class PPO(nn.Module):
                     *utilities.split_state(
                         state,
                         idx=list( range(start_idx, min(start_idx+max_batch, state.shape[0])) ),
-                        max_nodes=max_nodes,
+                        **self.split_args,
                     ),
                     return_all=True,
                 )
@@ -534,7 +538,7 @@ class PPO(nn.Module):
                     state_val = torch.concat((state_val, state_val_sub), dim=0)
         else:
             # Compute all at once
-            action, action_log, state_val = self.act(*utilities.split_state(state, max_nodes=max_nodes), return_all=True)
+            action, action_log, state_val = self.act(*utilities.split_state(state, **self.split_args), return_all=True)
 
         # Record
         # NOTE: `reward` and `is_terminal` are added outside of the class, calculated

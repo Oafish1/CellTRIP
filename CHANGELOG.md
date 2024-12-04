@@ -1,3 +1,9 @@
+### 1.0.0+2024-12-04
+- Add various strategies to `split_state` node sampling
+- Additional runs for spatial data with new random node sampling
+- Fix standardization bug when std equals zero
+- Make forward node sampling compatible with backwards computation
+
 ### 1.0.0+2024-11-26
 - Add frame skipping to analysis output
 - Add time-dependent analysis and discrepancy evaluation
