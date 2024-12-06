@@ -14,7 +14,64 @@ def load_data(dataset_name, data_folder):
         'ExSeq': 'ExSeq',
     }
 
-    if dataset_name in spatial_dataset_name_dict:
+    if dataset_name == 'temporalBrain':
+        import rds2py
+
+        # Get dir
+        dataset_dir = os.path.join(data_folder, 'temporalBrain')
+
+        # Load RNA
+        rdata = rds2py.parse_rds(os.path.join(dataset_dir, 'GSE204683_count_matrix.RDS'))
+        rdata['attributes']['dimnames'] = rdata['attributes']['Dimnames']
+        wrapper = rds2py.generics._dispatcher(rdata)
+        M1, F1, C1 = wrapper.matrix.T, *[np.array(sl) for sl in wrapper.dimnames]
+
+        # Load ATAC
+        rdata = rds2py.parse_rds(os.path.join(dataset_dir, 'GSE204682_count_matrix.RDS'))
+        rdata['attributes']['dimnames'] = rdata['attributes']['Dimnames']
+        wrapper = rds2py.generics._dispatcher(rdata)
+        M2, F2, C2 = wrapper.matrix.T, *[np.array(sl) for sl in wrapper.dimnames]
+
+        # Assert same order
+        assert (C1 == C2).all()
+
+        # Load barcodes
+        barcodes1 = pd.read_csv(os.path.join(dataset_dir, 'GSE204683_barcodes.tsv'), delimiter='\t')
+        barcodes2 = pd.read_csv(os.path.join(dataset_dir, 'GSE204682_barcodes.tsv'), delimiter='\t')
+
+        # Get sample ids
+        uniq_col, count_col = np.unique([e.split('_')[0] for e in C1], return_counts=True)
+        assert np.unique(count_col, return_counts=True)[1].max() == 1  # No duplicate counts, otherwise manual annotation is needed
+        # Get donor ids
+        uniq_donor, count_donor = np.unique(barcodes1['Donor ID'], return_counts=True)
+        assert (np.sort(count_col) == np.sort(count_donor)).all()
+        # Convert (aided by `preprocessing.R`)
+        name_to_id = {d: c for c, d in zip(uniq_col[np.argsort(count_col)], uniq_donor[np.argsort(count_donor)])}
+
+        # Set indices
+        barcodes1['Cell ID'] = barcodes1.apply(lambda r: f'{name_to_id[r["Donor ID"]]}_{r["Barcode"]}', axis=1)
+        barcodes2['Cell ID'] = barcodes2.apply(lambda r: f'{name_to_id[r["Donor ID"]]}_{r["Barcode"]}', axis=1)
+        assert (barcodes1.set_index('Cell ID') == barcodes1.set_index('Cell ID').loc[C1]).all().all()  # For some reason, `barcodes2` doesn't line up with `C2`, so we assume both meta are the correct order
+
+        # Join meta
+        barcodes = barcodes1.join(barcodes2, lsuffix=' RNA', rsuffix=' ATAC')
+        lsuffix, rsuffix = ' RNA', ' ATAC'
+        for col in ('Donor ID', 'Cell type'):
+            assert (barcodes[col+lsuffix] == barcodes[col+rsuffix]).all()
+            barcodes[col] = barcodes[col+lsuffix]
+            barcodes = barcodes.drop(columns=[col+lsuffix, col+rsuffix])
+
+        # Extract cell types
+        T1 = T2 = np.array(barcodes['Cell type'])
+
+        # TODO: Maybe use meta for actual year/week measurements
+
+        modalities = [M1, M2]
+        types = [T1, T2]
+        features = [F1, F2]
+        meta = barcodes
+
+    elif dataset_name in spatial_dataset_name_dict:
         dataset_dir = os.path.join(data_folder, spatial_dataset_name_dict[dataset_name])
 
         # Special handling
@@ -75,6 +132,7 @@ def load_data(dataset_name, data_folder):
         modalities = [M1, M2]
         types = [T1, T2]
         features = [F1, F2]
+        meta = meta
 
         del meta, meta_names
 

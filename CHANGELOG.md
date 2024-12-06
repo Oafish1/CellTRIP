@@ -1,3 +1,9 @@
+### 1.0.0+2024-12-06
+- Add temporal brain dataset
+- Annotate temporal brain data
+- Clean training notebook
+- Fix RDS reading techniques
+
 ### 1.0.0+2024-12-04
 - Add various strategies to `split_state` node sampling
 - Additional runs for spatial data with new random node sampling
