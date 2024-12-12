@@ -1,3 +1,29 @@
+### 1.0.0+2024-12-11
+- Add CLI output functionality to `run_notebook` script
+- Addition of several performance arguments to analysis notebook
+- Clean up several unnecessary segments in analysis and training notebooks
+- Formatting changes for main training notebook
+- Run analysis for MERFISH data with full, unfiltered episodes and 100 max nodes
+- Update of analysis notebook for new arguments
+
+### 1.0.0+2024-12-10
+- Recompile requirements
+- Run partial temporal data
+
+### 1.0.0+2024-12-09
+- Fix various bugs with ragged lists pertaining to environments of varying size within `AdvancedMemoryBuffer` class
+
+### 1.0.0+2024-12-08
+- Add type partitioning to preprocessing utility
+- Clean up preprocessing implementation
+- Fix handling of different-sized environments in memory module and training loop
+- Implement sparse PCA and standardization handling for preprocessing class
+
+### 1.0.0+2024-12-07
+- Compatibility changes for `analysis` notebook
+- Reformat `types` output from `data` module to allow for multiple outputs
+- Update requirements
+
 ### 1.0.0+2024-12-06
 - Add temporal brain dataset
 - Annotate temporal brain data

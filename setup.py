@@ -15,6 +15,7 @@ setup(
     version=__version__,
     packages=find_packages(),
     install_requires=[
+        'scipy>=1.13.0',  # For sparse, ~1.13.0
         'torch',
         'numpy',
     ],
@@ -23,16 +24,17 @@ setup(
             'memory-profiler',
             'pip-tools',
             'snakeviz',
-            'umap-learn',
         ],
         'examples': [
             'ipympl',
             'matplotlib',
             'pandas',
+            'rds2py',
             'scanpy',
-            'scikit-learn',
+            'scikit-learn>=1.4.2',  # Needs ~1.4.2
             'seaborn',
             'tqdm',
+            'umap-learn',
             'wandb[importers]',
         ],
     },

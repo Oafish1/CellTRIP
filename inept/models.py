@@ -176,12 +176,11 @@ class AdvancedMemoryBuffer:
             # Set all variables as unrecorded
             for k in self.recorded: self.recorded[k] = False
 
-    def propagate_rewards(self, gamma=.95, prune=None):
+    def propagate_rewards(self, gamma=.95, prune=0):
         "Propagate rewards with decay"
-        ret = []
-        if prune is not None: ret_prune = []
-        running_rewards = {k: 0 for k in np.unique(self.storage['keys'])}
-        running_prune = {k: 0 for k in np.unique(self.storage['keys'])}
+        ret, ret_prune = [], []
+        running_rewards = {k: 0 for k in np.unique(sum(self.storage['keys'], []))}
+        running_prune = {k: 0 for k in np.unique(sum(self.storage['keys'], []))}
         for keys, rewards, is_terminal in zip(self.storage['keys'][::-1], self.storage['rewards'][::-1], self.storage['is_terminals'][::-1]):
             for key, reward in zip(keys[::-1], rewards[::-1]):
                 if is_terminal:

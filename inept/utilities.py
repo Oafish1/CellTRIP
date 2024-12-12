@@ -4,6 +4,7 @@ import tracemalloc
 import warnings
 
 import numpy as np
+import scipy.sparse
 import sklearn.decomposition
 import torch
 
@@ -517,6 +518,8 @@ class Preprocessing(
         self,
         # Standardize
         standardize=False,
+        # Filtering
+        top_variant=None,
         # PCA
         pca_dim=None,
         pca_copy=True,  # Set to false if too much memory being used
@@ -528,8 +531,9 @@ class Preprocessing(
         **kwargs,
     ):
         self.standardize = standardize
+        self.top_variant = top_variant
         self.pca_dim = pca_dim
-        self.pca_copy = pca_copy
+        self.pca_copy = pca_copy  # Unused if sparse
         self.num_nodes = num_nodes
         self.num_features = num_features
         self.device = device
@@ -541,25 +545,51 @@ class Preprocessing(
         self.modalities = modalities
 
         # Standardize
-        if self.standardize:
-            self.standardize_mean = [m.mean(axis=0, keepdims=True) for m in modalities]
-            self.standardize_std = [m.std(axis=0, keepdims=True) for m in modalities]
+        if self.standardize or self.top_variant is not None:
+            self.standardize_mean = [
+                np.mean(m, keepdims=True)
+                if not scipy.sparse.issparse(m) else
+                np.array(np.mean(m).reshape((1, -1)))
+                for m in modalities
+            ]
+            self.standardize_std = [
+                np.std(m, keepdims=True)
+                if not scipy.sparse.issparse(m) else
+                np.array(np.sqrt(m.power(2).mean(axis=0) - np.square(m.mean(axis=0))))
+                for m in modalities
+            ]
+
+        # Filtering
+        if self.top_variant is not None:
+            self.filter_mask = [
+                np.argsort(std[0])[:-int(var+1):-1]
+                for std, var in zip(self.standardize_std, self.top_variant)
+            ]
+            modalities = [m[:, mask] for m, mask in zip(modalities, self.filter_mask)]
 
         # PCA
         if self.pca_dim is not None:
             self.pca_class = [
-                sklearn.decomposition.PCA(n_components=dim, copy=self.pca_copy).fit(m)
+                sklearn.decomposition.PCA(
+                    n_components=dim,
+                    svd_solver='auto' if not scipy.sparse.issparse(m) else 'arpack',
+                    copy=self.pca_copy,
+                ).fit(m)
                 for m, dim in zip(modalities, self.pca_dim)]
 
-
-    def transform(self, modalities, copy=True, **kwargs):
-        if copy: modalities = modalities.copy()
-
+    def transform(self, modalities, **kwargs):
         # Standardize
+        # NOTE: Not mean-centered for sparse matrices
         if self.standardize:
             modalities = [
                 (m - m_mean) / np.where(m_std == 0, 1, m_std)
+                if not scipy.sparse.issparse(m) else
+                (m / np.where(m_std == 0, 1, m_std)).tocsr()
                 for m, m_mean, m_std in zip(modalities, self.standardize_mean, self.standardize_std)]
+
+        # Filtering
+        if self.top_variant is not None:
+            modalities = [m[:, mask] for m, mask in zip(modalities, self.filter_mask)]
 
         # PCA
         if self.pca_dim is not None:
@@ -568,9 +598,7 @@ class Preprocessing(
         return modalities
 
 
-    def inverse_transform(self, modalities, copy=True, **kwargs):
-        if copy: modalities = modalities.copy()
-
+    def inverse_transform(self, modalities, **kwargs):
         # PCA
         if self.pca_dim is not None:
             modalities = [p.inverse_transform(m) for m, p in zip(modalities, self.pca_class)]
@@ -608,25 +636,27 @@ class Preprocessing(
         return modalities
     
     
-    def subsample(self, modalities, types=None, return_idx=False, copy=True, **kwargs):
-        if copy:
-            modalities = modalities.copy()
-            if types is not None: types = types.copy()
-
+    def subsample(self, modalities, types=None, partition=None, return_idx=False, **kwargs):
         # Subsample features
         # NOTE: Incompatible with inverse transform
         if self.num_features is not None:
             feature_idx = [np.random.choice(m.shape[1], nf, replace=False) for m, nf in zip(modalities, self.num_features)]
             modalities = [m[:, idx] for m, idx in zip(modalities, feature_idx)]
 
-        # Subsample nodes
         node_idx = np.arange(modalities[0].shape[0])
+        # Partition
+        if partition is not None:
+            partition_choice = np.random.choice(np.unique(partition), 1)[0]
+            node_idx = node_idx[partition==partition_choice]
+        
+        # Subsample nodes
         if self.num_nodes is not None:
             assert np.array([m.shape[0] for m in modalities]).var() == 0, 'Nodes in all modalities must be equal to use node subsampling'
-
-            node_idx = np.random.choice(modalities[0].shape[0], self.num_nodes, replace=False)
-            modalities = [m[node_idx] for m in modalities]
-            if types is not None: types = [t[node_idx] for t in types]
+            node_idx = np.random.choice(node_idx, self.num_nodes, replace=False)
+            
+        # Apply subsampling
+        modalities = [m[node_idx] for m in modalities]
+        if types is not None: types = [t[node_idx] for t in types]
 
         ret = (modalities,)
         if types is not None: ret += (types,)

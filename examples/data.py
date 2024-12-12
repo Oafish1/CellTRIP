@@ -14,7 +14,7 @@ def load_data(dataset_name, data_folder):
         'ExSeq': 'ExSeq',
     }
 
-    if dataset_name == 'temporalBrain':
+    if dataset_name == 'TemporalBrain':
         import rds2py
 
         # Get dir
@@ -62,7 +62,7 @@ def load_data(dataset_name, data_folder):
             barcodes = barcodes.drop(columns=[col+lsuffix, col+rsuffix])
 
         # Extract cell types
-        T1 = T2 = np.array(barcodes['Cell type'])
+        T1 = T2 = barcodes[['Cell type', 'Donor ID']].to_numpy()
 
         # TODO: Maybe use meta for actual year/week measurements
 
@@ -93,7 +93,7 @@ def load_data(dataset_name, data_folder):
         F1.to_numpy()
         M1 = M1.to_numpy()
 
-        T1 = T2 = M2['layer'].to_numpy()
+        T1 = T2 = M2[['layer']].to_numpy()
         F2 = np.array(['x', 'y'])
         M2 = M2[F2].to_numpy()
 
@@ -106,12 +106,12 @@ def load_data(dataset_name, data_folder):
         M1 = pd.read_csv(os.path.join(dataset_dir, 'Paccessibility_300.txt'), delimiter=' ', header=None).to_numpy()
         M2 = pd.read_csv(os.path.join(dataset_dir, 'Pmethylation_300.txt'), delimiter=' ', header=None).to_numpy()
         M3 = pd.read_csv(os.path.join(dataset_dir, 'RNA_300.txt'), delimiter=' ', header=None).to_numpy()
-        T1 = pd.read_csv(os.path.join(dataset_dir, 'type1.txt'), delimiter=' ', header=None).to_numpy().flatten()
-        T2 = pd.read_csv(os.path.join(dataset_dir, 'type2.txt'), delimiter=' ', header=None).to_numpy().flatten()
-        T3 = pd.read_csv(os.path.join(dataset_dir, 'type3.txt'), delimiter=' ', header=None).to_numpy().flatten()
+        T1 = pd.read_csv(os.path.join(dataset_dir, 'type1.txt'), delimiter=' ', header=None).to_numpy()
+        T2 = pd.read_csv(os.path.join(dataset_dir, 'type2.txt'), delimiter=' ', header=None).to_numpy()
+        T3 = pd.read_csv(os.path.join(dataset_dir, 'type3.txt'), delimiter=' ', header=None).to_numpy()
 
-        modalities = [M1, M2, M3][1]
-        types = [T1, T2, T3][1]
+        modalities = [M1, M2, M3][1:2]
+        types = [T1, T2, T3][1:2]
         features = [[i for i in range(M.shape[1])] for M in modalities]
 
     elif dataset_name == 'BrainChromatin':
@@ -125,7 +125,7 @@ def load_data(dataset_name, data_folder):
         meta_names = meta_names[meta_names['Assay'] == 'Multiome ATAC']
         meta = pd.merge(meta, meta_names, left_on='ATAC_cluster', right_on='Cluster.ID', how='left')
         meta.index = meta['Cell.ID']
-        T1 = T2 = np.array(meta.transpose()[M1.index].transpose()['Cluster.Name'])
+        T1 = T2 = meta.transpose()[M1.index].transpose()[['Cluster.Name']].to_numpy()
         F1, F2 = M1.columns, M2.columns
         M1, M2 = M1.to_numpy(), M2.to_numpy()
 
@@ -143,8 +143,8 @@ def load_data(dataset_name, data_folder):
         D2 = sc.read_h5ad(os.path.join(dataset_dir, 'Chen-2019-ATAC.h5ad'))
         M1 = np.asarray(D1.X.todense())
         M2 = np.asarray(D2.X.todense())
-        T1 = D1.obs.cell_type.to_numpy()
-        T2 = D2.obs.cell_type.to_numpy()
+        T1 = D1.obs.cell_type.to_numpy().reshape((-1, 1))
+        T2 = D2.obs.cell_type.to_numpy().reshape((-1, 1))
         F1 = D1.var.index.to_numpy()
         F2 = D2.var.index.to_numpy()
 
@@ -186,7 +186,7 @@ def load_data(dataset_name, data_folder):
         M2 = np.random.rand(num_nodes, 16)
 
         modalities = [M1, M2]
-        types = [2*[0 for _ in range(num_nodes)]]
+        types = [np.array([0 for _ in range(num_nodes)]).reshape((-1, 1)) for _ in range(len(modalities))]
         features = [[i for i in range(M.shape[1])] for M in modalities]
 
     else: assert False, 'No matching dataset found.'
