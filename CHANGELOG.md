@@ -1,3 +1,9 @@
+### 1.0.0+2024-12-13
+- Add `[None, ...]` compatibility for `pca_dim` and `top_variant` arguments within `Preprocessing` class
+- Refactor analysis plot code with base classes and consistent structure
+- Separate analysis plots into individual classes
+- Standardize analysis notebook for a variety of plot types
+
 ### 1.0.0+2024-12-11
 - Add CLI output functionality to `run_notebook` script
 - Addition of several performance arguments to analysis notebook

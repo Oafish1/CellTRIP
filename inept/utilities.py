@@ -1,8 +1,10 @@
 from collections import deque
+from itertools import product
 from time import perf_counter
 import tracemalloc
 import warnings
 
+import mpl_toolkits.mplot3d as mp3d
 import numpy as np
 import scipy.sparse
 import sklearn.decomposition
@@ -509,9 +511,7 @@ def subsample_nodes(*DS, num_nodes, **kwargs):
     return clean_return(ret, **kwargs)
 
 
-class Preprocessing(
-
-    ):
+class Preprocessing:
     "Apply modifications to input modalities based on given arguments. Takes np.array as input"
 
     def __init__(
@@ -538,8 +538,6 @@ class Preprocessing(
         self.num_features = num_features
         self.device = device
 
-        # Initialize persistent vars
-
     
     def fit(self, modalities, **kwargs):
         self.modalities = modalities
@@ -563,9 +561,10 @@ class Preprocessing(
         if self.top_variant is not None:
             self.filter_mask = [
                 np.argsort(std[0])[:-int(var+1):-1]
+                if var is not None else None
                 for std, var in zip(self.standardize_std, self.top_variant)
             ]
-            modalities = [m[:, mask] for m, mask in zip(modalities, self.filter_mask)]
+            modalities = [m[:, mask] if mask is not None else m for m, mask in zip(modalities, self.filter_mask)]
 
         # PCA
         if self.pca_dim is not None:
@@ -575,11 +574,13 @@ class Preprocessing(
                     svd_solver='auto' if not scipy.sparse.issparse(m) else 'arpack',
                     copy=self.pca_copy,
                 ).fit(m)
+                if dim is not None else None
                 for m, dim in zip(modalities, self.pca_dim)]
 
     def transform(self, modalities, **kwargs):
         # Standardize
         # NOTE: Not mean-centered for sparse matrices
+        # TODO: Maybe allow for only one dataset to be standardized?
         if self.standardize:
             modalities = [
                 (m - m_mean) / np.where(m_std == 0, 1, m_std)
@@ -589,11 +590,11 @@ class Preprocessing(
 
         # Filtering
         if self.top_variant is not None:
-            modalities = [m[:, mask] for m, mask in zip(modalities, self.filter_mask)]
+            modalities = [m[:, mask] if mask is not None else m for m, mask in zip(modalities, self.filter_mask)]
 
         # PCA
         if self.pca_dim is not None:
-            modalities = [p.transform(m) for m, p in zip(modalities, self.pca_class)]
+            modalities = [p.transform(m) if p is not None else m for m, p in zip(modalities, self.pca_class)]
 
         return modalities
 
@@ -676,3 +677,383 @@ def overwrite_dict(original, modification, copy=True):
         new[k] = v
 
     return new
+
+
+class ViewBase:
+    def __init__(
+        self,
+        # Data
+        # None
+        *args,
+        # Data params
+        # None
+        # Arguments
+        ax,
+        # Styling
+        # None
+        **kwargs,
+    ):
+        # Arguments
+        self.ax = ax
+
+        # Initialize plots
+        pass
+
+    def update(self, frame):
+        # Update plots per frame
+        pass
+
+
+class View3D(ViewBase):
+    "Class which controls a plot showing a live 3D view of the environment"
+    def __init__(
+        self,
+        # Data
+        states,
+        present,
+        rewards,
+        labels,
+        *args,
+        # Data params
+        dim,
+        modal_dist,
+        # Arguments
+        interval,  # Time between frames
+        skip=1,
+        # Styling
+        num_lines=25,  # Number of attraction and repulsion lines
+        rotations_per_second=.1,  # Camera azimuthal rotations per second
+        arrow_length_scale=1,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+
+        # Storage
+        self.states = states
+        self.present = present
+        self.rewards = rewards
+        self.labels = labels
+        self.modal_dist = modal_dist
+
+        # Arguments
+        self.skip = skip
+
+        # Styling
+        self.arrow_length_scale = arrow_length_scale
+
+        # Initialize nodes
+        self.get_node_data = lambda frame: states[frame, :, :3]
+        self.nodes = [
+            self.ax.plot(
+                # *get_node_data(0)[labels==l].T,
+                [], [],
+                label=l,
+                linestyle='',
+                marker='o',
+                ms=6,
+                zorder=2.3,
+            )[0]
+            for l in np.unique(labels)
+        ]
+
+        # Initialize velocity arrows
+        self.get_arrow_xyz_uvw = lambda frame: (states[frame, :, :3], states[frame, :, dim:dim+3])
+        self.arrows = self.ax.quiver(
+            [], [], [],
+            [], [], [],
+            arrow_length_ratio=0,
+            length=arrow_length_scale,
+            lw=2,
+            color='gray',
+            alpha=.4,
+            zorder=2.2,
+        )
+
+        # Initialize modal lines
+        # relative_connection_strength = [np.array([(1-dist[j, k].item()/dist.max().item())**2 for j, k in product(*[range(s) for s in dist.shape]) if j < k]) for dist in modal_dist]
+        self.get_distance_discrepancy = lambda frame: [np.array([((states[frame, j, :3] - states[frame, k, :3]).square().sum().sqrt() - dist[j, k].cpu()).item() for j, k in product(*[range(s) for s in dist.shape]) if j < k]) for dist in modal_dist]
+        self.get_modal_lines_segments = lambda frame, dist: np.array(states[frame, [[j, k] for j, k in product(*[range(s) for s in dist.shape]) if j < k], :3])
+        self.clip_dd_to_alpha = lambda dd: np.clip(np.abs(dd), 0, 2) / 2
+        # Randomly select lines to show
+        self.line_indices = [[j, k] for j, k in product(*[range(s) for s in modal_dist[0].shape]) if j < k]
+        total_lines = int((modal_dist[0].shape[0]**2 - modal_dist[0].shape[0]) / 2)  # Only considers first modality
+        self.line_selection = [
+            np.random.choice(total_lines, num_lines, replace=False) if num_lines is not None else list(range(total_lines)) for dist in modal_dist
+        ]
+        self.modal_lines = [
+            mp3d.art3d.Line3DCollection(
+                self.get_modal_lines_segments(0, dist)[self.line_selection[i]],
+                label=f'Modality {i}',
+                lw=2,
+                zorder=2.1,
+            )
+            for i, dist in enumerate(modal_dist)
+        ]
+        for ml in self.modal_lines: self.ax.add_collection(ml)
+
+        # Limits
+        self.ax.set(
+            xlim=(states[present][:, 0].min(), states[present][:, 0].max()),
+            ylim=(states[present][:, 1].min(), states[present][:, 1].max()),
+            zlim=(states[present][:, 2].min(), states[present][:, 2].max()),
+        )
+
+        # Legends
+        l1 = self.ax.legend(handles=self.nodes, loc='upper left')
+        self.ax.add_artist(l1)
+        l2 = self.ax.legend(handles=[
+            self.ax.plot([], [], color='red', label='Repulsion')[0],
+            self.ax.plot([], [], color='blue', label='Attraction')[0],
+        ], loc='upper right')
+        self.ax.add_artist(l2)
+
+        # Styling
+        self.ax.set(xlabel='x', ylabel='y', zlabel='z')
+        self.get_angle = lambda frame: (30, (360*rotations_per_second)*(frame*interval/1000)-60, 0)
+        self.ax.view_init(*self.get_angle(0))
+
+    def update(self, frame):
+        super().update(frame)
+
+        # Adjust nodes
+        for i, l in enumerate(np.unique(self.labels)):
+            present_labels = self.present[frame] * torch.tensor(self.labels==l)
+            data = self.get_node_data(frame)[present_labels].T
+            self.nodes[i].set_data(*data[:2])
+            self.nodes[i].set_3d_properties(data[2])
+
+        # Adjust arrows
+        xyz_xyz = [[xyz, xyz+self.arrow_length_scale*uvw] for i, (xyz, uvw) in enumerate(zip(*self.get_arrow_xyz_uvw(frame))) if self.present[frame, i]]
+        self.arrows.set_segments(xyz_xyz)
+
+        # Adjust lines
+        for i, (dist, ml) in enumerate(zip(self.modal_dist, self.modal_lines)):
+            ml.set_segments(self.get_modal_lines_segments(frame, dist)[self.line_selection[i]])
+            distance_discrepancy = self.get_distance_discrepancy(frame)[i][self.line_selection[i]]
+            color = np.array([(0., 0., 1.) if dd > 0 else (1., 0., 0.) for dd in distance_discrepancy])
+            alpha = np.expand_dims(self.clip_dd_to_alpha(distance_discrepancy), -1)
+            for j, line_index in enumerate(self.line_selection[i]):
+                if not self.present[frame, self.line_indices[line_index]].all(): alpha[j] = 0.
+            ml.set_color(np.concatenate((color, alpha), axis=-1))
+
+        # Styling
+        self.ax.set_title(f'{self.skip*frame: 4} : {self.rewards[frame].mean():5.2f}')  
+        self.ax.view_init(*self.get_angle(frame))
+
+
+class ViewSilhouette(ViewBase):
+    def __init__(
+        self,
+        # Data
+        states,
+        labels,
+        *args,
+        # Data params
+        dim,
+        # Arguments
+        # None
+        # Styling
+        # None
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+
+        # Data
+        self.states = states
+        self.labels = labels
+
+        # TODO: Update from 3 to env.dim
+        self.get_silhouette_samples = lambda frame: sklearn.metrics.silhouette_samples(self.states[frame, :, :dim].cpu(), self.labels)
+        self.bars = [self.ax.bar(l, 0) for l in np.unique(self.labels)]
+
+        # Styling
+        self.ax.axhline(y=0, color='black')
+        self.ax.set(ylim=(-1, 1))
+        self.ax.spines[['right', 'top', 'bottom', 'left']].set_visible(False)
+    
+    def update(self, frame):
+        super().update(frame)
+
+        # Update barplots
+        for bar, l in zip(self.bars, np.unique(self.labels)):
+            bar[0].set_height(self.get_silhouette_samples(frame)[self.labels==l].mean())
+
+        # Styling
+        self.ax.set_title(f'Silhouette Coefficient : {self.get_silhouette_samples(frame).mean():5.2f}') 
+
+
+# class ViewTemporalBase(ViewBase):
+#     def __init__(
+#         self,
+#         # Data
+#         states,
+#         present,
+#         modalities,
+#         *args,
+#         # Data params
+#         temporal_stages,
+#         env,
+#         # Arguments
+#         # None
+#         # Styling
+#         # None
+#         **kwargs,
+#     ):
+#         super().__init__(*args, **kwargs)
+        
+#         # Data
+#         self.states = states
+#         self.present = present
+#         self.modalities = modalities
+
+#         # Data params
+#         self.temporal_stages = temporal_stages
+
+#         # Persistent vars
+#         self.current_stage = 0
+#         self.modal_dist = None
+
+#         # Get temporal discrepancy
+#         def get_temporal_discrepancies(frame, recalculate=True):
+#             if recalculate: env.set_modalities([m[self.present[frame], :] for m in self.modalities])
+#             env.set_positions(states[frame, self.present[frame], :env.dim].to(env.device))
+#             return env.get_distance_match().detach().cpu()
+#         self.get_temporal_discrepancies = get_temporal_discrepancies
+
+#     def update(self, frame):
+#         super().update(frame)
+
+#         # Calculate discrepancy using env
+#         recalculate = (frame == 0) or not (self.present[frame] == self.present[frame-1]).all()  # Only recalculate dist if needed
+#         discrepancy = self.get_temporal_discrepancy(frame, recalculate=recalculate)
+
+#         # Iterate stage
+#         if not ((frame == 0 and len(xdata) > 0)):
+#             if frame == 0: self.current_stage = 0
+#             if recalculate:
+#                 xdata = np.append(xdata, self.current_stage)
+#                 ydata = np.append(ydata, None)
+#                 self.current_stage += 1  # Technically one ahead
+#             ydata[-1] = discrepancy
+#             self.temporal_eval_plot.set_xdata(xdata)
+#             self.temporal_eval_plot.set_ydata(ydata)
+
+
+class ViewTemporalDiscrepancy(ViewBase):
+    def __init__(
+        self,
+        # Data
+        states,
+        present,
+        modalities,
+        *args,
+        # Data params
+        temporal_stages,
+        env,
+        # Arguments
+        # None
+        # Styling
+        # None
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        
+        # Data
+        self.states = states
+        self.present = present
+        self.modalities = modalities
+
+        # Data params
+        self.temporal_stages = temporal_stages
+
+        # Persistent vars
+        self.current_stage = 0
+        self.modal_dist = None
+
+        # Get temporal discrepancy
+        def get_temporal_discrepancy(frame, recalculate=True):
+            if recalculate: env.set_modalities([m[self.present[frame], :] for m in self.modalities])
+            env.set_positions(states[frame, self.present[frame], :env.dim].to(env.device))
+            return float(env.get_distance_match().mean().detach().cpu())
+        self.get_temporal_discrepancy = get_temporal_discrepancy
+
+        # Initialize plot
+        self.temporal_eval_plot = self.ax.plot([], [], color='black', marker='o')[0]
+        # TODO: Highlight training regions
+ 
+        # Styling
+        self.ax.set_xticks(np.arange(len(self.temporal_stages)), self.temporal_stages)
+        self.ax.set_xlim([-.5, len(self.temporal_stages)-.5])
+        self.ax.set_ylim([0, 1e0])
+        self.ax.set_title('Temporal Discrepancy')
+        # ax2.set_yscale('symlog')
+        self.ax.spines[['right', 'top', 'bottom', 'left']].set_visible(False)
+
+    def update(self, frame):
+        super().update(frame)
+
+        # Calculate discrepancy using env
+        recalculate = (frame == 0) or not (self.present[frame] == self.present[frame-1]).all()  # Only recalculate dist if needed
+        discrepancy = self.get_temporal_discrepancy(frame, recalculate=recalculate)
+
+        # Adjust plot
+        xdata = self.temporal_eval_plot.get_xdata()
+        ydata = self.temporal_eval_plot.get_ydata()
+        if not ((frame == 0 and len(xdata) > 0)):
+            if frame == 0: self.current_stage = 0
+            if recalculate:
+                xdata = np.append(xdata, self.current_stage)
+                ydata = np.append(ydata, None)
+                self.current_stage += 1  # Technically one ahead
+            ydata[-1] = discrepancy
+            self.temporal_eval_plot.set_xdata(xdata)
+            self.temporal_eval_plot.set_ydata(ydata)
+
+
+class ViewTemporalScatter(ViewBase):
+    def __init__(
+        self,
+        # Data
+        states,
+        present,
+        modalities,
+        *args,
+        # Data params
+        env,
+        # Arguments
+        # None
+        # Styling
+        # None
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+
+        # Data
+        self.states = states
+        self.present = present
+        self.modalities = modalities
+
+        # Get temporal discrepancies
+        def get_temporal_discrepancy(frame, recalculate=True):
+            if recalculate: env.set_modalities([m[self.present[frame], :] for m in self.modalities])
+            env.set_positions(states[frame, self.present[frame], :env.dim].to(env.device))
+            return float(env.get_distance_match().detach().cpu())
+        self.get_temporal_discrepancy = get_temporal_discrepancy
+
+        # Initialize plot
+        self.points = self.ax.plot(
+            [], [],
+            linestyle='',
+            color='black',
+            marker='o',
+        )[0]
+
+    def update(self, frame):
+        super().update(frame)
+
+        # Get temporal discrepancies
+        # self.get_temporal_discrepancy(frame)
+        pass
+
+        # Update positions
+        # self.points.set_data(*data[:2])
