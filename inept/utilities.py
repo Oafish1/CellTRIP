@@ -1,9 +1,10 @@
-from collections import deque
+from collections import defaultdict, deque
 from itertools import product
 from time import perf_counter
 import tracemalloc
 import warnings
 
+import matplotlib
 import mpl_toolkits.mplot3d as mp3d
 import numpy as np
 import scipy.sparse
@@ -653,7 +654,8 @@ class Preprocessing:
         # Subsample nodes
         if self.num_nodes is not None:
             assert np.array([m.shape[0] for m in modalities]).var() == 0, 'Nodes in all modalities must be equal to use node subsampling'
-            node_idx = np.random.choice(node_idx, self.num_nodes, replace=False)
+            if len(node_idx) > self.num_nodes: node_idx = np.random.choice(node_idx, self.num_nodes, replace=False)
+            else: print(f'Skipping subsampling, only {len(node_idx)} nodes present.')
             
         # Apply subsampling
         modalities = [m[node_idx] for m in modalities]
@@ -704,36 +706,129 @@ class ViewBase:
         pass
 
 
-class View3D(ViewBase):
+class ViewModalDistBase(ViewBase):
     "Class which controls a plot showing a live 3D view of the environment"
     def __init__(
         self,
         # Data
         states,
+        modalities,
+        *args,
+        # Data params
+        modal_targets,
+        # Arguments
+        # None
+        # Styling
+        # None
+        **kwargs,
+    ):
+        local_vars = locals().copy()
+        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
+        super().__init__(**local_vars, **kwargs)
+
+        # Storage
+        self.states = states
+        self.modalities = modalities
+
+        # Calculate modal dist
+        # NOTE: Only calculated for targets
+        self.modal_dist = []
+        for target in modal_targets:
+            m = self.modalities[target].cpu()
+            m_dist = euclidean_distance(m, scaled=True)
+            self.modal_dist.append(m_dist)
+
+
+class ViewLinesBase(ViewModalDistBase):
+    "Class which controls a plot showing a live 3D view of the environment"
+    def __init__(
+        self,
+        # Data
+        states,
+        modalities,
+        *args,
+        # Data params
+        dim,
+        modal_targets,
+        # Arguments
+        seed=None,
+        # Styling
+        num_lines=100,  # Number of attraction and repulsion lines
+        **kwargs,
+    ):
+        local_vars = locals().copy()
+        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
+        super().__init__(**local_vars, **kwargs)
+
+        # Storage
+        self.states = states
+        self.modalities = modalities
+
+        # Data params
+        self.dim = dim
+
+        # Distance discrepancies
+        def get_distance_discrepancy(frame, dist):
+            latent_dist = euclidean_distance(self.states[frame, :, :self.dim])
+            dd_matrix = latent_dist - dist
+            return dd_matrix[np.triu_indices(dd_matrix.shape[0], k=1)].flatten()
+        self.get_distance_discrepancy = get_distance_discrepancy
+
+        # Randomly select lines to show
+        if seed is not None:
+            prev_rand_state = np.random.get_state()
+            np.random.seed(seed)
+        self.line_indices = [[[j, k] for j, k in product(*[range(s) for s in dist.shape]) if j < k] for dist in self.modal_dist]
+        self.total_lines = [int((dist.shape[0]**2 - dist.shape[0]) / 2) for dist in self.modal_dist]
+        self.line_selection = [
+            np.random.choice(self.total_lines[i], num_lines, replace=False)
+            if num_lines is not None else list(range(self.total_lines[i]))
+            for i in range(len(self.modal_dist))
+        ]
+        if seed is not None: np.random.set_state(prev_rand_state)
+
+        # Style
+        self.clip_dd_to_alpha = lambda dd: np.clip(np.abs(dd), 0, 2) / 2
+        def get_rgba_from_dd_array(dd_array, visible=None):
+            color = np.array([(0., 0., 1.) if dd > 0 else (1., 0., 0.) for dd in dd_array])
+            alpha = np.expand_dims(self.clip_dd_to_alpha(dd_array), -1)
+            if visible is not None: alpha[~np.array(visible)] = 0.
+            return np.concatenate((color, alpha), axis=-1)
+        self.get_rgba_from_dd_array = get_rgba_from_dd_array
+
+
+class View3D(ViewLinesBase):
+    "Class which controls a plot showing a live 3D view of the environment"
+    def __init__(
+        self,
+        # Data
         present,
         rewards,
+        modalities,
         labels,
         *args,
         # Data params
         dim,
-        modal_dist,
         # Arguments
+        ax,
         interval,  # Time between frames
         skip=1,
         # Styling
-        num_lines=25,  # Number of attraction and repulsion lines
+        ms=6,
+        lw=2,
         rotations_per_second=.1,  # Camera azimuthal rotations per second
         arrow_length_scale=1,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        local_vars = locals().copy()
+        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
+        super().__init__(**local_vars, **kwargs)
 
         # Storage
-        self.states = states
         self.present = present
         self.rewards = rewards
+        self.modalities = modalities
         self.labels = labels
-        self.modal_dist = modal_dist
 
         # Arguments
         self.skip = skip
@@ -742,7 +837,7 @@ class View3D(ViewBase):
         self.arrow_length_scale = arrow_length_scale
 
         # Initialize nodes
-        self.get_node_data = lambda frame: states[frame, :, :3]
+        self.get_node_data = lambda frame: self.states[frame, :, :self.dim]
         self.nodes = [
             self.ax.plot(
                 # *get_node_data(0)[labels==l].T,
@@ -750,52 +845,44 @@ class View3D(ViewBase):
                 label=l,
                 linestyle='',
                 marker='o',
-                ms=6,
+                ms=ms,
                 zorder=2.3,
             )[0]
             for l in np.unique(labels)
         ]
 
         # Initialize velocity arrows
-        self.get_arrow_xyz_uvw = lambda frame: (states[frame, :, :3], states[frame, :, dim:dim+3])
+        self.get_arrow_xyz_uvw = lambda frame: (self.states[frame, :, :self.dim], self.states[frame, :, dim:dim+3])
         self.arrows = self.ax.quiver(
             [], [], [],
             [], [], [],
             arrow_length_ratio=0,
             length=arrow_length_scale,
-            lw=2,
+            lw=lw,
             color='gray',
             alpha=.4,
             zorder=2.2,
         )
 
+        # Modal line utilities
+        self.get_modal_lines_segments = lambda frame, dist: np.array(self.states[frame, [[j, k] for j, k in product(*[range(s) for s in dist.shape]) if j < k], :self.dim])
         # Initialize modal lines
-        # relative_connection_strength = [np.array([(1-dist[j, k].item()/dist.max().item())**2 for j, k in product(*[range(s) for s in dist.shape]) if j < k]) for dist in modal_dist]
-        self.get_distance_discrepancy = lambda frame: [np.array([((states[frame, j, :3] - states[frame, k, :3]).square().sum().sqrt() - dist[j, k].cpu()).item() for j, k in product(*[range(s) for s in dist.shape]) if j < k]) for dist in modal_dist]
-        self.get_modal_lines_segments = lambda frame, dist: np.array(states[frame, [[j, k] for j, k in product(*[range(s) for s in dist.shape]) if j < k], :3])
-        self.clip_dd_to_alpha = lambda dd: np.clip(np.abs(dd), 0, 2) / 2
-        # Randomly select lines to show
-        self.line_indices = [[j, k] for j, k in product(*[range(s) for s in modal_dist[0].shape]) if j < k]
-        total_lines = int((modal_dist[0].shape[0]**2 - modal_dist[0].shape[0]) / 2)  # Only considers first modality
-        self.line_selection = [
-            np.random.choice(total_lines, num_lines, replace=False) if num_lines is not None else list(range(total_lines)) for dist in modal_dist
-        ]
         self.modal_lines = [
             mp3d.art3d.Line3DCollection(
                 self.get_modal_lines_segments(0, dist)[self.line_selection[i]],
                 label=f'Modality {i}',
-                lw=2,
+                lw=lw,
                 zorder=2.1,
             )
-            for i, dist in enumerate(modal_dist)
+            for i, dist in enumerate(self.modal_dist)
         ]
         for ml in self.modal_lines: self.ax.add_collection(ml)
 
         # Limits
         self.ax.set(
-            xlim=(states[present][:, 0].min(), states[present][:, 0].max()),
-            ylim=(states[present][:, 1].min(), states[present][:, 1].max()),
-            zlim=(states[present][:, 2].min(), states[present][:, 2].max()),
+            xlim=(self.states[present][:, 0].min(), self.states[present][:, 0].max()),
+            ylim=(self.states[present][:, 1].min(), self.states[present][:, 1].max()),
+            zlim=(self.states[present][:, 2].min(), self.states[present][:, 2].max()),
         )
 
         # Legends
@@ -829,12 +916,12 @@ class View3D(ViewBase):
         # Adjust lines
         for i, (dist, ml) in enumerate(zip(self.modal_dist, self.modal_lines)):
             ml.set_segments(self.get_modal_lines_segments(frame, dist)[self.line_selection[i]])
-            distance_discrepancy = self.get_distance_discrepancy(frame)[i][self.line_selection[i]]
-            color = np.array([(0., 0., 1.) if dd > 0 else (1., 0., 0.) for dd in distance_discrepancy])
-            alpha = np.expand_dims(self.clip_dd_to_alpha(distance_discrepancy), -1)
-            for j, line_index in enumerate(self.line_selection[i]):
-                if not self.present[frame, self.line_indices[line_index]].all(): alpha[j] = 0.
-            ml.set_color(np.concatenate((color, alpha), axis=-1))
+            dd_array = self.get_distance_discrepancy(frame, dist)[self.line_selection[i]]
+            rgba = self.get_rgba_from_dd_array(
+                dd_array,
+                [self.present[frame, self.line_indices[i][line_index]].all() for line_index in self.line_selection[i]],
+            )
+            ml.set_color(rgba)
 
         # Styling
         self.ax.set_title(f'{self.skip*frame: 4} : {self.rewards[frame].mean():5.2f}')  
@@ -856,7 +943,9 @@ class ViewSilhouette(ViewBase):
         # None
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        local_vars = locals().copy()
+        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
+        super().__init__(**local_vars, **kwargs)
 
         # Data
         self.states = states
@@ -882,100 +971,53 @@ class ViewSilhouette(ViewBase):
         self.ax.set_title(f'Silhouette Coefficient : {self.get_silhouette_samples(frame).mean():5.2f}') 
 
 
-# class ViewTemporalBase(ViewBase):
-#     def __init__(
-#         self,
-#         # Data
-#         states,
-#         present,
-#         modalities,
-#         *args,
-#         # Data params
-#         temporal_stages,
-#         env,
-#         # Arguments
-#         # None
-#         # Styling
-#         # None
-#         **kwargs,
-#     ):
-#         super().__init__(*args, **kwargs)
-        
-#         # Data
-#         self.states = states
-#         self.present = present
-#         self.modalities = modalities
-
-#         # Data params
-#         self.temporal_stages = temporal_stages
-
-#         # Persistent vars
-#         self.current_stage = 0
-#         self.modal_dist = None
-
-#         # Get temporal discrepancy
-#         def get_temporal_discrepancies(frame, recalculate=True):
-#             if recalculate: env.set_modalities([m[self.present[frame], :] for m in self.modalities])
-#             env.set_positions(states[frame, self.present[frame], :env.dim].to(env.device))
-#             return env.get_distance_match().detach().cpu()
-#         self.get_temporal_discrepancies = get_temporal_discrepancies
-
-#     def update(self, frame):
-#         super().update(frame)
-
-#         # Calculate discrepancy using env
-#         recalculate = (frame == 0) or not (self.present[frame] == self.present[frame-1]).all()  # Only recalculate dist if needed
-#         discrepancy = self.get_temporal_discrepancy(frame, recalculate=recalculate)
-
-#         # Iterate stage
-#         if not ((frame == 0 and len(xdata) > 0)):
-#             if frame == 0: self.current_stage = 0
-#             if recalculate:
-#                 xdata = np.append(xdata, self.current_stage)
-#                 ydata = np.append(ydata, None)
-#                 self.current_stage += 1  # Technically one ahead
-#             ydata[-1] = discrepancy
-#             self.temporal_eval_plot.set_xdata(xdata)
-#             self.temporal_eval_plot.set_ydata(ydata)
-
-
-class ViewTemporalDiscrepancy(ViewBase):
+class ViewTemporalDiscrepancy(ViewModalDistBase):
     def __init__(
         self,
         # Data
-        states,
         present,
+        states,
+        stages,
         modalities,
         *args,
         # Data params
         temporal_stages,
-        env,
+        modal_targets,
         # Arguments
         # None
         # Styling
         # None
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
-        
+        local_vars = locals().copy()
+        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
+        super().__init__(**local_vars, **kwargs)
+
         # Data
-        self.states = states
         self.present = present
+        self.states = states
+        self.stages = stages
         self.modalities = modalities
 
         # Data params
         self.temporal_stages = temporal_stages
-
-        # Persistent vars
-        self.current_stage = 0
-        self.modal_dist = None
+        self.modal_targets = modal_targets if modal_targets is not None else np.arange(len(self.modalities))
 
         # Get temporal discrepancy
-        def get_temporal_discrepancy(frame, recalculate=True):
-            if recalculate: env.set_modalities([m[self.present[frame], :] for m in self.modalities])
-            env.set_positions(states[frame, self.present[frame], :env.dim].to(env.device))
-            return float(env.get_distance_match().mean().detach().cpu())
-        self.get_temporal_discrepancy = get_temporal_discrepancy
+        def get_temporal_discrepancies(frame):
+            # Calculate distance for position
+            pos_dist = euclidean_distance(self.states[frame, self.present[frame], :])
+
+            # Calculate reward
+            running = torch.zeros(self.present[frame].sum())
+            for dist in self.modal_dist:
+                square_ew = (pos_dist - dist[self.present[frame], self.present[frame]])**2
+                mean_square_ew = square_ew.mean(dim=1)
+                running = running + mean_square_ew
+            running = running / len(self.modal_dist)
+
+            return running.detach().cpu()
+        self.get_temporal_discrepancies = get_temporal_discrepancies
 
         # Initialize plot
         self.temporal_eval_plot = self.ax.plot([], [], color='black', marker='o')[0]
@@ -986,6 +1028,8 @@ class ViewTemporalDiscrepancy(ViewBase):
         self.ax.set_xlim([-.5, len(self.temporal_stages)-.5])
         self.ax.set_ylim([0, 1e0])
         self.ax.set_title('Temporal Discrepancy')
+        self.ax.set_xlabel('Stage')
+        self.ax.set_ylabel('Mean Discrepancy')
         # ax2.set_yscale('symlog')
         self.ax.spines[['right', 'top', 'bottom', 'left']].set_visible(False)
 
@@ -993,67 +1037,140 @@ class ViewTemporalDiscrepancy(ViewBase):
         super().update(frame)
 
         # Calculate discrepancy using env
-        recalculate = (frame == 0) or not (self.present[frame] == self.present[frame-1]).all()  # Only recalculate dist if needed
-        discrepancy = self.get_temporal_discrepancy(frame, recalculate=recalculate)
+        discrepancy = self.get_temporal_discrepancies(frame).mean()
 
         # Adjust plot
         xdata = self.temporal_eval_plot.get_xdata()
         ydata = self.temporal_eval_plot.get_ydata()
-        if not ((frame == 0 and len(xdata) > 0)):
-            if frame == 0: self.current_stage = 0
-            if recalculate:
-                xdata = np.append(xdata, self.current_stage)
+        if not ((frame == 0 and len(xdata) > 0)):  # matplotlib sometimes runs frame 0 multiple times
+            if frame == 0 or (self.stages[frame] != self.stages[frame-1]):
+                xdata = np.append(xdata, self.stages[frame])
                 ydata = np.append(ydata, None)
-                self.current_stage += 1  # Technically one ahead
             ydata[-1] = discrepancy
             self.temporal_eval_plot.set_xdata(xdata)
             self.temporal_eval_plot.set_ydata(ydata)
 
 
-class ViewTemporalScatter(ViewBase):
+class ViewTemporalScatter(ViewLinesBase):
     def __init__(
         self,
         # Data
-        states,
         present,
-        modalities,
         *args,
         # Data params
-        env,
+        dim,
         # Arguments
-        # None
+        modal_targets,
         # Styling
         # None
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        local_vars = locals().copy()
+        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
+        super().__init__(**local_vars, **kwargs)
 
         # Data
-        self.states = states
         self.present = present
-        self.modalities = modalities
 
-        # Get temporal discrepancies
-        def get_temporal_discrepancy(frame, recalculate=True):
-            if recalculate: env.set_modalities([m[self.present[frame], :] for m in self.modalities])
-            env.set_positions(states[frame, self.present[frame], :env.dim].to(env.device))
-            return float(env.get_distance_match().detach().cpu())
-        self.get_temporal_discrepancy = get_temporal_discrepancy
+        # Data params
+        self.dim = dim
+
+        # Arguments
+        self.modal_targets = modal_targets  # A bit strict to require this
 
         # Initialize plot
-        self.points = self.ax.plot(
-            [], [],
-            linestyle='',
-            color='black',
-            marker='o',
-        )[0]
+        # TODO: Remove outline from points
+        self.points = [[
+            self.ax.plot(
+                [], [],
+                linestyle='',
+                color='black',
+                marker=['o', '^', 's', 'p', 'h'][modal_num % 5],
+            )[0]
+            for _ in range(len(self.line_selection[modal_num]))
+        ] for modal_num in range(len(self.modal_targets))]
+
+        # Legends
+        l1 = self.ax.legend(handles=[
+            self.ax.plot(
+                [], [],
+                color='black',
+                marker=['o', '^', 's', 'p', 'h'][modal_num % 5],
+                linestyle='',
+                label=f'Modality {self.modal_targets[modal_num]}',
+            )[0]
+            for modal_num in range(len(self.modal_targets))
+        ], loc='upper left')
+        self.ax.add_artist(l1)
+        l2 = self.ax.legend(handles=[
+            matplotlib.patches.Patch(color='red', label='Repulsion'),
+            matplotlib.patches.Patch(color='blue', label='Attraction'),
+        ], loc='upper right')
+        self.ax.add_artist(l2)
+
+        # Stylize
+        self.ax.spines[['right', 'top']].set_visible(False)
+        top_lim = max([md.max() for md in self.modal_dist])
+        bot_top_lim = [0, top_lim]
+        self.ax.set_xlim(bot_top_lim)
+        self.ax.set_ylim(bot_top_lim)
+
+        # Plot y=x
+        self.ax.plot(bot_top_lim, bot_top_lim, 'k-', alpha=.75, zorder=0)
+        self.ax.set_aspect('equal')
+
+        # Titles
+        self.ax.set_title(f'Inter-Cell Distance Comparison')
+        self.ax.set_xlabel('Measured')
+        self.ax.set_ylabel('Predicted')
 
     def update(self, frame):
         super().update(frame)
 
-        # Get temporal discrepancies
-        # self.get_temporal_discrepancy(frame)
-        pass
+        # Update positions and color
+        latent_dist_total = euclidean_distance(self.states[frame, :, :self.dim])
+        for modal_num in range(len(self.modal_targets)):
+            for i, idx in enumerate(np.array(self.line_indices[modal_num])[self.line_selection[modal_num]]):
+                point = self.points[modal_num][i]
 
-        # Update positions
-        # self.points.set_data(*data[:2])
+                # Show point and adjust color if present
+                if np.array([self.present[frame, j] for j in idx]).all():
+                    actual_dist = self.modal_dist[modal_num][idx[0], idx[1]]
+                    latent_dist = latent_dist_total[idx[0], idx[1]]
+                    # Set position
+                    point.set_data([actual_dist], [latent_dist])
+                    # Set color
+                    dd = actual_dist - latent_dist
+                    rgba = self.get_rgba_from_dd_array([dd])[0]
+                    point.set_color(rgba)
+
+                # Hide point if both nodes not present
+                else:
+                    point.set_data([], [])
+
+        # # Filter existing indices
+        # present_line_idx = [
+        #     idx
+        #     for idx in np.array(self.line_indices[self.target_num])[self.line_selection[self.target_num]]
+        #     if np.array([self.present[frame, i] for i in idx]).all()
+        # ]
+        
+        # # Update positions and color
+        # positions = []; dd_array = []
+        # for idx in present_line_idx:
+        #     # Get distances
+        #     actual_dist = self.modal_dist[self.target_num][idx[0], idx[1]]
+        #     latent_dist = latent_dist_total[idx[0], idx[1]]
+        #     # Record positions
+        #     positions.append([actual_dist, latent_dist])
+        #     # Record distance discrepancy
+        #     dd_array.append(actual_dist - latent_dist)
+        # # Set positions
+        # if len(positions) == 0:
+        #     self.points.set_data([], [])
+        #     self.points.set_color([])
+        # else:
+        #     self.points.set_data(*np.array(positions).T)
+        #     # Set colors
+        #     rgba = self.get_rgba_from_dd_array(dd_array)
+        #     self.points.set_color(rgba)

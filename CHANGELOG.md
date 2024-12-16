@@ -1,3 +1,22 @@
+### 1.0.0+2024-12-15 (1-2)
+- Add `sample_strategy` argument to `PPO` class
+- Add coloration to temporal scatter
+- Add labels to applicable animated plots
+- Add legends to temporal scatter
+- Additional runs
+- Delete and revise old scripts
+- Include multimodal compatibility with temporal scatter
+- Optimize `get_distance_discrepancy` function to run ~20x faster, main bottleneck of animation generation with many cells
+- Rearrange and condense analysis figures
+
+### 1.0.0+2024-12-14
+- Add scatter visualization for temporal discrepancies
+- Add `max_batch` override for visualizations
+- Compatibility revisions for `View3D` on modalities of differing sizes
+- Implement `ViewTemporalBase` class for scatter distance visualization
+- Re-remove auxiliary vars at beginning of analysis notebook
+- Rearrange temporal figure
+
 ### 1.0.0+2024-12-13
 - Add `[None, ...]` compatibility for `pca_dim` and `top_variant` arguments within `Preprocessing` class
 - Refactor analysis plot code with base classes and consistent structure

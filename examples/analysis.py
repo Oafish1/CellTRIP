@@ -1,3 +1,4 @@
+
 from collections import defaultdict
 from itertools import product
 import re
@@ -21,10 +22,10 @@ import data
 import inept
 
 # Get args
-import sys
-run_id = sys.argv[1]
-key = sys.argv[2]
-num_nodes = int(sys.argv[3])
+# import sys
+# run_id = sys.argv[1]
+# key = sys.argv[2]
+# num_nodes_override = int(sys.argv[3])
 
 # Set params
 DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -58,7 +59,20 @@ torch.set_grad_enabled(False);
 
 # %%
 # Parameters
+run_id = (
+    '32jqyk54',  # MERFISH Random 100 Max
+    'maofk1f2',  # ExSeq NR
+    'f6ajo2am',  # smFish NR
+    'vb1x7bae',  # MERFISH NR
+    '473vyon2',  # ISS NR
+    '4i9rhkfe',  # ISS Random 200 20k
+    'k52g4dx3',  # Random 100x (OLD)
+    '2dt27jy2',  # No random 20k (OLD)
+)[0]
 stage_override = None  # Manually override policy stage selection
+num_nodes_override = None
+max_batch_override = 500
+max_nodes_override = None
 seed_override = None  # 43
 
 # Load run
@@ -66,8 +80,8 @@ api = wandb.Api()
 run = api.run(f'oafish/INEPT/{run_id}')
 config = defaultdict(lambda: {})
 for k, v in run.config.items():
-    dict_name, keyr = k.split('/')
-    config[dict_name][keyr] = v
+    dict_name, key = k.split('/')
+    config[dict_name][key] = v
 config = dict(config)
 
 # Reproducibility
@@ -78,10 +92,10 @@ np.random.seed(seed)
 
 # Load data
 modalities, types, features = data.load_data(config['data']['dataset'], DATA_FOLDER)
-data_dict = config['data']
-# data_dict = inept.utilities.overwrite_dict(data_dict, {'standardize': True})  # Old model compatibility
-if num_nodes is not None: data_dict = inept.utilities.overwrite_dict(data_dict, {'num_nodes': num_nodes})
-ppc = inept.utilities.Preprocessing(**data_dict, device=DEVICE)
+# config['data'] = inept.utilities.overwrite_dict(config['data'], {'standardize': True})  # Old model compatibility
+if num_nodes_override is not None: config['data'] = inept.utilities.overwrite_dict(config['data'], {'num_nodes': num_nodes_override})
+if max_batch_override is not None: config['train'] = inept.utilities.overwrite_dict(config['train'], {'max_batch': max_batch_override})
+ppc = inept.utilities.Preprocessing(**config['data'], device=DEVICE)
 modalities = ppc.fit_transform(modalities)
 modalities, types = ppc.subsample(modalities, types)
 modalities = ppc.cast(modalities)
@@ -115,16 +129,17 @@ elif load_type == 'wgt':
     # Mainly used in the case of old argument names, also more secure
     with tempfile.TemporaryDirectory() as tmpdir:
         latest_wgt[1].download(tmpdir, replace=True)
-        config_to_use = config['policy']
-        # config_to_use = inept.utilities.overwrite_dict(config['policy'], {'positional_dim': 6, 'modal_dims': [76]})  # Old model compatibility
-        policy = inept.models.PPO(**config_to_use)
+        # config['policy'] = inept.utilities.overwrite_dict(config['policy'], {'positional_dim': 6, 'modal_dims': [76]})  # Old model compatibility
+        if max_nodes_override is not None: config['policy'] = inept.utilities.overwrite_dict(config['policy'], {'max_nodes': max_nodes_override})
+        policy = inept.models.PPO(**config['policy'])
         incompatible_keys = policy.load_state_dict(torch.load(os.path.join(tmpdir, latest_wgt[1].name), weights_only=True))
 policy = policy.to(DEVICE).eval()
 policy.actor.set_action_std(1e-7)
 
 # %%
 # TODO: Standardize implementation
-times = types[0]  # Temporary time annotation, will change per-dataset
+labels = types[0][:, 0]
+times = types[0][:, 0]  # Temporary time annotation, will change per-dataset
 
 # %% [markdown]
 # ### Generate Runs
@@ -132,8 +147,8 @@ times = types[0]  # Temporary time annotation, will change per-dataset
 # %%
 # Choose key
 # TODO: Calculate both, plot one (?)
+analysis_key = ['discovery', 'temporal'][0]
 
-# %%
 # Initialize memories
 memories = {}
 
@@ -146,13 +161,16 @@ def get_present_default(
     return torch.ones(modalities[0].shape[0], dtype=bool), timestep+1 >= config['train']['max_ep_timesteps']
 
 # %% [markdown]
-# ##### Integration
+# ##### Integration/Discovery
+
+# %% [markdown]
+# Integration is equivalent to discovery with `None` deployment
 
 # %%
 # Deployment list
 deployment = [None]
 # Reverse alphabetical (ExSeq, MERFISH, smFISH, ISS, MouseVisual)
-type_order = np.unique(types[0])[::-1]
+type_order = np.unique(labels)[::-1]
 deployment_general = {
     'labels': list(type_order),
     'delay': 50*np.arange(len(type_order)),
@@ -160,10 +178,10 @@ deployment_general = {
     'origins': [None] + list(type_order[:-1])}
 deployment += [deployment_general]
 
-# %%
 # Choose Deployment
 deployment = deployment[1]
 
+# %%
 # Functions
 # Takes in combination of variables, outputs present, end
 def get_present_deployment(
@@ -187,9 +205,10 @@ def get_present_deployment(
                 # If label matches and not already present
                 if labels[i] == label and not present[i]:
                     # Roll for appearance
-                    if np.random.rand() < rate:
-                        # Mark as present and set origin
-                        if origin is not None:
+                    num_progenitors = ((labels==origin)*present.cpu().numpy()).sum()
+                    if np.random.rand() < rate:  # * num_progenitors
+                        # Mark as present and set origin if at least one progenitor has spawned
+                        if origin is not None and num_progenitors > 0:
                             state[i] = state[np.random.choice(np.argwhere((labels==origin)*present.cpu().numpy()).flatten())]
                         present[i] = True
 
@@ -204,15 +223,15 @@ def get_present_deployment(
 # Stage order list
 temporal = [None]
 # Reverse alphabetical (ExSeq, MERFISH, smFISH, ISS, MouseVisual)
-temporal_general = {'stages': [[l] for l in np.unique(types[0])[::-1]]}
+temporal_general = {'stages': [[l] for l in np.unique(labels)[::-1]]}
 temporal += [temporal_general]
 
-# %%
 # Choose stage order
 temporal = temporal[1]
 
+# %%
 # Functions
-current_stage = None  # TODO: Move into class
+current_stage = -1  # TODO: Move into class
 stage_start = 0
 max_stage_len = 500
 
@@ -261,10 +280,10 @@ get_present_dict = {
     'discovery': get_present_deployment if deployment is not None else get_present_default,
     'temporal': get_present_temporal if temporal is not None else get_present_default,
 }
-get_present_func = get_present_dict[key]
+get_present_func = get_present_dict[analysis_key]
 
 # Initialize
-env.reset(); memories[key] = defaultdict(lambda: [])
+env.reset(); memories[analysis_key] = defaultdict(lambda: [])
 
 # Modify
 present = torch.zeros(modalities[0].shape[0], dtype=bool, device=DEVICE)
@@ -272,15 +291,16 @@ present, _ = get_present_func(
     env=env,
     timestep=0,
     present=present,
-    labels=types[0],
+    labels=labels,
     times=times,
     deployment=deployment,
 )
 
 # Continue initializing
-memories[key]['present'].append(present)
-memories[key]['states'].append(env.get_state())
-memories[key]['rewards'].append(torch.zeros(modalities[0].shape[0], device=DEVICE))
+memories[analysis_key]['present'].append(present)
+memories[analysis_key]['states'].append(env.get_state())
+memories[analysis_key]['stages'].append(current_stage)
+memories[analysis_key]['rewards'].append(torch.zeros(modalities[0].shape[0], device=DEVICE))
 
 # Simulate
 timestep = 1
@@ -288,7 +308,7 @@ while True:
     # CLI
     if timestep % 20 == 0:
         cli_out = f'Timestep: {timestep}'
-        if key == 'temporal': cli_out += f' - Stage: {current_stage}'
+        if analysis_key == 'temporal': cli_out += f' - Stage: {current_stage}'
         print(cli_out, end='\r')
 
     # Step
@@ -298,7 +318,6 @@ while True:
         state[present],
         keys=torch.arange(modalities[0].shape[0], device=DEVICE)[present],
         max_batch=config['train']['max_batch'],
-        max_nodes=config['train']['max_nodes'],
     )
     rewards = torch.zeros(modalities[0].shape[0])
     # TODO: Currently, rewards factor in non-present nodes
@@ -308,16 +327,17 @@ while True:
     env.set_state(new_state)
 
     # Record
-    memories[key]['present'].append(present)
-    memories[key]['states'].append(env.get_state())
-    memories[key]['rewards'].append(rewards)
+    memories[analysis_key]['present'].append(present)
+    memories[analysis_key]['states'].append(env.get_state())
+    memories[analysis_key]['stages'].append(current_stage)
+    memories[analysis_key]['rewards'].append(rewards)
 
     # Modify
     present, end = get_present_func(
         env=env,
         timestep=timestep, 
         present=present, 
-        labels=types[0],
+        labels=labels,
         times=times,
         deployment=deployment,
     )
@@ -327,10 +347,11 @@ while True:
     timestep += 1
 
 # Stack
-memories[key]['present'] = torch.stack(memories[key]['present'])
-memories[key]['states'] = torch.stack(memories[key]['states'])
-memories[key]['rewards'] = torch.stack(memories[key]['rewards'])
-memories[key] = dict(memories[key])
+memories[analysis_key]['present'] = torch.stack(memories[analysis_key]['present'])
+memories[analysis_key]['states'] = torch.stack(memories[analysis_key]['states'])
+memories[analysis_key]['stages'] = torch.tensor(memories[analysis_key]['stages'])
+memories[analysis_key]['rewards'] = torch.stack(memories[analysis_key]['rewards'])
+memories[analysis_key] = dict(memories[analysis_key])
 
 # CLI
 print()
@@ -338,15 +359,13 @@ print()
 # %% [markdown]
 # ### Plot Memories
 
-# %% [markdown]
-# ##### Integration
-
 # %%
 # Prepare data
-skip = 10
-present = memories[key]['present'].cpu()[::skip]
-states = memories[key]['states'].cpu()[::skip]
-rewards = memories[key]['rewards'].cpu()[::skip]
+skip = 3
+present = memories[analysis_key]['present'].cpu()[::skip]
+states = memories[analysis_key]['states'].cpu()[::skip]
+stages = memories[analysis_key]['stages'].cpu()[::skip]
+rewards = memories[analysis_key]['rewards'].cpu()[::skip]
 env.set_modalities(modalities)
 env.reset()
 env.get_distance_match()
@@ -354,176 +373,71 @@ modal_dist = env.dist
 
 # Parameters
 interval = 1e3*env.delta/3  # Time between frames (3x speedup)
-min_max_vel = 0 if key == 'temporal' else 1e-2  # Stop at first frame all vels are below target. 0 for full play
+min_max_vel = -1 if analysis_key == 'temporal' else 1e-2  # Stop at first frame all vels are below target. 0 for full play
 frame_override = None  # Manually enter number of frames to draw
 num_lines = 25  # Number of attraction and repulsion lines
 rotations_per_second = .1  # Camera azimuthal rotations per second
 
-# Create plot
-figsize = (17, 10)
-fig = plt.figure(figsize=figsize)
-# grid = mpl_grid.GridSpec(1, 2, width_ratios=(2, 1))
-# ax1 = fig.add_subplot(grid[0], projection='3d')
-# ax2 = fig.add_subplot(grid[1])
-# fig.tight_layout(pad=2)
-ax1 = fig.add_axes([1 /figsize[0], 1 /figsize[1], 8 /figsize[0], 8 /figsize[1]], projection='3d')
-ax2 = fig.add_axes([12 /figsize[0], 1 /figsize[1], 4 /figsize[0], 8 /figsize[1]])
+# Create plot based on key
+# NOTE: Standard 1-padding all around, then 3 between figures
+# NOTE: Left, bottom, width, height
+if analysis_key == 'discovery':
+    figsize = (15, 10)
+    fig = plt.figure(figsize=figsize)
+    axs = [
+        fig.add_axes([1 /figsize[0], 1 /figsize[1], 8 /figsize[0], 8 /figsize[1]], projection='3d'),
+        fig.add_axes([10 /figsize[0], 5.5 /figsize[1], 4 /figsize[0], 3.5 /figsize[1]]),
+        fig.add_axes([10 /figsize[0], 1 /figsize[1], 4 /figsize[0], 3.5 /figsize[1]]),
+    ]
+    views = [
+        inept.utilities.View3D,
+        inept.utilities.ViewTemporalScatter,
+        inept.utilities.ViewSilhouette,
+    ]
 
-# Initialize nodes
-get_node_data = lambda frame: states[frame, :, :3]
-nodes = [
-    ax1.plot(
-        # *get_node_data(0)[types[0]==l].T,
-        [], [],
-        label=l,
-        linestyle='',
-        marker='o',
-        ms=6,
-        zorder=2.3,
-    )[0]
-    for l in np.unique(types[0])
-]
+elif analysis_key == 'temporal':
+    figsize = (15, 10)
+    fig = plt.figure(figsize=figsize)
+    axs = [
+        fig.add_axes([1 /figsize[0], 1 /figsize[1], 8 /figsize[0], 8 /figsize[1]], projection='3d'),
+        fig.add_axes([10 /figsize[0], 5.5 /figsize[1], 4 /figsize[0], 3.5 /figsize[1]]),
+        fig.add_axes([10 /figsize[0], 1 /figsize[1], 4 /figsize[0], 3.5 /figsize[1]]),
+    ]
+    views = [
+        inept.utilities.View3D,
+        inept.utilities.ViewTemporalScatter,
+        inept.utilities.ViewTemporalDiscrepancy,
+    ]
 
-# Initialize velocity arrows
-arrow_length_scale = 1
-get_arrow_xyz_uvw = lambda frame: (states[frame, :, :3], states[frame, :, env.dim:env.dim+3])
-arrows = ax1.quiver(
-    [], [], [],
-    [], [], [],
-    arrow_length_ratio=0,
-    length=arrow_length_scale,
-    lw=2,
-    color='gray',
-    alpha=.4,
-    zorder=2.2,
-)
-
-# Initialize modal lines
-# relative_connection_strength = [np.array([(1-dist[j, k].item()/dist.max().item())**2 for j, k in product(*[range(s) for s in dist.shape]) if j < k]) for dist in modal_dist]
-get_distance_discrepancy = lambda frame: [np.array([((states[frame, j, :3] - states[frame, k, :3]).square().sum().sqrt() - dist[j, k].cpu()).item() for j, k in product(*[range(s) for s in dist.shape]) if j < k]) for dist in modal_dist]
-get_modal_lines_segments = lambda frame, dist: np.array(states[frame, [[j, k] for j, k in product(*[range(s) for s in dist.shape]) if j < k], :3])
-clip_dd_to_alpha = lambda dd: np.clip(np.abs(dd), 0, 2) / 2
-# Randomly select lines to show
-line_indices = [[j, k] for j, k in product(*[range(s) for s in modal_dist[0].shape]) if j < k]
-total_lines = int((modal_dist[0].shape[0]**2 - modal_dist[0].shape[0]) / 2)  # Only considers first modality
-line_selection = [
-    np.random.choice(total_lines, num_lines, replace=False) if num_lines is not None else list(range(total_lines)) for dist in modal_dist
-]
-modal_lines = [
-    mp3d.art3d.Line3DCollection(
-        get_modal_lines_segments(0, dist)[line_selection[i]],
-        label=f'Modality {i}',
-        lw=2,
-        zorder=2.1,
-    )
-    for i, dist in enumerate(modal_dist)
-]
-for ml in modal_lines: ax1.add_collection(ml)
-
-# Silhouette scoring
-if key == 'discovery':
-    # TODO: Update from 3 to env.dim
-    get_silhouette_samples = lambda frame: sklearn.metrics.silhouette_samples(states[frame, :, :3].cpu(), types[0])
-    bars = [ax2.bar(l, 0) for l in np.unique(types[0])]
-    ax2.axhline(y=0, color='black')
-    ax2.set(ylim=(-1, 1))
-
-# Temporal comparison
-elif key == 'temporal':
-    def get_temporal_discrepancy(frame, recalculate=True):
-        if recalculate: env.set_modalities([m[present[frame], :] for m in modalities])
-        env.set_positions(states[frame, present[frame], :env.dim].to(DEVICE))
-        return float(env.get_distance_match().mean().detach().cpu())
-    temporal_eval_plot = ax2.plot([], [], color='black', marker='o')[0]
-    # TODO: Highlight training regions
-    num_stages = len(temporal['stages'])  # present.unique(dim=0).shape[0]
-
+# Initialize views
+arguments = {
+    # Data
+    'present': present,
+    'states': states,
+    'stages': stages,
+    'rewards': rewards,
+    'modalities': modalities,
+    'labels': labels,
+    # Data params
+    'dim': env.dim,
+    'modal_targets': env.reward_distance_target,
+    'temporal_stages': temporal['stages'],
+    # Arguments
+    'interval': interval,
+    'skip': skip,
+    'seed': 42,
     # Styling
-    ax2.set_xticks(np.arange(num_stages), temporal['stages'])
-    ax2.set_xlim([-.5, num_stages-.5])
-    ax2.set_ylim([0, 1e0])
-    ax2.set_title('Temporal Discrepancy')
-    # ax2.set_yscale('symlog')
-
-# Limits
-# TODO: Double-check that the `present` indexing works
-ax1.set(
-    xlim=(states[present][:, 0].min(), states[present][:, 0].max()),
-    ylim=(states[present][:, 1].min(), states[present][:, 1].max()),
-    zlim=(states[present][:, 2].min(), states[present][:, 2].max()),
-)
-
-# Legends
-l1 = ax1.legend(handles=nodes, loc='upper left')
-ax1.add_artist(l1)
-l2 = ax1.legend(handles=[
-    ax1.plot([], [], color='red', label='Repulsion')[0],
-    ax1.plot([], [], color='blue', label='Attraction')[0],
-], loc='upper right')
-ax1.add_artist(l2)
-ax2.spines[['right', 'top', 'bottom', 'left']].set_visible(False)
-
-# Styling
-ax1.set(xlabel='x', ylabel='y', zlabel='z')
-get_angle = lambda frame: (30, (360*rotations_per_second)*(frame*interval/1000)-60, 0)
-ax1.view_init(*get_angle(0))
+    'ms': 3,
+    'lw': 1,
+}
+views = [view(**arguments, ax=ax) for view, ax in zip(views, axs)]
 
 # Update function
 def update(frame):
-    # Adjust nodes
-    for i, l in enumerate(np.unique(types[0])):
-        present_labels = present[frame] * torch.tensor(types[0]==l)
-        data = get_node_data(frame)[present_labels].T
-        nodes[i].set_data(*data[:2])
-        nodes[i].set_3d_properties(data[2])
-
-    # Adjust arrows
-    xyz_xyz = [[xyz, xyz+arrow_length_scale*uvw] for i, (xyz, uvw) in enumerate(zip(*get_arrow_xyz_uvw(frame))) if present[frame, i]]
-    arrows.set_segments(xyz_xyz)
-
-    # Adjust lines
-    for i, (dist, ml) in enumerate(zip(modal_dist, modal_lines)):
-        ml.set_segments(get_modal_lines_segments(frame, dist)[line_selection[i]])
-        distance_discrepancy = get_distance_discrepancy(frame)[i][line_selection[i]]
-        color = np.array([(0., 0., 1.) if dd > 0 else (1., 0., 0.) for dd in distance_discrepancy])
-        alpha = np.expand_dims(clip_dd_to_alpha(distance_discrepancy), -1)
-        for j, line_index in enumerate(line_selection[i]):
-            if not present[frame, line_indices[line_index]].all(): alpha[j] = 0.
-        ml.set_color(np.concatenate((color, alpha), axis=-1))
-
-    # Barplots
-    if key == 'discovery':
-        for bar, l in zip(bars, np.unique(types[0])):
-            bar[0].set_height(get_silhouette_samples(frame)[types[0]==l].mean())
-
-        # Styling
-        ax2.set_title(f'Silhouette Coefficient : {get_silhouette_samples(frame).mean():5.2f}') 
-
-    # Line plots
-    elif key == 'temporal':
-        # Defaults
-        global current_stage  # TODO: Find better solution
-
-        # Calculate discrepancy using env
-        recalculate = (frame == 0) or not (present[frame] == present[frame-1]).all()  # Only recalculate dist if needed
-        discrepancy = get_temporal_discrepancy(frame, recalculate=recalculate)
-
-        # Adjust plot
-        xdata = temporal_eval_plot.get_xdata()
-        ydata = temporal_eval_plot.get_ydata()
-        if not ((frame == 0 and len(xdata) > 0)):
-            if frame == 0: current_stage = 0
-            if recalculate:
-                xdata = np.append(xdata, current_stage)
-                ydata = np.append(ydata, None)
-                current_stage += 1  # Technically one ahead
-            ydata[-1] = discrepancy
-            temporal_eval_plot.set_xdata(xdata)
-            temporal_eval_plot.set_ydata(ydata)
-
-    # Styling
-    ax1.set_title(f'{skip*frame: 4} : {rewards[frame].mean():5.2f}')  
-    ax1.view_init(*get_angle(frame))
+    # Update views
+    for view in views:
+        # print(view)
+        view.update(frame)
 
     # CLI
     print(f'{frame} / {frames-1}', end='\r')
@@ -535,6 +449,16 @@ frames = np.array([(frames[i] or frames[i+1]) if i != len(frames)-1 else frames[
 frames = np.argwhere(frames)
 frames = frames[0, 0].item()+1 if len(frames) > 0 else states.shape[0]
 frames = frames if frame_override is None else frame_override
+
+# Test individual frames
+# for frame in range(frames):
+#     update(frame)
+#     # print()
+#     # print('saving')
+#     fig.savefig(os.path.join('temp/plots', f'frame_{frame}.png'), dpi=300)
+#     break
+
+# Initialize animation
 ani = animation.FuncAnimation(
     fig=fig,
     func=update,
@@ -553,7 +477,9 @@ ani = animation.FuncAnimation(
 file_type = 'mp4'
 if file_type == 'mp4': writer = animation.FFMpegWriter(fps=int(1e3/interval), extra_args=['-vcodec', 'libx264'], bitrate=8e3)  # Faster
 elif file_type == 'gif': writer = animation.FFMpegWriter(fps=int(1e3/interval))  # Slower
-ani.save(os.path.join(PLOT_FOLDER, f'{config["data"]["dataset"]}_{key}.{file_type}'), writer=writer, dpi=300)
+ani.save(os.path.join(PLOT_FOLDER, f'{config["data"]["dataset"]}_{analysis_key}.{file_type}'), writer=writer, dpi=300)
 
 # CLI
 print()
+
+

@@ -429,6 +429,7 @@ class PPO(nn.Module):
             critic_lr=1e-3,
             lr_gamma=1,
             max_nodes=None,
+            sample_strategy='random',
             update_maxbatch=torch.inf,
             update_batch=torch.inf,
             update_minibatch=torch.inf,
@@ -450,7 +451,7 @@ class PPO(nn.Module):
         self.memory_prune = memory_prune
 
         # Runtime management
-        self.split_args = {'max_nodes': max_nodes}
+        self.split_args = {'max_nodes': max_nodes, 'sample_strategy': sample_strategy}
         self.update_maxbatch = update_maxbatch
         self.update_batch = update_batch
         self.update_minibatch = update_minibatch
