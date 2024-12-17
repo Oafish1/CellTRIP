@@ -788,10 +788,9 @@ class ViewLinesBase(ViewModalDistBase):
         if seed is not None: np.random.set_state(prev_rand_state)
 
         # Style
-        self.clip_dd_to_alpha = lambda dd: np.clip(np.abs(dd), 0, 2) / 2
-        def get_rgba_from_dd_array(dd_array, visible=None):
+        def get_rgba_from_dd_array(dd_array, visible=None, min_alpha=0, max_value_alpha=2):
             color = np.array([(0., 0., 1.) if dd > 0 else (1., 0., 0.) for dd in dd_array])
-            alpha = np.expand_dims(self.clip_dd_to_alpha(dd_array), -1)
+            alpha = np.expand_dims(np.clip(np.abs(dd_array), min_alpha * max_value_alpha, max_value_alpha) / max_value_alpha, -1)
             if visible is not None: alpha[~np.array(visible)] = 0.
             return np.concatenate((color, alpha), axis=-1)
         self.get_rgba_from_dd_array = get_rgba_from_dd_array
@@ -968,7 +967,9 @@ class ViewSilhouette(ViewBase):
             bar[0].set_height(self.get_silhouette_samples(frame)[self.labels==l].mean())
 
         # Styling
-        self.ax.set_title(f'Silhouette Coefficient : {self.get_silhouette_samples(frame).mean():5.2f}') 
+        self.ax.set_title('Silhouette Coefficient')
+        self.ax.set_xlabel('Group')
+        self.ax.set_ylabel(f'Mean: {self.get_silhouette_samples(frame).mean():5.2f}') 
 
 
 class ViewTemporalDiscrepancy(ViewModalDistBase):
@@ -986,7 +987,7 @@ class ViewTemporalDiscrepancy(ViewModalDistBase):
         # Arguments
         # None
         # Styling
-        # None
+        limit_y=True,
         **kwargs,
     ):
         local_vars = locals().copy()
@@ -1002,6 +1003,9 @@ class ViewTemporalDiscrepancy(ViewModalDistBase):
         # Data params
         self.temporal_stages = temporal_stages
         self.modal_targets = modal_targets if modal_targets is not None else np.arange(len(self.modalities))
+
+        # Styling
+        self.limit_y = limit_y
 
         # Get temporal discrepancy
         def get_temporal_discrepancies(frame):
@@ -1024,9 +1028,13 @@ class ViewTemporalDiscrepancy(ViewModalDistBase):
         # TODO: Highlight training regions
  
         # Styling
-        self.ax.set_xticks(np.arange(len(self.temporal_stages)), self.temporal_stages)
+        self.ax.set_xticks(
+            np.arange(len(self.temporal_stages)),
+            [', '.join(stage) for stage in self.temporal_stages],
+        )
         self.ax.set_xlim([-.5, len(self.temporal_stages)-.5])
-        self.ax.set_ylim([0, 1e0])
+        self.top_ylim = 1
+        self.ax.set_ylim([0, self.top_ylim])
         self.ax.set_title('Temporal Discrepancy')
         self.ax.set_xlabel('Stage')
         self.ax.set_ylabel('Mean Discrepancy')
@@ -1038,6 +1046,7 @@ class ViewTemporalDiscrepancy(ViewModalDistBase):
 
         # Calculate discrepancy using env
         discrepancy = self.get_temporal_discrepancies(frame).mean()
+        if self.limit_y: discrepancy = min(self.top_ylim, discrepancy)
 
         # Adjust plot
         xdata = self.temporal_eval_plot.get_xdata()
@@ -1062,7 +1071,7 @@ class ViewTemporalScatter(ViewLinesBase):
         # Arguments
         modal_targets,
         # Styling
-        # None
+        scaling_approach='limit',  # 'limit' y-values to top or 'scale' plot to show all
         **kwargs,
     ):
         local_vars = locals().copy()
@@ -1077,6 +1086,9 @@ class ViewTemporalScatter(ViewLinesBase):
 
         # Arguments
         self.modal_targets = modal_targets  # A bit strict to require this
+
+        # Styling
+        self.scaling_approach = scaling_approach
 
         # Initialize plot
         # TODO: Remove outline from points
@@ -1110,14 +1122,14 @@ class ViewTemporalScatter(ViewLinesBase):
 
         # Stylize
         self.ax.spines[['right', 'top']].set_visible(False)
-        top_lim = max([md.max() for md in self.modal_dist])
-        bot_top_lim = [0, top_lim]
+        self.top_lim = max([md.max() for md in self.modal_dist])
+        bot_top_lim = [0, self.top_lim]
         self.ax.set_xlim(bot_top_lim)
         self.ax.set_ylim(bot_top_lim)
 
         # Plot y=x
         self.ax.plot(bot_top_lim, bot_top_lim, 'k-', alpha=.75, zorder=0)
-        self.ax.set_aspect('equal')
+        if self.scaling_approach == 'limit': self.ax.set_aspect('equal')
 
         # Titles
         self.ax.set_title(f'Inter-Cell Distance Comparison')
@@ -1137,16 +1149,26 @@ class ViewTemporalScatter(ViewLinesBase):
                 if np.array([self.present[frame, j] for j in idx]).all():
                     actual_dist = self.modal_dist[modal_num][idx[0], idx[1]]
                     latent_dist = latent_dist_total[idx[0], idx[1]]
+                    # Limit height
+                    if self.scaling_approach == 'limit': latent_dist = min(self.top_lim, latent_dist)
                     # Set position
                     point.set_data([actual_dist], [latent_dist])
                     # Set color
-                    dd = actual_dist - latent_dist
-                    rgba = self.get_rgba_from_dd_array([dd])[0]
+                    dd = latent_dist - actual_dist
+                    rgba = self.get_rgba_from_dd_array([dd], min_alpha=.1)[0]
+                    # Clip lowest alpha
                     point.set_color(rgba)
 
                 # Hide point if both nodes not present
                 else:
                     point.set_data([], [])
+
+        # Update axis scaling
+        if self.scaling_approach == 'scale':
+            new_top_lim = latent_dist_total[self.present[frame], self.present[frame]].max()
+            new_top_lim = np.ceil(new_top_lim / self.top_lim) * self.top_lim
+            self.ax.set_ylim(top=new_top_lim)
+
 
         # # Filter existing indices
         # present_line_idx = [

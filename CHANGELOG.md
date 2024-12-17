@@ -1,10 +1,24 @@
-### 1.0.0+2024-12-15 (1-2)
+### 1.0.0+2024-12-16
+- Add explicit `integration` option for analysis
+- Add y-limitation option for `ViewTemporalDiscrepancy` class
+- Compatibility with custom environment weight stages
+- Fix bug with `propagate_rewards` function in `AdvancedMemoryBuffer` with Tuple handling
+- Integration runs
+- Remove `None` options for `discovery` and `temporal`, as they would then default to `integration` in function
+- Reorganize analysis notebook to aggregate run arguments and make names more clear
+- Reruns for various analyses
+
+### 1.0.0+2024-12-15 (1-3)
 - Add `sample_strategy` argument to `PPO` class
 - Add coloration to temporal scatter
+- Add customizable alpha limits to `ViewLinesBase` and tweak opacity in `ViewTemporalScatter`
 - Add labels to applicable animated plots
 - Add legends to temporal scatter
 - Additional runs
+- Change tick formatting for `ViewTemporalDiscrepancies`
 - Delete and revise old scripts
+- Fix inversed color for temporal scatter plot
+- Implement plot scaling/cutoff approach for `ViewTemporalScatter`
 - Include multimodal compatibility with temporal scatter
 - Optimize `get_distance_discrepancy` function to run ~20x faster, main bottleneck of animation generation with many cells
 - Rearrange and condense analysis figures

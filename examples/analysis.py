@@ -1,6 +1,6 @@
 
+
 from collections import defaultdict
-from itertools import product
 import re
 import os
 import tempfile
@@ -13,9 +13,7 @@ import matplotlib.animation as animation
 import mpl_toolkits.mplot3d as mp3d
 import numpy as np
 import seaborn as sns
-import sklearn.metrics
 import torch
-from tqdm import tqdm
 import wandb
 
 import data
@@ -23,9 +21,8 @@ import inept
 
 # Get args
 # import sys
-# run_id = sys.argv[1]
-# key = sys.argv[2]
-# num_nodes_override = int(sys.argv[3])
+# run_id_idx = int(sys.argv[1])
+# analysis_key_idx = int(sys.argv[2])
 
 # Set params
 DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -60,6 +57,7 @@ torch.set_grad_enabled(False);
 # %%
 # Parameters
 run_id = (
+    'c8zsunc9',  # ISS Random 100 Max
     '32jqyk54',  # MERFISH Random 100 Max
     'maofk1f2',  # ExSeq NR
     'f6ajo2am',  # smFish NR
@@ -71,7 +69,7 @@ run_id = (
 )[0]
 stage_override = None  # Manually override policy stage selection
 num_nodes_override = None
-max_batch_override = 500
+max_batch_override = 1_000
 max_nodes_override = None
 seed_override = None  # 43
 
@@ -139,15 +137,29 @@ policy.actor.set_action_std(1e-7)
 # %%
 # TODO: Standardize implementation
 labels = types[0][:, 0]
-times = types[0][:, 0]  # Temporary time annotation, will change per-dataset
+times = types[0][:, -1]  # Temporary time annotation, will change per-dataset
 
 # %% [markdown]
 # ### Generate Runs
 
+# %% [markdown]
+# Integration is equivalent to discovery with `None` discovery
+
 # %%
 # Choose key
 # TODO: Calculate both, plot one (?)
-analysis_key = ['discovery', 'temporal'][0]
+analysis_key = [
+    'integration',
+    'discovery',
+    'temporal'
+][0]
+
+# Discovery params
+discovery_key = 0  # Auto
+
+# Temporal params
+temporal_key = 0  # Auto
+max_stage_len = 500
 
 # Initialize memories
 memories = {}
@@ -163,28 +175,25 @@ def get_present_default(
 # %% [markdown]
 # ##### Integration/Discovery
 
-# %% [markdown]
-# Integration is equivalent to discovery with `None` deployment
-
 # %%
-# Deployment list
-deployment = [None]
+# Discovery list
+discovery = []
 # Reverse alphabetical (ExSeq, MERFISH, smFISH, ISS, MouseVisual)
 type_order = np.unique(labels)[::-1]
-deployment_general = {
+discovery_general = {
     'labels': list(type_order),
     'delay': 50*np.arange(len(type_order)),
     'rates': [1] + [.015]*(len(type_order)-1),
     'origins': [None] + list(type_order[:-1])}
-deployment += [deployment_general]
+discovery += [discovery_general]
 
-# Choose Deployment
-deployment = deployment[1]
+# Choose Discovery
+discovery = discovery[discovery_key]
 
 # %%
 # Functions
 # Takes in combination of variables, outputs present, end
-def get_present_deployment(
+def get_present_discovery(
     *args,
     env,
     timestep,
@@ -197,7 +206,7 @@ def get_present_deployment(
     state = env.get_state().clone()
 
     # Iterate over each label
-    for label, delay, rate, origin in zip(*deployment.values()):
+    for label, delay, rate, origin in zip(*discovery.values()):
         # If delay has been reached
         if timestep >= delay:
             # Look at each node
@@ -221,19 +230,18 @@ def get_present_deployment(
 
 # %%
 # Stage order list
-temporal = [None]
+temporal = []
 # Reverse alphabetical (ExSeq, MERFISH, smFISH, ISS, MouseVisual)
 temporal_general = {'stages': [[l] for l in np.unique(labels)[::-1]]}
 temporal += [temporal_general]
 
 # Choose stage order
-temporal = temporal[1]
+temporal = temporal[temporal_key]
 
 # %%
 # Functions
 current_stage = -1  # TODO: Move into class
 stage_start = 0
-max_stage_len = 500
 
 def get_present_temporal(
     *args,
@@ -277,8 +285,9 @@ def get_present_temporal(
 # %%
 # Choose key
 get_present_dict = {
-    'discovery': get_present_deployment if deployment is not None else get_present_default,
-    'temporal': get_present_temporal if temporal is not None else get_present_default,
+    'integration': get_present_default,
+    'discovery': get_present_discovery,
+    'temporal': get_present_temporal,
 }
 get_present_func = get_present_dict[analysis_key]
 
@@ -293,7 +302,7 @@ present, _ = get_present_func(
     present=present,
     labels=labels,
     times=times,
-    deployment=deployment,
+    discovery=discovery,
 )
 
 # Continue initializing
@@ -339,7 +348,7 @@ while True:
         present=present, 
         labels=labels,
         times=times,
-        deployment=deployment,
+        discovery=discovery,
     )
 
     # End
@@ -361,7 +370,7 @@ print()
 
 # %%
 # Prepare data
-skip = 3
+skip = 10
 present = memories[analysis_key]['present'].cpu()[::skip]
 states = memories[analysis_key]['states'].cpu()[::skip]
 stages = memories[analysis_key]['stages'].cpu()[::skip]
@@ -381,7 +390,7 @@ rotations_per_second = .1  # Camera azimuthal rotations per second
 # Create plot based on key
 # NOTE: Standard 1-padding all around, then 3 between figures
 # NOTE: Left, bottom, width, height
-if analysis_key == 'discovery':
+if analysis_key in ('integration', 'discovery'):
     figsize = (15, 10)
     fig = plt.figure(figsize=figsize)
     axs = [
@@ -421,7 +430,7 @@ arguments = {
     # Data params
     'dim': env.dim,
     'modal_targets': env.reward_distance_target,
-    'temporal_stages': temporal['stages'],
+    'temporal_stages': temporal['stages'] if analysis_key == 'temporal' else None,
     # Arguments
     'interval': interval,
     'skip': skip,
