@@ -1,3 +1,31 @@
+### 1.0.0+2024-12-30
+- Add framework for state manager in analysis runs
+
+### 1.0.0+2024-12-29
+- Change location of `present` modifications to match stages exactly in analysis
+
+### 1.0.0+2024-12-27
+- Add torch determinism function
+- Fixes for diffusion randomization
+- More intuitive indices for `ViewLinesBase` visualization class
+- Opacity scaling based on actual distance for `ViewLinesBase` derivatives
+- Remove outline from points all views
+- Reruns
+
+### 1.0.0+2024-12-23
+- Add sample strategies `proximity` and `random-proximity`
+- Add reproducibility for `split_state` sampling with multiple strategies
+  - `hash` and set seed methods
+- Additional CLI information for partitioned training
+
+### 1.0.0+2024-12-18
+- Change default argument for y-limit in `ViewTemporalDiscrepancy`
+- Reruns for various datasets
+
+### 1.0.0+2024-12-17
+- Additional runs
+- Additional visualizations
+
 ### 1.0.0+2024-12-16
 - Add explicit `integration` option for analysis
 - Add y-limitation option for `ViewTemporalDiscrepancy` class

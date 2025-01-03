@@ -212,47 +212,114 @@ def split_state(
     idx=None,
     max_nodes=None,
     sample_strategy='random',
+    reproducible_strategy=None,
+    dimension=None,  # Should be the full positional dim (including velocity)
     return_mask=False,
 ):
-    "Split full state matrix into individual inputs, idx is an optional array"
+    "Split full state matrix into individual inputs, self_idx is an optional array"
     # Parameters
     if idx is None: idx = list(range(state.shape[0]))
     if not isinstance(idx, list): idx = [idx]
+    self_idx = idx
+    del idx
 
     # Get self features for each node
-    self_entity = state[idx]
+    self_entity = state[self_idx]
 
     # Get node features for each state
-    node_mask = torch.zeros((len(idx), state.shape[0]), dtype=torch.bool)
-    for i, j in enumerate(idx): node_mask[i, j] = True
+    node_mask = torch.zeros((len(self_idx), state.shape[0]), dtype=torch.bool)
+    for i, j in enumerate(self_idx): node_mask[i, j] = True
     node_mask = ~node_mask
+
+    # Enforce reproducibility
+    if reproducible_strategy is not None:
+        # Save old random seed
+        seed_old = torch.seed()
+
+    # Hashing method
+    if reproducible_strategy is None:
+        pass
+
+    elif reproducible_strategy == 'hash':
+        # Set new random state
+        torch.manual_seed(hash(state))
+
+    # Set seed (not recommended)
+    # TODO: Is there a better way to do this?
+    elif type(reproducible_strategy) != str:
+        # Set new random state
+        torch.manual_seed(reproducible_strategy)
+
+    else:
+        # TODO: Verify works
+        raise ValueError(f'Reproducible strategy \'{reproducible_strategy}\' not found.')
 
     # Enforce max nodes
     num_nodes = state.shape[0] - 1
     use_mask = max_nodes is not None and max_nodes < num_nodes
     if use_mask:
+        # Set new num_nodes
+        num_nodes = max_nodes - 1
+
         # Random sample `num_nodes` to `max_nodes`
-        # NOTE: Not reproducible between forward and backward, at the moment
         if sample_strategy == 'random':
             # Filter nodes to `max_nodes` per idx
-            num_nodes = max_nodes - 1
             probs = torch.rand_like(node_mask, dtype=torch.get_default_dtype())
             probs[~node_mask] = 0
             selected_idx = probs.argsort(dim=-1)[..., -num_nodes:]  # Take `num_nodes` highest values
 
             # Create new mask
-            node_mask = torch.zeros((len(idx), state.shape[0]), dtype=torch.bool)
+            node_mask = torch.zeros((len(self_idx), state.shape[0]), dtype=torch.bool)
             for i in range(node_mask.shape[0]):
                 node_mask[i, selected_idx[i]] = True
 
         # Sample closest nodes
-        elif sample_strategy == 'closest':
-            # TODO
-            pass
+        elif sample_strategy == 'proximity':
+            # Check for dim pass
+            assert dimension is not None, (
+                f'`dimension` argument must be passed if `sample_strategy` is \'{sample_strategy}\'')
 
+            # Get inter-node distances
+            dist = euclidean_distance(state[..., dimension:])
+            dist[~node_mask] = -1  # Set self-dist lowest for case of ties
+
+            # Select `max_nodes` closest
+            selected_idx = dist.argsort(dim=-1)[..., 1:max_nodes]
+            
+            # Create new mask
+            node_mask = torch.zeros((len(self_idx), state.shape[0]), dtype=torch.bool)
+            for i in range(node_mask.shape[0]):
+                node_mask[i, selected_idx[i]] = True
+
+        # Randomly sample from a distribution of node distance
+        elif sample_strategy == 'random-proximity':
+            # Check for dim pass
+            assert dimension is not None, (
+                f'`dimension` argument must be passed if `sample_strategy` is \'{sample_strategy}\'')
+
+            # Get inter-node distances
+            dist = euclidean_distance(state[..., dimension:])
+            prob = 1 / dist+1
+            prob[~node_mask] = 0  # Remove self
+
+            # Randomly sample
+            node_mask = torch.zeros((len(self_idx), state.shape[0]), dtype=torch.bool)
+            for i in range(node_mask.shape[0]):
+                # TODO: Fix syntax
+                idx = prob[self_idx[i]].multinomial(num_nodes, replacement=False)
+                node_mask[i, idx] = True
+
+        else:
+            # TODO: Verify works
+            raise ValueError(f'Sample strategy \'{sample_strategy}\' not found.')
+
+    # Revert random changes
+    if reproducible_strategy is not None:
+        torch.manual_seed(seed_old)
+    
     # Final formation
-    node_entities = state.unsqueeze(0).expand(len(idx), *state.shape)
-    node_entities = node_entities[node_mask].reshape(len(idx), num_nodes, state.shape[1])
+    node_entities = state.unsqueeze(0).expand(len(self_idx), *state.shape)
+    node_entities = node_entities[node_mask].reshape(len(self_idx), num_nodes, state.shape[1])
 
     # Return
     ret = (self_entity, node_entities)
@@ -778,7 +845,7 @@ class ViewLinesBase(ViewModalDistBase):
         if seed is not None:
             prev_rand_state = np.random.get_state()
             np.random.seed(seed)
-        self.line_indices = [[[j, k] for j, k in product(*[range(s) for s in dist.shape]) if j < k] for dist in self.modal_dist]
+        self.line_indices = [np.stack(np.triu_indices(dist.shape[0], k=1), axis=-1) for dist in self.modal_dist]
         self.total_lines = [int((dist.shape[0]**2 - dist.shape[0]) / 2) for dist in self.modal_dist]
         self.line_selection = [
             np.random.choice(self.total_lines[i], num_lines, replace=False)
@@ -841,10 +908,11 @@ class View3D(ViewLinesBase):
             self.ax.plot(
                 # *get_node_data(0)[labels==l].T,
                 [], [],
-                label=l,
                 linestyle='',
+                markeredgecolor='none',
                 marker='o',
                 ms=ms,
+                label=l,
                 zorder=2.3,
             )[0]
             for l in np.unique(labels)
@@ -888,8 +956,8 @@ class View3D(ViewLinesBase):
         l1 = self.ax.legend(handles=self.nodes, loc='upper left')
         self.ax.add_artist(l1)
         l2 = self.ax.legend(handles=[
-            self.ax.plot([], [], color='red', label='Repulsion')[0],
-            self.ax.plot([], [], color='blue', label='Attraction')[0],
+            self.ax.plot([], [], color='red', markeredgecolor='none', label='Repulsion')[0],
+            self.ax.plot([], [], color='blue', markeredgecolor='none', label='Attraction')[0],
         ], loc='upper right')
         self.ax.add_artist(l2)
 
@@ -916,9 +984,11 @@ class View3D(ViewLinesBase):
         for i, (dist, ml) in enumerate(zip(self.modal_dist, self.modal_lines)):
             ml.set_segments(self.get_modal_lines_segments(frame, dist)[self.line_selection[i]])
             dd_array = self.get_distance_discrepancy(frame, dist)[self.line_selection[i]]
+            idx = self.line_indices[i][self.line_selection[i]].T
             rgba = self.get_rgba_from_dd_array(
                 dd_array,
                 [self.present[frame, self.line_indices[i][line_index]].all() for line_index in self.line_selection[i]],
+                max_value_alpha=2*dist[idx[0], idx[1]],
             )
             ml.set_color(rgba)
 
@@ -987,7 +1057,7 @@ class ViewTemporalDiscrepancy(ViewModalDistBase):
         # Arguments
         # None
         # Styling
-        limit_y=True,
+        limit_y=False,
         **kwargs,
     ):
         local_vars = locals().copy()
@@ -1030,7 +1100,7 @@ class ViewTemporalDiscrepancy(ViewModalDistBase):
         # Styling
         self.ax.set_xticks(
             np.arange(len(self.temporal_stages)),
-            [', '.join(stage) for stage in self.temporal_stages],
+            [', '.join([str(s) for s in stage]) for stage in self.temporal_stages],
         )
         self.ax.set_xlim([-.5, len(self.temporal_stages)-.5])
         self.top_ylim = 1
@@ -1095,9 +1165,10 @@ class ViewTemporalScatter(ViewLinesBase):
         self.points = [[
             self.ax.plot(
                 [], [],
-                linestyle='',
                 color='black',
+                markeredgecolor='none',
                 marker=['o', '^', 's', 'p', 'h'][modal_num % 5],
+                linestyle='',
             )[0]
             for _ in range(len(self.line_selection[modal_num]))
         ] for modal_num in range(len(self.modal_targets))]
@@ -1107,6 +1178,7 @@ class ViewTemporalScatter(ViewLinesBase):
             self.ax.plot(
                 [], [],
                 color='black',
+                markeredgecolor='none',
                 marker=['o', '^', 's', 'p', 'h'][modal_num % 5],
                 linestyle='',
                 label=f'Modality {self.modal_targets[modal_num]}',
@@ -1142,7 +1214,7 @@ class ViewTemporalScatter(ViewLinesBase):
         # Update positions and color
         latent_dist_total = euclidean_distance(self.states[frame, :, :self.dim])
         for modal_num in range(len(self.modal_targets)):
-            for i, idx in enumerate(np.array(self.line_indices[modal_num])[self.line_selection[modal_num]]):
+            for i, idx in enumerate(self.line_indices[modal_num][self.line_selection[modal_num]]):
                 point = self.points[modal_num][i]
 
                 # Show point and adjust color if present
@@ -1155,7 +1227,7 @@ class ViewTemporalScatter(ViewLinesBase):
                     point.set_data([actual_dist], [latent_dist])
                     # Set color
                     dd = latent_dist - actual_dist
-                    rgba = self.get_rgba_from_dd_array([dd], min_alpha=.1)[0]
+                    rgba = self.get_rgba_from_dd_array([dd], min_alpha=.1, max_value_alpha=2*actual_dist)[0]
                     # Clip lowest alpha
                     point.set_color(rgba)
 
@@ -1170,29 +1242,158 @@ class ViewTemporalScatter(ViewLinesBase):
             self.ax.set_ylim(top=new_top_lim)
 
 
-        # # Filter existing indices
-        # present_line_idx = [
-        #     idx
-        #     for idx in np.array(self.line_indices[self.target_num])[self.line_selection[self.target_num]]
-        #     if np.array([self.present[frame, i] for i in idx]).all()
-        # ]
+class StateManager:
+    def __init__(self, *, device, **kwargs):
+        # NOTE: Assume all input kwargs are options/data
+        self.timestep = -1
+        self.device = device
+
+    def __call__(self, **kwargs):
+        # NOTE: Assume all input kwargs are vars to modify
+        # Iterate
+        self.timestep += 1
+
+
+def check_requirements(req, kwargs):
+    assert np.array([s in kwargs for s in req]).all(), (
+        f'All of {req} must be passed for `DiscoveryStateManager` call.')
+      
+
+class IntegrationStateManager(StateManager):
+    def __init__(
+        self,
+        *,
+        num_nodes=None,
+        max_timesteps=None,
+        **kwargs,
+    ):
+        local_vars = locals().copy()
+        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
+        super().__init__(**local_vars, **kwargs)
+
+        # Save vars
+        self.num_nodes = num_nodes
+        self.max_timesteps = max_timesteps
+
+        # Initialize present
+        self.present = torch.ones(self.num_nodes, dtype=bool, device=self.device) if num_nodes is not None else None
+
+    def __call__(self, **kwargs):
+        local_vars = locals().copy()
+        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
+        super().__init__(**local_vars, **kwargs)
+
+        # Set present
+        if self.present is not None: kwargs['present'] = self.present
+
+        # Check requirements
+        check_requirements(('present',))
+
+        # Modify present
+        if self.present is None: kwargs['present'][:] = 1
+
+        return kwargs, self.is_end()
+
+    def _is_end(self):
+        return self.timestep+1 >= self.max_timesteps
+
+
+class DiscoveryStateManager(StateManager):
+    def __init__(
+        self,
+        *,
+        discovery=None,
+        num_nodes=None,
+        max_timesteps=None,
+        **kwargs,
+    ):
+        local_vars = locals().copy()
+        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
+        super().__init__(**local_vars, **kwargs)
+
+        # Save vars
+        self.discovery = discovery
+        self.num_nodes = num_nodes
+        self.max_timesteps = max_timesteps
+
+    def __call__(self, **kwargs):
+        local_vars = locals().copy()
+        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
+        super().__init__(**local_vars, **kwargs)
+
+        # Initialize present for timestep 0
+        if self.timestep == 0 and 'present' not in kwargs:
+            assert self.num_nodes is not None, '`num_nodes` must be defined for automatic `present` generation.'
+            kwargs['present'] = torch.zeros(self.num_nodes, dtype=bool, device=self.device)
+
+        # Check requirements
+        check_requirements(('present', 'state', 'labels'))
+
+        # Iterate over each label
+        for label, delay, rate, origin in zip(*self.discovery.values()):
+            # If delay has been reached
+            if self.timestep >= delay:
+                # Look at each node
+                for i in range(len(kwargs['present'])):
+                    # If label matches and not already present
+                    if kwargs['labels'][i] == label and not kwargs['present'][i]:
+                        # Roll for appearance
+                        num_progenitors = ((kwargs['labels']==origin)*kwargs['present'].cpu().numpy()).sum()
+                        if np.random.rand() < rate:  # * num_progenitors
+                            # Mark as present and set origin if at least one progenitor has spawned
+                            if origin is not None and num_progenitors > 0:
+                                kwargs['state'][i] = kwargs['state'][np.random.choice(np.argwhere((kwargs['labels']==origin)*kwargs['present'].cpu().numpy()).flatten())]
+                            kwargs['present'][i] = True
+
+        # Return
+        return kwargs, self._is_end()
+
+    def _is_end(self):
+        return self.timestep+1 >= self.max_timesteps
+
+
+class TemporalStateManager(StateManager):
+    def __init__(
+        self,
+        *,
+        temporal=None,
+        num_nodes=None,
+        **kwargs,
+     ):
+        local_vars = locals().copy()
+        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
+        super().__init__(**local_vars, **kwargs)
+
+        # Save vars
+        self.temporal = temporal
+        self.num_nodes = num_nodes
+
+        # Initialize vars
+        self.current_stage = -1
+        self.stage_start = 0
+
+    def __call__(self, **kwargs):
+        # Initialize present for timestep 0
+        if self.timestep == 0 and 'present' not in kwargs:
+            assert self.num_nodes is not None, '`num_nodes` must be defined for automatic `present` generation.'
+            kwargs['present'] = torch.zeros(self.num_nodes, dtype=bool, device=self.device)
+
+        # Check requirements
+        check_requirements(('present', 'state', 'times'))
+
+        # Initiate change if vel is low
+        if kwargs['present'].sum() > 0: vel_threshold_met = kwargs['state'][kwargs['present'], env.dim:].square().sum(dim=-1).sqrt().max(dim=-1).values < vel_threshold
+        else: vel_threshold_met = False
+
+        update = vel_threshold_met or self.timestep - stage_start >= max_stage_len
+        if update:
+            # Make change to next stage
+            current_stage += 1
+            stage_start = self.timestep
+            if current_stage >= len(self.temporal['stages']): return kwargs, True
         
-        # # Update positions and color
-        # positions = []; dd_array = []
-        # for idx in present_line_idx:
-        #     # Get distances
-        #     actual_dist = self.modal_dist[self.target_num][idx[0], idx[1]]
-        #     latent_dist = latent_dist_total[idx[0], idx[1]]
-        #     # Record positions
-        #     positions.append([actual_dist, latent_dist])
-        #     # Record distance discrepancy
-        #     dd_array.append(actual_dist - latent_dist)
-        # # Set positions
-        # if len(positions) == 0:
-        #     self.points.set_data([], [])
-        #     self.points.set_color([])
-        # else:
-        #     self.points.set_data(*np.array(positions).T)
-        #     # Set colors
-        #     rgba = self.get_rgba_from_dd_array(dd_array)
-        #     self.points.set_color(rgba)
+        # Update present if needed
+        if update or self.timestep == 0:
+            kwargs['present'] = torch.tensor(np.isin(kwargs['times'], self.temporal['stages'][current_stage]))
+        
+        return kwargs, False

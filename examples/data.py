@@ -77,11 +77,11 @@ def load_data(dataset_name, data_folder):
         # Special handling
         if dataset_name not in ('ExSeq',):
             M1 = pd.read_csv(os.path.join(dataset_dir, 's3_cell_by_gene.csv'), delimiter=',', header=1).rename(columns={'gene_name': 'sample_name'})
-            # spot_data = pd.read_csv(os.path.join(dataset_dir, 's3_spot_table.csv'), delimiter=',', header=0).drop(columns=['Unnamed: 0', 'Unnamed: 0.1'])
+            spot_data = pd.read_csv(os.path.join(dataset_dir, 's3_spot_table.csv'), delimiter=',', header=0).drop(columns=['Unnamed: 0'])
             M2 = pd.read_csv(os.path.join(dataset_dir, 's3_mapped_cell_table.csv'), delimiter=',', header=0).drop(columns=['Unnamed: 0'])
         else:
             M1 = pd.read_csv(os.path.join(dataset_dir, 's3_cell_by_gene.csv'), delimiter=',', header=0).rename(columns={'Unnamed: 0': 'sample_name'})
-            # spot_data = pd.read_csv(os.path.join(dataset_dir, 's3_spot_table.csv'), delimiter=',', header=0).drop(columns=['Unnamed: 0', 'Unnamed: 0.1'])
+            spot_data = pd.read_csv(os.path.join(dataset_dir, 's3_spot_table.csv'), delimiter=',', header=0).drop(columns=['Unnamed: 0'])
             M2 = pd.read_csv(os.path.join(dataset_dir, 's3_mapped_cell_table.csv'), delimiter=',', header=0).drop(columns=['Unnamed: 0']).rename(columns={'cell': 'sample_name', 'cluster': 'layer'})  # Not really a layer, just for consistency
 
         # Check all samples line up
@@ -93,6 +93,7 @@ def load_data(dataset_name, data_folder):
         F1.to_numpy()
         M1 = M1.to_numpy()
 
+        # TODO: Add sample/snapshot
         T1 = T2 = M2[['layer']].to_numpy()
         F2 = np.array(['x', 'y'])
         M2 = M2[F2].to_numpy()

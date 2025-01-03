@@ -1,5 +1,3 @@
-
-
 from collections import defaultdict
 import re
 import os
@@ -20,9 +18,9 @@ import data
 import inept
 
 # Get args
-# import sys
+import sys
 # run_id_idx = int(sys.argv[1])
-# analysis_key_idx = int(sys.argv[2])
+analysis_key_idx = int(sys.argv[1])
 
 # Set params
 DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -57,21 +55,19 @@ torch.set_grad_enabled(False);
 # %%
 # Parameters
 run_id = (
-    'c8zsunc9',  # ISS Random 100 Max
+    'rypltvk5',  # MMD-MA Random 100 Max
     '32jqyk54',  # MERFISH Random 100 Max
+    'c8zsunc9',  # ISS Random 100 Max
     'maofk1f2',  # ExSeq NR
     'f6ajo2am',  # smFish NR
     'vb1x7bae',  # MERFISH NR
     '473vyon2',  # ISS NR
-    '4i9rhkfe',  # ISS Random 200 20k
-    'k52g4dx3',  # Random 100x (OLD)
-    '2dt27jy2',  # No random 20k (OLD)
 )[0]
 stage_override = None  # Manually override policy stage selection
 num_nodes_override = None
 max_batch_override = 1_000
 max_nodes_override = None
-seed_override = None  # 43
+seed_override = None
 
 # Load run
 api = wandb.Api()
@@ -84,6 +80,7 @@ config = dict(config)
 
 # Reproducibility
 seed = seed_override if seed_override is not None else config['note']['seed']
+# torch.use_deterministic_algorithms(True)
 torch.manual_seed(seed)
 if torch.cuda.is_available(): torch.cuda.manual_seed(seed)
 np.random.seed(seed)
@@ -97,9 +94,6 @@ ppc = inept.utilities.Preprocessing(**config['data'], device=DEVICE)
 modalities = ppc.fit_transform(modalities)
 modalities, types = ppc.subsample(modalities, types)
 modalities = ppc.cast(modalities)
-
-# Load env
-env = inept.environments.trajectory(*modalities, **config['env'], device=DEVICE)
 
 # Get latest policy
 latest_mdl = [-1, None]  # Pkl
@@ -117,8 +111,13 @@ for file in run.files():
         elif ftype == 'wgt': latest_wgt = [stage, file]
 print(f'Policy found at stage {latest_mdl[0]}')
 
+# Load env
+env = inept.environments.trajectory(*modalities, **config['env'], **config['stages']['env'][0], device=DEVICE)
+for weight_stage in config['stages']['env'][1:latest_mdl[0]+1]:
+    env.set_rewards(weight_stage)
+
 # Load file
-load_type = 'wgt'
+load_type = 'mdl'
 if load_type == 'mdl':
     with tempfile.TemporaryDirectory() as tmpdir:
         latest_mdl[1].download(tmpdir, replace=True)
@@ -130,7 +129,7 @@ elif load_type == 'wgt':
         # config['policy'] = inept.utilities.overwrite_dict(config['policy'], {'positional_dim': 6, 'modal_dims': [76]})  # Old model compatibility
         if max_nodes_override is not None: config['policy'] = inept.utilities.overwrite_dict(config['policy'], {'max_nodes': max_nodes_override})
         policy = inept.models.PPO(**config['policy'])
-        incompatible_keys = policy.load_state_dict(torch.load(os.path.join(tmpdir, latest_wgt[1].name), weights_only=True))
+        # incompatible_keys = policy.load_state_dict(torch.load(os.path.join(tmpdir, latest_wgt[1].name), weights_only=True))
 policy = policy.to(DEVICE).eval()
 policy.actor.set_action_std(1e-7)
 
@@ -152,7 +151,7 @@ analysis_key = [
     'integration',
     'discovery',
     'temporal'
-][0]
+][analysis_key_idx]
 
 # Discovery params
 discovery_key = 0  # Auto
@@ -365,12 +364,15 @@ memories[analysis_key] = dict(memories[analysis_key])
 # CLI
 print()
 
+# %%
+memories[analysis_key]['rewards'].cpu().mean()  # TODO: Why not the same as WANDB?
+
 # %% [markdown]
 # ### Plot Memories
 
 # %%
 # Prepare data
-skip = 10
+skip = 1
 present = memories[analysis_key]['present'].cpu()[::skip]
 states = memories[analysis_key]['states'].cpu()[::skip]
 stages = memories[analysis_key]['stages'].cpu()[::skip]
@@ -436,7 +438,7 @@ arguments = {
     'skip': skip,
     'seed': 42,
     # Styling
-    'ms': 3,
+    'ms': 5,  # 3
     'lw': 1,
 }
 views = [view(**arguments, ax=ax) for view, ax in zip(views, axs)]
