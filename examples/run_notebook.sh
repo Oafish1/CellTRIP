@@ -1,1 +1,1 @@
-jupyter nbconvert --execute --to notebook --inplace $1 --stdout --ExecutePreprocessor.timeout=-1
+jupyter nbconvert --execute --to notebook $1 --output $1 --stdout --ExecutePreprocessor.timeout=-1

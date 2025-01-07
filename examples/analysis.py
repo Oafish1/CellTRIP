@@ -41,6 +41,7 @@ torch.set_grad_enabled(False);
 
 # %% [markdown]
 # - HIGH PRIORITY
+#   - Extent `get_present_func` to class with full state-altering capabilities
 #   - Add more accuracy metrics
 #   - Perturbation analysis with inverse transform
 #   - Add 2D functionality
@@ -141,40 +142,23 @@ times = types[0][:, -1]  # Temporary time annotation, will change per-dataset
 # %% [markdown]
 # ### Generate Runs
 
-# %% [markdown]
-# Integration is equivalent to discovery with `None` discovery
-
 # %%
 # Choose key
 # TODO: Calculate both, plot one (?)
 analysis_key = [
     'integration',
     'discovery',
-    'temporal'
+    'temporal',
+][analysis_key_idx]
+state_manager_class = [
+    inept.utilities.IntegrationStateManager,
+    inept.utilities.DiscoveryStateManager,
+    inept.utilities.TemporalStateManager,
 ][analysis_key_idx]
 
 # Discovery params
 discovery_key = 0  # Auto
 
-# Temporal params
-temporal_key = 0  # Auto
-max_stage_len = 500
-
-# Initialize memories
-memories = {}
-
-# Default present function
-def get_present_default(
-    *args,
-    timestep,
-    **kwargs,
-):
-    return torch.ones(modalities[0].shape[0], dtype=bool), timestep+1 >= config['train']['max_ep_timesteps']
-
-# %% [markdown]
-# ##### Integration/Discovery
-
-# %%
 # Discovery list
 discovery = []
 # Reverse alphabetical (ExSeq, MERFISH, smFISH, ISS, MouseVisual)
@@ -185,128 +169,52 @@ discovery_general = {
     'rates': [1] + [.015]*(len(type_order)-1),
     'origins': [None] + list(type_order[:-1])}
 discovery += [discovery_general]
-
 # Choose Discovery
 discovery = discovery[discovery_key]
 
-# %%
-# Functions
-# Takes in combination of variables, outputs present, end
-def get_present_discovery(
-    *args,
-    env,
-    timestep,
-    present,
-    labels,
-    **kwargs,
-):
-    # Copy status
-    present = present.clone()
-    state = env.get_state().clone()
+# Temporal params
+temporal_key = 0  # Auto
 
-    # Iterate over each label
-    for label, delay, rate, origin in zip(*discovery.values()):
-        # If delay has been reached
-        if timestep >= delay:
-            # Look at each node
-            for i in range(len(present)):
-                # If label matches and not already present
-                if labels[i] == label and not present[i]:
-                    # Roll for appearance
-                    num_progenitors = ((labels==origin)*present.cpu().numpy()).sum()
-                    if np.random.rand() < rate:  # * num_progenitors
-                        # Mark as present and set origin if at least one progenitor has spawned
-                        if origin is not None and num_progenitors > 0:
-                            state[i] = state[np.random.choice(np.argwhere((labels==origin)*present.cpu().numpy()).flatten())]
-                        present[i] = True
-
-    # Return
-    env.set_state(state)
-    return present, timestep+1 >= config['train']['max_ep_timesteps']
-
-# %% [markdown]
-# ##### Trajectory
-
-# %%
 # Stage order list
 temporal = []
 # Reverse alphabetical (ExSeq, MERFISH, smFISH, ISS, MouseVisual)
 temporal_general = {'stages': [[l] for l in np.unique(labels)[::-1]]}
 temporal += [temporal_general]
-
 # Choose stage order
 temporal = temporal[temporal_key]
 
-# %%
-# Functions
-current_stage = -1  # TODO: Move into class
-stage_start = 0
-
-def get_present_temporal(
-    *args,
-    timestep,
-    env,
-    times,  # np.array
-    present,
-    vel_threshold=3e-2,
-    **kwargs,
-):
-    # Clone data
-    present = present.clone()
-    state = env.get_state().clone()
-
-    # Defaults
-    global current_stage, stage_start
-    if timestep == 0:
-        current_stage = 0
-        stage_start = 0
-
-    # Initiate change if vel is low
-    if present.sum() > 0: vel_threshold_met = state[present, env.dim:].square().sum(dim=-1).sqrt().max(dim=-1).values < vel_threshold
-    else: vel_threshold_met = False
-
-    update = vel_threshold_met or timestep - stage_start >= max_stage_len
-    if update:
-        # Make change to next stage
-        current_stage += 1
-        stage_start = timestep
-        if current_stage >= len(temporal['stages']): return present, True
-    
-    # Update present if needed
-    if update or timestep == 0:
-        present = torch.tensor(np.isin(times, temporal['stages'][current_stage]))
-    
-    return present, False
+# Initialize memories
+memories = {}
 
 # %% [markdown]
 # ##### Main Run
 
 # %%
-# Choose key
-get_present_dict = {
-    'integration': get_present_default,
-    'discovery': get_present_discovery,
-    'temporal': get_present_temporal,
-}
-get_present_func = get_present_dict[analysis_key]
+# Choose state manager
+state_manager = state_manager_class(
+    device=DEVICE,
+    discovery=discovery,
+    temporal=temporal,
+    num_nodes=modalities[0].shape[0],
+)
 
 # Initialize
 env.reset(); memories[analysis_key] = defaultdict(lambda: [])
 
 # Modify
-present = torch.zeros(modalities[0].shape[0], dtype=bool, device=DEVICE)
-present, _ = get_present_func(
-    env=env,
-    timestep=0,
-    present=present,
+state_vars, end = state_manager(
+    # present=present,
+    state=env.get_state(),
     labels=labels,
     times=times,
-    discovery=discovery,
 )
+present = state_vars['present']
+env.set_state(state_vars['state'])
 
 # Continue initializing
 memories[analysis_key]['present'].append(present)
 memories[analysis_key]['states'].append(env.get_state())
+current_stage = state_manager.current_stage if state_manager_class in (inept.utilities.TemporalStateManager,) else -1
 memories[analysis_key]['stages'].append(current_stage)
 memories[analysis_key]['rewards'].append(torch.zeros(modalities[0].shape[0], device=DEVICE))
 
@@ -334,21 +242,22 @@ while True:
     new_state[~present] = state[~present, :2*env.dim]  # Don't move un-spawned nodes
     env.set_state(new_state)
 
+    # Modify
+    state_vars, end = state_manager(
+        present=present,
+        state=env.get_state(),
+        labels=labels,
+        times=times,
+    )
+    present = state_vars['present']
+    env.set_state(state_vars['state'])
+
     # Record
     memories[analysis_key]['present'].append(present)
     memories[analysis_key]['states'].append(env.get_state())
+    current_stage = state_manager.current_stage if state_manager_class in (inept.utilities.TemporalStateManager,) else -1
     memories[analysis_key]['stages'].append(current_stage)
     memories[analysis_key]['rewards'].append(rewards)
-
-    # Modify
-    present, end = get_present_func(
-        env=env,
-        timestep=timestep, 
-        present=present, 
-        labels=labels,
-        times=times,
-        discovery=discovery,
-    )
 
     # End
     if end: break

@@ -5,6 +5,7 @@ import tracemalloc
 import warnings
 
 import matplotlib
+from matplotlib.ticker import ScalarFormatter
 import mpl_toolkits.mplot3d as mp3d
 import numpy as np
 import scipy.sparse
@@ -607,7 +608,7 @@ class Preprocessing:
         self.device = device
 
     
-    def fit(self, modalities, **kwargs):
+    def fit(self, modalities, *args, **kwargs):
         self.modalities = modalities
 
         # Standardize
@@ -645,7 +646,7 @@ class Preprocessing:
                 if dim is not None else None
                 for m, dim in zip(modalities, self.pca_dim)]
 
-    def transform(self, modalities, **kwargs):
+    def transform(self, modalities, features=None, **kwargs):
         # Standardize
         # NOTE: Not mean-centered for sparse matrices
         # TODO: Maybe allow for only one dataset to be standardized?
@@ -659,15 +660,19 @@ class Preprocessing:
         # Filtering
         if self.top_variant is not None:
             modalities = [m[:, mask] if mask is not None else m for m, mask in zip(modalities, self.filter_mask)]
+            if features is not None: features = [fs[mask] if mask is not None else fs for fs, mask in zip(features, self.filter_mask)]
 
         # PCA
         if self.pca_dim is not None:
             modalities = [p.transform(m) if p is not None else m for m, p in zip(modalities, self.pca_class)]
 
-        return modalities
+        ret = (modalities,)
+        if features is not None: ret += (features,)
+        return clean_return(ret)
 
 
     def inverse_transform(self, modalities, **kwargs):
+        # NOTE: Does not reverse top variant filtering or feature sampling
         # PCA
         if self.pca_dim is not None:
             modalities = [p.inverse_transform(m) for m, p in zip(modalities, self.pca_class)]
@@ -686,7 +691,7 @@ class Preprocessing:
         return self.transform(*args, **kwargs)
     
 
-    def cast(self, modalities, copy=True):
+    def cast(self, modalities, copy=False):
         assert self.device is not None, '`device` must be set to call `self.cast`'
         if copy: modalities = modalities.copy()
 
@@ -696,7 +701,7 @@ class Preprocessing:
         return modalities
     
 
-    def inverse_cast(self, modalities, copy=True):
+    def inverse_cast(self, modalities, copy=False):
         if copy: modalities = modalities.copy()
 
         # Inverse cast
@@ -1242,6 +1247,84 @@ class ViewTemporalScatter(ViewLinesBase):
             self.ax.set_ylim(top=new_top_lim)
 
 
+class ViewPerturbationEffect(ViewModalDistBase):
+    def __init__(
+        self,
+        # Data
+        present,
+        states,
+        stages,
+        modalities,
+        *args,
+        # Data params
+        dim,
+        perturbation_features,
+        perturbation_feature_names=None,
+        # Arguments
+        # None
+        # Styling
+        default_ylim=1e-2,
+        **kwargs,
+    ):
+        local_vars = locals().copy()
+        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
+        super().__init__(**local_vars, **kwargs)
+
+        # Data
+        self.present = present
+        self.states = states
+        self.stages = stages
+        self.modalities = modalities
+
+        # Data params
+        self.dim = dim
+        self.perturbation_features = perturbation_features
+        self.perturbation_feature_names = perturbation_feature_names
+        if self.perturbation_feature_names is None: self.perturbation_feature_names = list(range(sum([len(fs) for fs in self.perturbation_features])))
+
+        # Styling
+        self.default_ylim = default_ylim
+
+        # Get baseline for steady state
+        self.steady_state = self.states[torch.argwhere(stages==0).max(), :, :].clone()
+
+        # Initialize bars
+        self.bars = [self.ax.bar(l, 0, color='gray') for l in range(sum([len(fs) for fs in self.perturbation_features]))]
+
+        # Styling
+        self.ax.set_xlabel('Feature')
+        self.ax.set_ylabel('Effect Size')
+        self.ax.set_xticks(list(range(len(self.perturbation_feature_names))))
+        self.ax.set_xticklabels(self.perturbation_feature_names, rotation=45, ha='center', va='center')
+        self.ax.set_ylim([0, self.default_ylim])
+        self.ax.spines[['right', 'top', 'left']].set_visible(False)
+        formatter = ScalarFormatter()
+        formatter.set_powerlimits((0, 0))
+        self.ax.yaxis.set_major_formatter(formatter)
+
+    def update(self, frame):
+        super().update(frame)
+
+        # Calclate mean positional difference from steady state
+        diff = (self.states[frame, self.present[frame], :self.dim] - self.steady_state[:, :self.dim]).square().sum(dim=-1).sqrt().mean()
+
+        # Reset ylim for passing integration stage
+        if frame == torch.argwhere(self.stages==0).max() + 1:
+            self.ax.set_ylim([0, self.default_ylim])
+
+        # Set bar heights
+        stage = self.stages[frame]
+        # Set all bar heights for integration period
+        if stage == 0:
+            for bar in self.bars: bar[0].set_height(diff)
+        # Set individual bar heights for perturbation effects
+        else: self.bars[stage - 1][0].set_height(diff)
+
+        # Set new limit
+        ylim = self.ax.get_ylim()
+        self.ax.set_ylim([0, max(diff, ylim[1])])
+
+
 class StateManager:
     def __init__(self, *, device, **kwargs):
         # NOTE: Assume all input kwargs are options/data
@@ -1255,8 +1338,11 @@ class StateManager:
 
 
 def check_requirements(req, kwargs):
-    assert np.array([s in kwargs for s in req]).all(), (
-        f'All of {req} must be passed for `DiscoveryStateManager` call.')
+    not_found = []
+    for s in req:
+        if s not in kwargs: not_found.append(s)
+    assert len(not_found) == 0, (
+        f'All of {not_found} must be passed for `DiscoveryStateManager` call.')
       
 
 class IntegrationStateManager(StateManager):
@@ -1264,11 +1350,11 @@ class IntegrationStateManager(StateManager):
         self,
         *,
         num_nodes=None,
-        max_timesteps=None,
+        max_timesteps=1_000,
         **kwargs,
     ):
         local_vars = locals().copy()
-        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
+        for k in ('self', '__class__', 'kwargs'): local_vars.pop(k)
         super().__init__(**local_vars, **kwargs)
 
         # Save vars
@@ -1280,19 +1366,19 @@ class IntegrationStateManager(StateManager):
 
     def __call__(self, **kwargs):
         local_vars = locals().copy()
-        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
-        super().__init__(**local_vars, **kwargs)
+        for k in ('self', '__class__', 'kwargs'): local_vars.pop(k)
+        super().__call__(**local_vars, **kwargs)
 
         # Set present
         if self.present is not None: kwargs['present'] = self.present
 
         # Check requirements
-        check_requirements(('present',))
+        check_requirements(('present',), kwargs)
 
         # Modify present
         if self.present is None: kwargs['present'][:] = 1
 
-        return kwargs, self.is_end()
+        return kwargs, self._is_end()
 
     def _is_end(self):
         return self.timestep+1 >= self.max_timesteps
@@ -1302,13 +1388,13 @@ class DiscoveryStateManager(StateManager):
     def __init__(
         self,
         *,
-        discovery=None,
+        discovery,
         num_nodes=None,
-        max_timesteps=None,
+        max_timesteps=1_000,
         **kwargs,
     ):
         local_vars = locals().copy()
-        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
+        for k in ('self', '__class__', 'kwargs'): local_vars.pop(k)
         super().__init__(**local_vars, **kwargs)
 
         # Save vars
@@ -1318,8 +1404,8 @@ class DiscoveryStateManager(StateManager):
 
     def __call__(self, **kwargs):
         local_vars = locals().copy()
-        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
-        super().__init__(**local_vars, **kwargs)
+        for k in ('self', '__class__', 'kwargs'): local_vars.pop(k)
+        super().__call__(**local_vars, **kwargs)
 
         # Initialize present for timestep 0
         if self.timestep == 0 and 'present' not in kwargs:
@@ -1327,7 +1413,10 @@ class DiscoveryStateManager(StateManager):
             kwargs['present'] = torch.zeros(self.num_nodes, dtype=bool, device=self.device)
 
         # Check requirements
-        check_requirements(('present', 'state', 'labels'))
+        check_requirements(('present', 'state', 'labels'), kwargs)
+
+        # Copy present to avoid modifying previous
+        kwargs['present'] = kwargs['present'].clone()
 
         # Iterate over each label
         for label, delay, rate, origin in zip(*self.discovery.values()):
@@ -1356,44 +1445,151 @@ class TemporalStateManager(StateManager):
     def __init__(
         self,
         *,
-        temporal=None,
+        temporal,
         num_nodes=None,
+        dim=3,
+        max_stage_len=500,
+        vel_threshold=3e-2,
         **kwargs,
      ):
         local_vars = locals().copy()
-        for k in ('self', '__class__', 'args', 'kwargs'): local_vars.pop(k)
+        for k in ('self', '__class__', 'kwargs'): local_vars.pop(k)
         super().__init__(**local_vars, **kwargs)
 
         # Save vars
         self.temporal = temporal
         self.num_nodes = num_nodes
+        self.dim = dim
+        self.max_stage_len = max_stage_len
+        self.vel_threshold = vel_threshold
 
         # Initialize vars
         self.current_stage = -1
         self.stage_start = 0
+        self.advance_next = True
 
     def __call__(self, **kwargs):
+        local_vars = locals().copy()
+        for k in ('self', '__class__', 'kwargs'): local_vars.pop(k)
+        super().__call__(**local_vars, **kwargs)
+
         # Initialize present for timestep 0
         if self.timestep == 0 and 'present' not in kwargs:
             assert self.num_nodes is not None, '`num_nodes` must be defined for automatic `present` generation.'
             kwargs['present'] = torch.zeros(self.num_nodes, dtype=bool, device=self.device)
 
         # Check requirements
-        check_requirements(('present', 'state', 'times'))
+        check_requirements(('present', 'state', 'times'), kwargs)
+
+        # Update present if needed
+        if self.advance_next or self.timestep == 0:
+            kwargs['present'] = torch.tensor(np.isin(kwargs['times'], self.temporal['stages'][self.current_stage + 1]))
+
+        # Make change to next stage
+        if self.advance_next:
+            self.current_stage += 1
+            self.stage_start = self.timestep
+            self.advance_next = False
 
         # Initiate change if vel is low
-        if kwargs['present'].sum() > 0: vel_threshold_met = kwargs['state'][kwargs['present'], env.dim:].square().sum(dim=-1).sqrt().max(dim=-1).values < vel_threshold
+        stage_steps = self.timestep - self.stage_start
+        if kwargs['present'].sum() > 0: vel_threshold_met = kwargs['state'][kwargs['present'], self.dim:].square().sum(dim=-1).sqrt().max(dim=-1).values < self.vel_threshold
         else: vel_threshold_met = False
 
-        update = vel_threshold_met or self.timestep - stage_start >= max_stage_len
+        update = vel_threshold_met or stage_steps >= self.max_stage_len - 1
         if update:
-            # Make change to next stage
-            current_stage += 1
-            stage_start = self.timestep
-            if current_stage >= len(self.temporal['stages']): return kwargs, True
-        
-        # Update present if needed
-        if update or self.timestep == 0:
-            kwargs['present'] = torch.tensor(np.isin(kwargs['times'], self.temporal['stages'][current_stage]))
+            self.advance_next = True
+            if self.current_stage + 1 >= len(self.temporal['stages']): return kwargs, True
+
+        return kwargs, False
+
+
+class PerturbationStateManager(StateManager):
+    def __init__(
+        self,
+        *,
+        perturbation_features=None,
+        num_nodes=None,
+        dim=3,
+        max_timesteps=1_000,
+        max_stage_len=500,
+        vel_threshold=None,
+        **kwargs,
+     ):
+        local_vars = locals().copy()
+        for k in ('self', '__class__', 'kwargs'): local_vars.pop(k)
+        super().__init__(**local_vars, **kwargs)
+
+        # Save vars
+        self.perturbation_features = perturbation_features
+        self.num_nodes = num_nodes
+        self.dim = dim
+        self.max_timesteps = max_timesteps
+        self.max_stage_len = max_stage_len
+        self.vel_threshold = vel_threshold
+
+        # Initialize vars
+        self.current_stage = 0
+        self.stage_start = 0
+        self.steady_state = None
+        self.steady_modalities = None
+        self.advance_next = False
+
+    def __call__(self, **kwargs):
+        local_vars = locals().copy()
+        for k in ('self', '__class__', 'kwargs'): local_vars.pop(k)
+        super().__call__(**local_vars, **kwargs)
+
+        # Initialize present for timestep 0
+        if self.timestep == 0 and 'present' not in kwargs:
+            assert self.num_nodes is not None, '`num_nodes` must be defined for automatic `present` generation.'
+            kwargs['present'] = torch.ones(self.num_nodes, dtype=bool, device=self.device)
+
+        # Check requirements
+        check_requirements(('state', 'modalities'), kwargs)
+
+        # Advance stage
+        if self.advance_next:
+            # Record if needed
+            if self.current_stage == 0:
+                self.steady_state = kwargs['state'].clone()
+                self.steady_modalities = tuple([ten.clone() for ten in kwargs['modalities']])
+
+                # Set vel threshold if needed
+                if self.vel_threshold is None:
+                    # Maybe do this with integration as well?
+                    self.vel_threshold = self.steady_state[kwargs['present'], self.dim:].square().sum(dim=-1).sqrt().max(dim=-1).values
+
+            # Make meta changes
+            self.current_stage += 1
+            self.stage_start = self.timestep
+            self.advance_next = False
+
+            # Set to steady state
+            kwargs['state'] = self.steady_state.clone()
+            kwargs['modalities'] = tuple([ten.clone() for ten in self.steady_modalities])
+
+            # Modify feature
+            target_modality, target_feature = self.perturbation_feature_pairs[self.current_stage - 1]
+            kwargs['modalities'][target_modality][:, target_feature] = 0
+
+        # Calculate feature idx on first run
+        if self.timestep == 0:
+            if self.perturbation_features is None: self.perturbation_features = [np.arange(m.shape[1]) for m in kwargs['modalities']]
+            self.perturbation_feature_pairs = [(i, f) for i, fs in enumerate(self.perturbation_features) for f in fs]
+            self.num_features = sum([len(fs) for fs in self.perturbation_features])
+
+        # Calculate advance criterion
+        if self.vel_threshold is not None:
+            vel_threshold_met = kwargs['state'][kwargs['present'], self.dim:].square().sum(dim=-1).sqrt().max(dim=-1).values < self.vel_threshold
+        else: vel_threshold_met = False
+        max_len = self.max_timesteps if self.current_stage == 0 else self.max_stage_len
+        time_threshold_met = self.timestep - self.stage_start >= max_len - 1
+        # update = (vel_threshold_met and self.current_stage != 0) or time_threshold_met
+        update = vel_threshold_met or time_threshold_met
+
+        if update:
+            self.advance_next = True
+            if self.current_stage + 1 > self.num_features: return kwargs, True
         
         return kwargs, False

@@ -1,3 +1,26 @@
+### 1.0.0+2025-01-07
+- Add labels to perturbation view
+- Adjust copy behavior in `Preprocessing` class
+- Adjust formatting for `ViewPerturbationEffect`
+- Data loading fixes and feature format standardization
+- Feature filtering according to top variant for `Preprocessing` class
+- Optimize modality modification during analysis main run (3x speedup!)
+- Remove mdl file saving from `train` notebook
+
+### 1.0.0+2025-01-06
+- Add perturbation state manager class
+- Add perturbation visualization class
+- Amend behavior of `run_notebook` script for bash arguments
+- Fix initial stage of temporal analysis being labeled `-1`
+- Fix lingering stage at end of main run for analysis
+- Implement dynamic thresholding for perturbation state manager
+
+### 1.0.0+2025-01-05
+- Finish state manager impelementation
+- Fix bug for state manager not cloning tensors, thereby improperly updating `present`
+- Replace `get_present` function with state manager classes
+- Start framework for perturbation analysis
+
 ### 1.0.0+2024-12-30
 - Add framework for state manager in analysis runs
 

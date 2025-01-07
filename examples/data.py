@@ -90,7 +90,7 @@ def load_data(dataset_name, data_folder):
         # Get final formatted data
         M1 = M1.drop(columns='sample_name')
         F1 = M1.columns
-        F1.to_numpy()
+        F1 = F1.to_numpy()
         M1 = M1.to_numpy()
 
         # TODO: Add sample/snapshot
@@ -113,7 +113,7 @@ def load_data(dataset_name, data_folder):
 
         modalities = [M1, M2, M3][1:2]
         types = [T1, T2, T3][1:2]
-        features = [[i for i in range(M.shape[1])] for M in modalities]
+        features = [np.arange(m.shape[1]) for m in modalities]
 
     elif dataset_name == 'BrainChromatin':
         nrows = None  # 2_000
@@ -127,7 +127,7 @@ def load_data(dataset_name, data_folder):
         meta = pd.merge(meta, meta_names, left_on='ATAC_cluster', right_on='Cluster.ID', how='left')
         meta.index = meta['Cell.ID']
         T1 = T2 = meta.transpose()[M1.index].transpose()[['Cluster.Name']].to_numpy()
-        F1, F2 = M1.columns, M2.columns
+        F1, F2 = M1.columns.to_numpy(), M2.columns.to_numpy()
         M1, M2 = M1.to_numpy(), M2.to_numpy()
 
         modalities = [M1, M2]
@@ -178,7 +178,7 @@ def load_data(dataset_name, data_folder):
 
         modalities = [M1, M2]
         types = [T1, T2]
-        features = [[i for i in range(M.shape[1])] for M in modalities]
+        features = [np.arange(m.shape[1]) for m in modalities]
 
     # Random data
     elif dataset_name == 'Random':
@@ -188,7 +188,7 @@ def load_data(dataset_name, data_folder):
 
         modalities = [M1, M2]
         types = [np.array([0 for _ in range(num_nodes)]).reshape((-1, 1)) for _ in range(len(modalities))]
-        features = [[i for i in range(M.shape[1])] for M in modalities]
+        features = [np.arange(m.shape[1]) for m in modalities]
 
     else: assert False, 'No matching dataset found.'
 
