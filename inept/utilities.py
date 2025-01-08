@@ -614,13 +614,13 @@ class Preprocessing:
         # Standardize
         if self.standardize or self.top_variant is not None:
             self.standardize_mean = [
-                np.mean(m, keepdims=True)
+                np.mean(m, axis=0, keepdims=True)
                 if not scipy.sparse.issparse(m) else
-                np.array(np.mean(m).reshape((1, -1)))
+                np.array(np.mean(m, axis=0).reshape((1, -1)))
                 for m in modalities
             ]
             self.standardize_std = [
-                np.std(m, keepdims=True)
+                np.std(m, axis=0, keepdims=True)
                 if not scipy.sparse.issparse(m) else
                 np.array(np.sqrt(m.power(2).mean(axis=0) - np.square(m.mean(axis=0))))
                 for m in modalities
@@ -634,6 +634,9 @@ class Preprocessing:
                 for std, var in zip(self.standardize_std, self.top_variant)
             ]
             modalities = [m[:, mask] if mask is not None else m for m, mask in zip(modalities, self.filter_mask)]
+            
+            self.standardize_mean = [st[:, mask] if mask is not None else st for m, st, mask in zip(self.modalities, self.standardize_mean, self.filter_mask)]
+            self.standardize_std = [st[:, mask] if mask is not None else st for m, st, mask in zip(self.modalities, self.standardize_std, self.filter_mask)]
 
         # PCA
         if self.pca_dim is not None:
@@ -647,6 +650,12 @@ class Preprocessing:
                 for m, dim in zip(modalities, self.pca_dim)]
 
     def transform(self, modalities, features=None, **kwargs):
+        # Filtering
+        # NOTE: Determines if filtering is already done by shape checking the main `modalities` input
+        if self.top_variant is not None and np.array([m.shape[1] != mask.shape[0] for m, mask in zip(modalities, self.filter_mask) if mask is not None]).any():
+            modalities = [m[:, mask] if mask is not None else m for m, mask in zip(modalities, self.filter_mask)]
+            if features is not None: features = [fs[mask] if mask is not None else fs for fs, mask in zip(features, self.filter_mask)]
+
         # Standardize
         # NOTE: Not mean-centered for sparse matrices
         # TODO: Maybe allow for only one dataset to be standardized?
@@ -656,11 +665,6 @@ class Preprocessing:
                 if not scipy.sparse.issparse(m) else
                 (m / np.where(m_std == 0, 1, m_std)).tocsr()
                 for m, m_mean, m_std in zip(modalities, self.standardize_mean, self.standardize_std)]
-
-        # Filtering
-        if self.top_variant is not None:
-            modalities = [m[:, mask] if mask is not None else m for m, mask in zip(modalities, self.filter_mask)]
-            if features is not None: features = [fs[mask] if mask is not None else fs for fs, mask in zip(features, self.filter_mask)]
 
         # PCA
         if self.pca_dim is not None:
@@ -1274,19 +1278,18 @@ class ViewPerturbationEffect(ViewModalDistBase):
         self.present = present
         self.states = states
         self.stages = stages
-        self.modalities = modalities
 
         # Data params
         self.dim = dim
         self.perturbation_features = perturbation_features
         self.perturbation_feature_names = perturbation_feature_names
-        if self.perturbation_feature_names is None: self.perturbation_feature_names = list(range(sum([len(fs) for fs in self.perturbation_features])))
+        if self.perturbation_feature_names is None: self.perturbation_feature_names = [np.arange(len(pfs)) for pfs in self.perturbation_features]
 
         # Styling
         self.default_ylim = default_ylim
 
         # Get baseline for steady state
-        self.steady_state = self.states[torch.argwhere(stages==0).max(), :, :].clone()
+        self.steady_state = self.states[torch.argwhere(self.stages==0).max(), :, :].clone()
 
         # Initialize bars
         self.bars = [self.ax.bar(l, 0, color='gray') for l in range(sum([len(fs) for fs in self.perturbation_features]))]
@@ -1294,8 +1297,15 @@ class ViewPerturbationEffect(ViewModalDistBase):
         # Styling
         self.ax.set_xlabel('Feature')
         self.ax.set_ylabel('Effect Size')
-        self.ax.set_xticks(list(range(len(self.perturbation_feature_names))))
-        self.ax.set_xticklabels(self.perturbation_feature_names, rotation=45, ha='center', va='center')
+        self.ax.set_xticks(list(range(sum([len(pfs) for pfs in self.perturbation_features]))))
+        self.ax.set_xticklabels([pfn for pfns in self.perturbation_feature_names for pfn in pfns], rotation=45, ha='center', va='baseline')
+
+        max_height = max([l.get_window_extent(renderer=self.ax.figure.canvas.get_renderer()).height for l in self.ax.get_xticklabels()])
+        fontsize = self.ax.get_xticklabels()[0].get_size()
+        pad = fontsize / 2 + max_height / 2
+        self.ax.tick_params(axis='x', pad=pad)
+
+        # Additional styling
         self.ax.set_ylim([0, self.default_ylim])
         self.ax.spines[['right', 'top', 'left']].set_visible(False)
         formatter = ScalarFormatter()
@@ -1305,8 +1315,8 @@ class ViewPerturbationEffect(ViewModalDistBase):
     def update(self, frame):
         super().update(frame)
 
-        # Calclate mean positional difference from steady state
-        diff = (self.states[frame, self.present[frame], :self.dim] - self.steady_state[:, :self.dim]).square().sum(dim=-1).sqrt().mean()
+        # Calclate mean positional difference from steady state (effect size)
+        diff = (self.states[frame, self.present[frame], :self.dim] - self.steady_state[self.present[frame], :self.dim]).square().sum(dim=-1).sqrt().mean(dim=-1)
 
         # Reset ylim for passing integration stage
         if frame == torch.argwhere(self.stages==0).max() + 1:
@@ -1509,6 +1519,7 @@ class PerturbationStateManager(StateManager):
         self,
         *,
         perturbation_features=None,
+        modal_targets=[],
         num_nodes=None,
         dim=3,
         max_timesteps=1_000,
@@ -1522,6 +1533,7 @@ class PerturbationStateManager(StateManager):
 
         # Save vars
         self.perturbation_features = perturbation_features
+        self.modal_targets = modal_targets
         self.num_nodes = num_nodes
         self.dim = dim
         self.max_timesteps = max_timesteps
@@ -1571,11 +1583,18 @@ class PerturbationStateManager(StateManager):
 
             # Modify feature
             target_modality, target_feature = self.perturbation_feature_pairs[self.current_stage - 1]
-            kwargs['modalities'][target_modality][:, target_feature] = 0
+            kwargs['modalities'][self.modal_inputs[target_modality]][:, target_feature] = kwargs['modalities'][target_modality][:, target_feature].mean()  # Revert to mean
 
-        # Calculate feature idx on first run
+        # Initial setup
         if self.timestep == 0:
-            if self.perturbation_features is None: self.perturbation_features = [np.arange(m.shape[1]) for m in kwargs['modalities']]
+            # Base case for modal inputs
+            self.modal_inputs = np.array([i for i in range(len(kwargs['modalities'])) if i not in self.modal_targets])
+
+            # Case for integration
+            if len(self.modal_inputs) == 0: self.modal_inputs = list(range(len(kwargs['modalities'])))
+            
+            # Calculate feature idx on first run
+            if self.perturbation_features is None: self.perturbation_features = [np.arange(m.shape[1]) for i, m in enumerate(kwargs['modalities']) if i in self.modal_inputs]
             self.perturbation_feature_pairs = [(i, f) for i, fs in enumerate(self.perturbation_features) for f in fs]
             self.num_features = sum([len(fs) for fs in self.perturbation_features])
 

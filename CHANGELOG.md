@@ -1,11 +1,21 @@
-### 1.0.0+2025-01-07
+### 1.0.0+2025-01-07 (1-3)
 - Add labels to perturbation view
+- Add present consideration to `ViewPerturbationEffect`
+- Additional CLI filtering for analysis
 - Adjust copy behavior in `Preprocessing` class
 - Adjust formatting for `ViewPerturbationEffect`
+- Adjust `ViewPerturbationEffect` pad to properly align feature names
+- Adjust syntax of perturbation feature names to match perturbation features
 - Data loading fixes and feature format standardization
 - Feature filtering according to top variant for `Preprocessing` class
+- Fix bug in model loading causing `wgt` initializations in `analysis` to be entirely random
+- Fix bug in preprocessing standardization incorrectly taking overall mean and std for dense modalities
+- Fix bug in `top_variant` filtering for `Preprocessing` class
+- Fix bug with processing sparse data using `top_variant` filter
+- Fix perturbation state manager behavior for present modal targets
 - Optimize modality modification during analysis main run (3x speedup!)
 - Remove mdl file saving from `train` notebook
+- Switch knockdown method to mean reversion
 
 ### 1.0.0+2025-01-06
 - Add perturbation state manager class
