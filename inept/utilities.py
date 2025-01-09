@@ -608,21 +608,21 @@ class Preprocessing:
         self.device = device
 
     
-    def fit(self, modalities, *args, **kwargs):
+    def fit(self, modalities, *args, total_statistics=False, **kwargs):
         self.modalities = modalities
 
         # Standardize
         if self.standardize or self.top_variant is not None:
             self.standardize_mean = [
-                np.mean(m, axis=0, keepdims=True)
+                np.mean(m, axis=0 if not total_statistics else None, keepdims=True)
                 if not scipy.sparse.issparse(m) else
-                np.array(np.mean(m, axis=0).reshape((1, -1)))
+                np.array(np.mean(m, axis=0 if not total_statistics else None).reshape((1, -1)))
                 for m in modalities
             ]
             self.standardize_std = [
-                np.std(m, axis=0, keepdims=True)
+                np.std(m, axis=0 if not total_statistics else None, keepdims=True)
                 if not scipy.sparse.issparse(m) else
-                np.array(np.sqrt(m.power(2).mean(axis=0) - np.square(m.mean(axis=0))))
+                np.array(np.sqrt(m.power(2).mean(axis=0 if not total_statistics else None) - np.square(m.mean(axis=0 if not total_statistics else None))))
                 for m in modalities
             ]
 
@@ -829,7 +829,7 @@ class ViewLinesBase(ViewModalDistBase):
         # Arguments
         seed=None,
         # Styling
-        num_lines=100,  # Number of attraction and repulsion lines
+        num_lines=300,  # Number of attraction and repulsion lines
         **kwargs,
     ):
         local_vars = locals().copy()

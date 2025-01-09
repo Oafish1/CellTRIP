@@ -1,3 +1,12 @@
+### 1.0.0+2025-01-08
+- Add loss history plot to `analysis`
+- Add unloaded option for `analysis`
+- Compressed runs for simulation and spatial data
+- Figure updates
+- Raise `action_std_min` due to behavior collapse in a few models
+- Raise detection threshold for `action_std` due to the appearance of extra stages
+- Run corrections for MMD-MA and MERFISH using new parameter `total_statistics` in preprocessing class
+
 ### 1.0.0+2025-01-07 (1-3)
 - Add labels to perturbation view
 - Add present consideration to `ViewPerturbationEffect`

@@ -420,7 +420,7 @@ class PPO(nn.Module):
             model=EntitySelfAttention,
             action_std_init=.6,
             action_std_decay=.05,
-            action_std_min=.1,
+            action_std_min=.15,
             epochs=80,
             epsilon_clip=.2,
             memory_gamma=.95,

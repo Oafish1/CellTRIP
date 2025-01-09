@@ -23,8 +23,9 @@ import inept
 
 # Get args
 import sys
-run_id_idx = int(sys.argv[1])
-# analysis_key_idx = int(sys.argv[2])
+# run_id_idx = int(sys.argv[1])
+# analysis_key_idx = int(sys.argv[1])
+stage_override = int(sys.argv[1])
 
 # Set params
 DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -58,10 +59,10 @@ torch.set_grad_enabled(False);
 
 # %%
 # Parameters
-# run_id_idx = 1
+run_id_idx = 1
 run_id = (
     'brf6n6sn',  # TemporalBrain Random 100 Max
-    'rypltvk5',  # MMD-MA Random 100 Max
+    'rypltvk5',  # MMD-MA Random 100 Max (requires `total_statistics`)
     '32jqyk54',  # MERFISH Random 100 Max
     'c8zsunc9',  # ISS Random 100 Max
     'maofk1f2',  # ExSeq NR
@@ -69,7 +70,7 @@ run_id = (
     'vb1x7bae',  # MERFISH NR
     '473vyon2',  # ISS NR
 )[run_id_idx]
-stage_override = None  # Manually override policy stage selection
+# stage_override = None  # Manually override policy stage selection
 num_nodes_override = None
 max_batch_override = None
 max_nodes_override = None
@@ -98,7 +99,7 @@ modalities, types, features = data.load_data(config['data']['dataset'], DATA_FOL
 if num_nodes_override is not None: config['data'] = inept.utilities.overwrite_dict(config['data'], {'num_nodes': num_nodes_override})
 if max_batch_override is not None: config['train'] = inept.utilities.overwrite_dict(config['train'], {'max_batch': max_batch_override})
 ppc = inept.utilities.Preprocessing(**config['data'], device=DEVICE)
-modalities, features = ppc.fit_transform(modalities, features)
+modalities, features = ppc.fit_transform(modalities, features, total_statistics=True)
 modalities, types = ppc.subsample(modalities, types)
 modalities = ppc.cast(modalities)
 
@@ -126,11 +127,11 @@ for weight_stage in config['stages']['env'][1:latest_mdl[0]+1]:
 
 # Load file
 load_type = 'wgt'
-if load_type == 'mdl':
+if load_type == 'mdl' and latest_mdl[0] != -1:
     with tempfile.TemporaryDirectory() as tmpdir:
         latest_mdl[1].download(tmpdir, replace=True)
         policy = torch.load(os.path.join(tmpdir, latest_mdl[1].name))
-elif load_type == 'wgt':
+elif load_type == 'wgt' and latest_wgt[0] != -1:
     # Mainly used in the case of old argument names, also generally more secure
     with tempfile.TemporaryDirectory() as tmpdir:
         latest_wgt[1].download(tmpdir, replace=True)
@@ -138,6 +139,9 @@ elif load_type == 'wgt':
         if max_nodes_override is not None: config['policy'] = inept.utilities.overwrite_dict(config['policy'], {'max_nodes': max_nodes_override})
         policy = inept.models.PPO(**config['policy'])
         incompatible_keys = policy.load_state_dict(torch.load(os.path.join(tmpdir, latest_wgt[1].name), weights_only=True))
+else:
+    # Use random model
+    policy = inept.models.PPO(**config['policy'])
 policy = policy.to(DEVICE).eval()
 policy.actor.set_action_std(1e-7)
 
@@ -147,12 +151,51 @@ labels = types[0][:, 0]
 times = types[0][:, -1]  # Temporary time annotation, will change per-dataset
 
 # %% [markdown]
+# ### Static Visualizations
+
+# %%
+# Load history from wandb
+history = run.history(samples=2000)
+history['timestep'] = history['end_timestep']
+history['Runtime (h)'] = history['_runtime'] / 60**2
+
+# Plot
+fig, ax = plt.subplots(1, 1, figsize=(8, 3), sharex=True, layout='constrained')
+def plot_without_zeros(x, y, **kwargs):
+    x, y = x[np.argwhere(y != 0).flatten()], y[np.argwhere(y != 0).flatten()]
+    ax.plot(x, y, **kwargs)
+ax.plot(history['timestep'], history['average_reward'], color='black', lw=3, label='Average Reward')
+plot_without_zeros(history['timestep'], history['rewards/bound'], color='red', alpha=.75, lw=2, label='Boundary Penalty')
+plot_without_zeros(history['timestep'], history['rewards/velocity'], color='goldenrod', alpha=.75, lw=2, label='Velocity Penalty')
+plot_without_zeros(history['timestep'], history['rewards/action'], color='green', alpha=.75, lw=2, label='Action Penalty')
+plot_without_zeros(history['timestep'], history['rewards/distance'], color='blue', alpha=.75, lw=2, label='Distance Reward')
+plot_without_zeros(history['timestep'], history['rewards/origin'], color='darkorange', alpha=.75, lw=2, label='Origin Reward')
+
+# Stage ticks
+unique, stage_idx = np.unique(history['stage'][::-1], return_index=True)
+stage_idx = len(history['stage']) - stage_idx
+stage_idx = stage_idx[:-1]
+[ax.axvline(x=history['timestep'][idx], color='black', alpha=.5, linestyle='dashed', lw=1) for idx in stage_idx]
+
+# Labels
+ax.set_xlabel('Timestep')
+ax.set_ylabel('Reward')
+ax.legend(ncols=3)
+
+# Styling
+ax.spines[['right', 'top']].set_visible(False)
+
+# Save plot
+fname = f'{config["data"]["dataset"]}_performance.pdf'
+fig.savefig(os.path.join(PLOT_FOLDER, fname), dpi=300)
+
+# %% [markdown]
 # ### Generate Runs
 
 # %%
 # Choose key
 # TODO: Calculate all, plot one (?)
-analysis_key_idx = 3
+analysis_key_idx = 0
 discovery_key = 0  # Auto
 temporal_key = 0  # Auto
 perturbation_features = [np.random.choice(len(fs), 10, replace=False) for i, fs in enumerate(features) if (i not in env.reward_distance_target) or (len(env.reward_distance_target) == len(modalities))]
@@ -338,7 +381,7 @@ if 'perturbation' in memories:
 
 # %%
 # Prepare data
-skip = 1
+skip = 5
 present = memories[analysis_key]['present'].cpu()[::skip]
 states = memories[analysis_key]['states'].cpu()[::skip]
 stages = memories[analysis_key]['stages'].cpu()[::skip]
@@ -472,7 +515,11 @@ ani = animation.FuncAnimation(
 file_type = 'mp4'
 if file_type == 'mp4': writer = animation.FFMpegWriter(fps=int(1e3/interval), extra_args=['-vcodec', 'libx264'], bitrate=8e3)  # Faster
 elif file_type == 'gif': writer = animation.FFMpegWriter(fps=int(1e3/interval))  # Slower
-ani.save(os.path.join(PLOT_FOLDER, f'{config["data"]["dataset"]}_{analysis_key}.{file_type}'), writer=writer, dpi=300)
+fname =                                     f'{config["data"]["dataset"]}'
+if stage_override is not None: fname +=     f'_{stage_override:02}'
+fname +=                                    f'_{analysis_key}'
+fname +=                                    f'.{file_type}'
+ani.save(os.path.join(PLOT_FOLDER, fname), writer=writer, dpi=300)
 
 # CLI
 print()
