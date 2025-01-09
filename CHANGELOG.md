@@ -1,3 +1,7 @@
+### 1.0.0+2025-01-09
+- Add `TemporalBrain` performance visualization
+- Figure updates - main figure drafts
+
 ### 1.0.0+2025-01-08
 - Add loss history plot to `analysis`
 - Add unloaded option for `analysis`
@@ -35,7 +39,7 @@
 - Implement dynamic thresholding for perturbation state manager
 
 ### 1.0.0+2025-01-05
-- Finish state manager impelementation
+- Finish state manager implementation
 - Fix bug for state manager not cloning tensors, thereby improperly updating `present`
 - Replace `get_present` function with state manager classes
 - Start framework for perturbation analysis
