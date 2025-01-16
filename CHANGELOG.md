@@ -1,3 +1,26 @@
+### 1.0.0+2025-01-15
+- Add memory optimization option for analysis when present is not full
+- Add memory profiling from PyTorch
+- Add method comparison figure to analysis with several metrics
+- Add other integration methods with standardized formatting and a variety of envs, compatible with any python version
+- Adjust velocity threshold for Temporal analysis
+- Change bounding behavior for `ViewTemporalDiscrepancy`, adding new parameters
+- Dynamically adjust `num_lines` for `ViewLinesBase` based on `analysis_key` in `analysis` notebook
+- Fix notebook running script inplace writing
+- Fix rewards for analyses with present modifications
+- Implement device override to `Preprocessing` `cast` function
+- Many reruns
+- More descriptive CLI output for analysis
+- Move raw data to cpu to aid with GPU memory optimization
+- Recompile requirements
+- Reorganize analysis notebook static visualizations
+- Small annotation in `README` for requirement compilation
+- Small bugfix for standard environment class
+
+### 1.0.0+2025-01-14
+- Bugfix for temporal analysis using `labels` rather than `times`
+- Verbosity updates for analysis
+
 ### 1.0.0+2025-01-09
 - Add `TemporalBrain` performance visualization
 - Figure updates - main figure drafts

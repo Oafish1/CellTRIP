@@ -8,7 +8,7 @@ def load_data(dataset_name, data_folder):
     spatial_dataset_name_dict = {
         'MouseVisual': 'BARISTASeq',
         'BARISTASeq': 'BARISTASeq',
-        'ISS': 'ISS',  # TODO: Mixed species.  Also, make sure samples line up! i.e. same time!
+        'ISS': 'ISS',
         'MERFISH': 'MERFISH',
         'smFISH': 'smFISH',
         'ExSeq': 'ExSeq',

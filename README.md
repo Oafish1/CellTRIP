@@ -7,3 +7,6 @@ This repository is an implementation of proximal policy optimization (PPO) in a 
 ![Policy trained on 100 cells of spatial data, shown in 3D with layer separation measurements and reward visualizations](./plots/MouseVisual_imputation.gif)
 
 ![Policy trained on 50 cells of MMD-MA simulation data, generalized to the whole dataset (300 cells) with single cell perturbed and traced from steady-state position](./plots/MMD-MA_trajectory.gif)
+
+## Updating Requirements
+```python -m piptools compile```

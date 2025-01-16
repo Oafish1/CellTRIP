@@ -5,7 +5,9 @@
 #    pip-compile requirements-dev.in
 #
 -e file:.
-    # via -r requirements-dev.in
+    # via file:///-
+adjusttext==1.3.0
+    # via inept
 alembic==1.13.1
     # via mlflow
 aniso8601==9.0.1
@@ -112,9 +114,7 @@ idna==3.7
 importlib-metadata==7.1.0
     # via mlflow
 ipympl==0.9.3
-    # via
-    #   file:///-
-    #   inept
+    # via inept
 ipython==8.12.3
     # via
     #   ipympl
@@ -162,7 +162,7 @@ markupsafe==2.1.5
     #   werkzeug
 matplotlib==3.7.5
     # via
-    #   file:///-
+    #   adjusttext
     #   inept
     #   ipympl
     #   mlflow
@@ -173,9 +173,7 @@ matplotlib-inline==0.1.7
 mdurl==0.1.2
     # via markdown-it-py
 memory-profiler==0.61.0
-    # via
-    #   file:///-
-    #   inept
+    # via inept
 mlflow==2.11.3
     # via wandb
 mpmath==1.3.0
@@ -203,11 +201,11 @@ numba==0.58.1
 numpy==1.24.4
     # via
     #   -c requirements.txt
+    #   adjusttext
     #   anndata
     #   biocframe
     #   biocutils
     #   contourpy
-    #   file:///-
     #   genomicranges
     #   h5py
     #   inept
@@ -292,7 +290,6 @@ packaging==23.2
 pandas==2.0.3
     # via
     #   anndata
-    #   file:///-
     #   inept
     #   iranges
     #   mlflow
@@ -314,9 +311,7 @@ pillow==10.3.0
     #   ipympl
     #   matplotlib
 pip-tools==7.4.1
-    # via
-    #   file:///-
-    #   inept
+    # via inept
 polars==0.20.19
     # via
     #   iranges
@@ -364,9 +359,7 @@ pyyaml==6.0.1
 querystring-parser==1.2.4
     # via mlflow
 rds2py==0.5.1
-    # via
-    #   file:///-
-    #   inept
+    # via inept
 requests==2.31.0
     # via
     #   docker
@@ -375,12 +368,9 @@ requests==2.31.0
 rich==13.7.1
     # via wandb
 scanpy==1.9.8
-    # via
-    #   file:///-
-    #   inept
+    # via inept
 scikit-learn==1.6.0
     # via
-    #   file:///-
     #   inept
     #   mlflow
     #   pynndescent
@@ -389,8 +379,8 @@ scikit-learn==1.6.0
 scipy==1.14.1
     # via
     #   -c requirements.txt
+    #   adjusttext
     #   anndata
-    #   file:///-
     #   inept
     #   mlflow
     #   pynndescent
@@ -401,7 +391,6 @@ scipy==1.14.1
     #   umap-learn
 seaborn==0.13.2
     # via
-    #   file:///-
     #   inept
     #   scanpy
 sentry-sdk==1.45.0
@@ -421,9 +410,7 @@ six==1.16.0
 smmap==5.0.1
     # via gitdb
 snakeviz==2.2.0
-    # via
-    #   file:///-
-    #   inept
+    # via inept
 sqlalchemy==2.0.29
     # via
     #   alembic
@@ -457,13 +444,11 @@ tomli==2.0.1
 torch==2.2.2
     # via
     #   -c requirements.txt
-    #   file:///-
     #   inept
 tornado==6.4.1
     # via snakeviz
 tqdm==4.66.5
     # via
-    #   file:///-
     #   inept
     #   scanpy
     #   umap-learn
@@ -488,7 +473,6 @@ tzdata==2024.1
     # via pandas
 umap-learn==0.5.6
     # via
-    #   file:///-
     #   inept
     #   scanpy
 urllib3==2.2.1
@@ -497,9 +481,7 @@ urllib3==2.2.1
     #   requests
     #   sentry-sdk
 wandb[importers]==0.16.6
-    # via
-    #   file:///-
-    #   inept
+    # via inept
 wcwidth==0.2.13
     # via prompt-toolkit
 werkzeug==3.0.2

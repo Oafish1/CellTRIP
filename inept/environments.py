@@ -105,7 +105,7 @@ class trajectory:
     ### State functions
     def step(self, actions=None, *, delta=None, return_itemized_rewards=False):
         # Defaults
-        if actions is None: actions = torch.zeros_like(self.vel)
+        if actions is None: actions = torch.zeros_like(self.vel, device=self.device)
         if delta is None: delta = self.delta
 
         # Check dimensions
@@ -208,7 +208,7 @@ class trajectory:
     def get_distance_from_targets(self, targets=None):
         # Defaults
         if targets is None: targets = self.modalities[0][:, :self.dim]
-
+        
         # Calculate distance
         dist = self.pos - targets
 
@@ -217,7 +217,7 @@ class trajectory:
     def get_distance_match(self, targets=None):
         # Defaults
         if targets is None: targets = self.reward_distance_target
-
+        
         # Calculate modality distances
         # NOTE: Only scaled for `self.dist` calculation
         if self.dist is None:

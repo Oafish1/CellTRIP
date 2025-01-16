@@ -26,6 +26,7 @@ setup(
             'snakeviz',
         ],
         'examples': [
+            'adjustText',
             'ipympl',
             'matplotlib',
             'pandas',

@@ -1,0 +1,8 @@
+# Input data
+X*.txt
+X*.tsv
+
+# MMD-MA misc output
+alpha_*
+beta_*
+loss.txt

@@ -582,7 +582,6 @@ def subsample_nodes(*DS, num_nodes, **kwargs):
 
 class Preprocessing:
     "Apply modifications to input modalities based on given arguments. Takes np.array as input"
-
     def __init__(
         self,
         # Standardize
@@ -695,12 +694,14 @@ class Preprocessing:
         return self.transform(*args, **kwargs)
     
 
-    def cast(self, modalities, copy=False):
-        assert self.device is not None, '`device` must be set to call `self.cast`'
+    def cast(self, modalities, device=None, copy=False):
         if copy: modalities = modalities.copy()
+        if device is None:
+            assert self.device is not None, '`device` must be set to call `self.cast`'
+            device = self.device
 
         # Cast types
-        modalities = [torch.tensor(m, dtype=torch.float32, device=self.device) for m in modalities]
+        modalities = [torch.tensor(m, dtype=torch.float32, device=device) for m in modalities]
 
         return modalities
     
@@ -990,6 +991,7 @@ class View3D(ViewLinesBase):
         self.arrows.set_segments(xyz_xyz)
 
         # Adjust lines
+        # NOTE: Currently calculates invisible lines unoptimally
         for i, (dist, ml) in enumerate(zip(self.modal_dist, self.modal_lines)):
             ml.set_segments(self.get_modal_lines_segments(frame, dist)[self.line_selection[i]])
             dd_array = self.get_distance_discrepancy(frame, dist)[self.line_selection[i]]
@@ -1002,7 +1004,7 @@ class View3D(ViewLinesBase):
             ml.set_color(rgba)
 
         # Styling
-        self.ax.set_title(f'{self.skip*frame: 4} : {self.rewards[frame].mean():5.2f}')  
+        self.ax.set_title(f'{self.skip*frame: 4} : {self.rewards[frame, self.present[frame]].mean():5.2f}')  
         self.ax.view_init(*self.get_angle(frame))
 
 
@@ -1066,7 +1068,9 @@ class ViewTemporalDiscrepancy(ViewModalDistBase):
         # Arguments
         # None
         # Styling
-        limit_y=False,
+        y_bound=[2, np.inf],  # Bounds for discrepancy chart max
+        clip_discrepancy=False,  # Clips discrepancy values to inside the chart
+        dynamic_ylim=True,  # Change ylim of plot dynamically
         **kwargs,
     ):
         local_vars = locals().copy()
@@ -1084,7 +1088,9 @@ class ViewTemporalDiscrepancy(ViewModalDistBase):
         self.modal_targets = modal_targets if modal_targets is not None else np.arange(len(self.modalities))
 
         # Styling
-        self.limit_y = limit_y
+        self.y_bound = y_bound
+        self.clip_discrepancy = clip_discrepancy
+        self.dynamic_ylim = dynamic_ylim
 
         # Get temporal discrepancy
         def get_temporal_discrepancies(frame):
@@ -1112,8 +1118,7 @@ class ViewTemporalDiscrepancy(ViewModalDistBase):
             [', '.join([str(s) for s in stage]) for stage in self.temporal_stages],
         )
         self.ax.set_xlim([-.5, len(self.temporal_stages)-.5])
-        self.top_ylim = 1
-        self.ax.set_ylim([0, self.top_ylim])
+        self.ax.set_ylim([0, 1])
         self.ax.set_title('Temporal Discrepancy')
         self.ax.set_xlabel('Stage')
         self.ax.set_ylabel('Mean Discrepancy')
@@ -1125,7 +1130,8 @@ class ViewTemporalDiscrepancy(ViewModalDistBase):
 
         # Calculate discrepancy using env
         discrepancy = self.get_temporal_discrepancies(frame).mean()
-        if self.limit_y: discrepancy = min(self.top_ylim, discrepancy)
+        y_max = np.clip(discrepancy, *self.y_bound)
+        if self.clip_discrepancy: discrepancy = y_max
 
         # Adjust plot
         xdata = self.temporal_eval_plot.get_xdata()
@@ -1137,6 +1143,9 @@ class ViewTemporalDiscrepancy(ViewModalDistBase):
             ydata[-1] = discrepancy
             self.temporal_eval_plot.set_xdata(xdata)
             self.temporal_eval_plot.set_ydata(ydata)
+        
+        # Styling
+        if self.dynamic_ylim: self.ax.set_ylim([0, y_max])
 
 
 class ViewTemporalScatter(ViewLinesBase):
@@ -1459,7 +1468,7 @@ class TemporalStateManager(StateManager):
         num_nodes=None,
         dim=3,
         max_stage_len=500,
-        vel_threshold=3e-2,
+        vel_threshold=1e-2,  # 3e-2 for more aggressive culling
         **kwargs,
      ):
         local_vars = locals().copy()
