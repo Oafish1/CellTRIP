@@ -29,6 +29,36 @@ def euclidean_distance(a, scaled=False):
     return dist
 
 
+def partition_distance(data, partitions=None, func=euclidean_distance):
+    "Calculate distance only within specified partitions"
+    # Base case
+    if partitions is None: return func(data)
+
+    # Argument handling
+    if not isinstance(partitions, torch.Tensor): partitions = torch.Tensor(partitions)
+
+    # Calculate distance for each partition
+    indices = torch.empty([2, 0], dtype=torch.int)
+    values = torch.empty([0])
+    for stage in partitions.unique():
+        # Get indices
+        flat_indices = torch.argwhere(partitions==stage).flatten()
+        new_indices = torch.stack((
+            flat_indices.reshape((-1, 1)).expand((-1, flat_indices.shape[0])).flatten(),
+            flat_indices.reshape((1, -1)).expand((flat_indices.shape[0], -1)).flatten(),
+        ), dim=0)
+
+        # Get values
+        new_values = func(data[partitions==stage]).flatten()
+
+        # Append
+        indices = torch.concat((indices, new_indices), dim=-1)
+        values = torch.concat((values, new_values), dim=-1)
+    
+    dist = torch.sparse_coo_tensor(indices, values, 2*data.shape[0:1]).coalesce()
+    return scipy.sparse.coo_matrix((dist.values(), dist.indices()), shape=dist.shape).tocsr()
+
+
 class time_logger():
     """Class made for easy logging with toggleable verbosity"""
     def __init__(
@@ -804,6 +834,7 @@ class ViewModalDistBase(ViewBase):
         *args,
         # Data params
         modal_targets,
+        partitions=None,
         # Arguments
         # None
         # Styling
@@ -823,7 +854,7 @@ class ViewModalDistBase(ViewBase):
         self.modal_dist = []
         for target in modal_targets:
             m = self.modalities[target].cpu()
-            m_dist = euclidean_distance(m, scaled=True)
+            m_dist = partition_distance(m, partitions=partitions, func=lambda x: euclidean_distance(x, scaled=True))
             self.modal_dist.append(m_dist)
 
 
@@ -838,6 +869,7 @@ class ViewLinesBase(ViewModalDistBase):
         # Data params
         dim,
         modal_targets,
+        partitions=None,
         # Arguments
         seed=None,
         # Styling
@@ -857,9 +889,12 @@ class ViewLinesBase(ViewModalDistBase):
 
         # Distance discrepancies
         def get_distance_discrepancy(frame, dist):
-            latent_dist = euclidean_distance(self.states[frame, :, :self.dim])
+            latent_dist = partition_distance(self.states[frame, :, :self.dim], partitions=partitions)
+            # latent_dist = euclidean_distance(self.states[frame, :, :self.dim])
             dd_matrix = latent_dist - dist
-            return dd_matrix[np.triu_indices(dd_matrix.shape[0], k=1)].flatten()
+            ret = dd_matrix[np.triu_indices(dd_matrix.shape[0], k=1)].flatten()
+            if partitions is not None: ret = torch.Tensor(ret).squeeze()
+            return ret
         self.get_distance_discrepancy = get_distance_discrepancy
 
         # Randomly select lines to show
@@ -877,6 +912,10 @@ class ViewLinesBase(ViewModalDistBase):
 
         # Style
         def get_rgba_from_dd_array(dd_array, visible=None, min_alpha=0, max_value_alpha=2):
+            # Handle sparse case
+            if isinstance(max_value_alpha, np.matrix): max_value_alpha = torch.Tensor(max_value_alpha).squeeze()
+
+            # Determine colors
             color = np.array([(0., 0., 1.) if dd > 0 else (1., 0., 0.) for dd in dd_array])
             alpha = np.expand_dims(np.clip(np.abs(dd_array), min_alpha * max_value_alpha, max_value_alpha) / max_value_alpha, -1)
             if visible is not None: alpha[~np.array(visible)] = 0.
@@ -1129,7 +1168,7 @@ class ViewTemporalDiscrepancy(ViewModalDistBase):
             [', '.join([str(s) for s in stage]) for stage in self.temporal_stages],
         )
         self.ax.set_xlim([-.5, len(self.temporal_stages)-.5])
-        self.ax.set_ylim([0, 1])
+        self.ax.set_ylim([0, 1]); self.current_y_max = 0
         self.ax.set_title('Temporal Discrepancy')
         self.ax.set_xlabel('Stage')
         self.ax.set_ylabel('Mean Discrepancy')
@@ -1151,12 +1190,15 @@ class ViewTemporalDiscrepancy(ViewModalDistBase):
             if frame == 0 or (self.stages[frame] != self.stages[frame-1]):
                 xdata = np.append(xdata, self.stages[frame])
                 ydata = np.append(ydata, None)
+            # Update max discrepancy
+            if (frame < self.stages.shape[0] - 1) and (self.stages[frame] != self.stages[frame+1]):
+                self.current_y_max = max(self.current_y_max, discrepancy)
             ydata[-1] = discrepancy
             self.temporal_eval_plot.set_xdata(xdata)
             self.temporal_eval_plot.set_ydata(ydata)
         
         # Styling
-        if self.dynamic_ylim: self.ax.set_ylim([0, y_max])
+        if self.dynamic_ylim: self.ax.set_ylim([0, max(y_max, self.current_y_max)])
 
 
 class ViewTemporalScatter(ViewLinesBase):
@@ -1241,7 +1283,8 @@ class ViewTemporalScatter(ViewLinesBase):
         super().update(frame)
 
         # Update positions and color
-        latent_dist_total = euclidean_distance(self.states[frame, :, :self.dim])
+        latent_dist_total = partition_distance(self.states[frame, :, :self.dim])
+        # latent_dist_total = euclidean_distance(self.states[frame, :, :self.dim])
         for modal_num in range(len(self.modal_targets)):
             for i, idx in enumerate(self.line_indices[modal_num][self.line_selection[modal_num]]):
                 point = self.points[modal_num][i]
