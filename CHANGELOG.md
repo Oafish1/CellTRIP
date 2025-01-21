@@ -1,3 +1,25 @@
+### 1.0.0+2025-01-20
+- `Analysis` notebook reorganization
+- Add tentative PCA alternative for sparse data to `Preprocessing`
+- Fix inverse standardization for sparse data in `Preprocessing`
+- Fix mix sparse/dense handling for `Preprocessing` class
+- Memory profiling, output, and debugging for sparse and large datasets
+- Offload state storage to CPU memory
+- Recompile requirements
+- Remove unnecessary modality transforming when perturbation is unused (extreme speedup for all PCA datasets, especially `TemporalBrain`)
+
+### 1.0.0+2025-01-17
+- Add adata output for other methods notebook
+- Add hdf5 output for other methods notebook
+- Add methods to other methods notebook, including BABEL
+- Fix instance detection for analysis
+- Reformat other methods folder, add descriptive `README`
+
+### 1.0.0+2025-01-16
+- Add JAMIE to integration and imputation methods
+- Add KNN and MLP imputation methods from sklearn
+- Fix directory creation for alternate methods
+
 ### 1.0.0+2025-01-15
 - Add memory optimization option for analysis when present is not full
 - Add memory profiling from PyTorch

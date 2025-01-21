@@ -7,9 +7,8 @@ __pycache__
 
 # Profiling
 *.prof
-
-# Pickle files
 *.pickle
+*.pkl
 
 # Wandb
 **/wandb/

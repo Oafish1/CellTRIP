@@ -27,6 +27,7 @@ setup(
         ],
         'examples': [
             'adjustText',
+            'h5py',
             'ipympl',
             'matplotlib',
             'pandas',

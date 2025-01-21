@@ -108,6 +108,7 @@ gunicorn==21.2.0
 h5py==3.11.0
     # via
     #   anndata
+    #   inept
     #   scanpy
 idna==3.7
     # via requests

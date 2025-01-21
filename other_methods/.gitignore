@@ -6,3 +6,9 @@ X*.tsv
 alpha_*
 beta_*
 loss.txt
+
+# Method folders
+babel/
+JAMIE/
+ManiNetCluster/
+2019_mmd_wabi/

@@ -1,9 +1,0 @@
-# Script files
-*.py
-*.ipynb
-
-# Data files
-*.npy
-
-# Misc files
-untitled

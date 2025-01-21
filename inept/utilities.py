@@ -606,23 +606,27 @@ class Preprocessing:
         self.num_features = num_features
         self.device = device
 
+        # Data
+        self.is_sparse_transform = None
+
     
     def fit(self, modalities, *args, total_statistics=False, **kwargs):
-        self.modalities = modalities
+        # Parameters
+        self.is_sparse_transform = [scipy.sparse.issparse(m) for m in modalities]
 
         # Standardize
         if self.standardize or self.top_variant is not None:
             self.standardize_mean = [
                 np.mean(m, axis=0 if not total_statistics else None, keepdims=True)
-                if not scipy.sparse.issparse(m) else
+                if not m_sparse else
                 np.array(np.mean(m, axis=0 if not total_statistics else None).reshape((1, -1)))
-                for m in modalities
+                for m, m_sparse in zip(modalities, self.is_sparse_transform)
             ]
             self.standardize_std = [
                 np.std(m, axis=0 if not total_statistics else None, keepdims=True)
-                if not scipy.sparse.issparse(m) else
+                if not m_sparse else
                 np.array(np.sqrt(m.power(2).mean(axis=0 if not total_statistics else None) - np.square(m.mean(axis=0 if not total_statistics else None))))
-                for m in modalities
+                for m, m_sparse in zip(modalities, self.is_sparse_transform)
             ]
 
         # Filtering
@@ -634,19 +638,20 @@ class Preprocessing:
             ]
             modalities = [m[:, mask] if mask is not None else m for m, mask in zip(modalities, self.filter_mask)]
             
-            self.standardize_mean = [st[:, mask] if mask is not None else st for m, st, mask in zip(self.modalities, self.standardize_mean, self.filter_mask)]
-            self.standardize_std = [st[:, mask] if mask is not None else st for m, st, mask in zip(self.modalities, self.standardize_std, self.filter_mask)]
+            self.standardize_mean = [st[:, mask] if mask is not None else st for m, st, mask in zip(modalities, self.standardize_mean, self.filter_mask)]
+            self.standardize_std = [st[:, mask] if mask is not None else st for m, st, mask in zip(modalities, self.standardize_std, self.filter_mask)]
 
         # PCA
         if self.pca_dim is not None:
             self.pca_class = [
                 sklearn.decomposition.PCA(
                     n_components=dim,
-                    svd_solver='auto' if not scipy.sparse.issparse(m) else 'arpack',
+                    svd_solver='auto' if not m_sparse else 'arpack',
                     copy=self.pca_copy,
                 ).fit(m)
+                # sklearn.decomposition.TruncatedSVD(n_components=dim).fit(m)
                 if dim is not None else None
-                for m, dim in zip(modalities, self.pca_dim)]
+                for m, m_sparse, dim in zip(modalities, self.is_sparse_transform, self.pca_dim)]
 
     def transform(self, modalities, features=None, **kwargs):
         # Filtering
@@ -660,10 +665,10 @@ class Preprocessing:
         # TODO: Maybe allow for only one dataset to be standardized?
         if self.standardize:
             modalities = [
-                (m - m_mean) / np.where(m_std == 0, 1, m_std)
-                if not scipy.sparse.issparse(m) else
-                (m / np.where(m_std == 0, 1, m_std)).tocsr()
-                for m, m_mean, m_std in zip(modalities, self.standardize_mean, self.standardize_std)]
+                (m - m_mean) / np.where(m_std == 0, 1, m_std) if not m_sparse else
+                (m / np.where(m_std == 0, 1, m_std)).tocsr() if scipy.sparse.issparse(m) else
+                (m / np.where(m_std == 0, 1, m_std))
+                for m, m_mean, m_std, m_sparse in zip(modalities, self.standardize_mean, self.standardize_std, self.is_sparse_transform)]
 
         # PCA
         if self.pca_dim is not None:
@@ -675,7 +680,7 @@ class Preprocessing:
 
 
     def inverse_transform(self, modalities, **kwargs):
-        # NOTE: Does not reverse top variant filtering or feature sampling
+        # NOTE: Does not reverse top variant filtering or feature sampling, also always dense output
         # PCA
         if self.pca_dim is not None:
             modalities = [p.inverse_transform(m) for m, p in zip(modalities, self.pca_class)]
@@ -683,8 +688,10 @@ class Preprocessing:
         # Standardize
         if self.standardize:
             modalities = [
-                m_std * m + m_mean
-                for m, m_mean, m_std in zip(modalities, self.standardize_mean, self.standardize_std)]
+                (m_std * m + m_mean)
+                if not m_sparse else
+                (m_std * m)
+                for m, m_mean, m_std, m_sparse in zip(modalities, self.standardize_mean, self.standardize_std, self.is_sparse_transform)]
 
         return modalities
 
@@ -701,7 +708,11 @@ class Preprocessing:
             device = self.device
 
         # Cast types
-        modalities = [torch.tensor(m, dtype=torch.float32, device=device) for m in modalities]
+        # NOTE: Always dense
+        modalities = [
+            torch.tensor(m if not scipy.sparse.issparse(m) else m.todense(), dtype=torch.float32, device=device)
+            for m in modalities
+        ]
 
         return modalities
     
@@ -1592,7 +1603,8 @@ class PerturbationStateManager(StateManager):
 
             # Modify feature
             target_modality, target_feature = self.perturbation_feature_pairs[self.current_stage - 1]
-            kwargs['modalities'][self.modal_inputs[target_modality]][:, target_feature] = kwargs['modalities'][target_modality][:, target_feature].mean()  # Revert to mean
+            # kwargs['modalities'][self.modal_inputs[target_modality]][:, target_feature] = kwargs['modalities'][target_modality][:, target_feature].mean()  # Revert to mean
+            kwargs['modalities'][self.modal_inputs[target_modality]][:, target_feature] = 0  # Knockdown
 
         # Initial setup
         if self.timestep == 0:
