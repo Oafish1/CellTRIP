@@ -1,18 +1,25 @@
-### 1.0.0+2025-01-20 (1-2)
+### 1.0.0+2025-01-20.2
+- Compression algorithms for analysis memory storage
+- Move additional tensors to CPU for analysis memory
+- Revise changelog multi-commit structure (not propagated)
+
+### 1.0.0+2025-01-20.1
 - `analysis` notebook reorganization
 - Add temporary state saving for analysis, currently uncategorized
-- Add tentative PCA alternative for sparse data to `Preprocessing`
 - Bugfix for `analysis` `use_modalities` within-epoch processing
 - Bugfix for state manager class detection in `analysis` notebook
 - Fix dynamic y-scaling for `ViewTemporalDiscrepancy`
-- Fix inverse standardization for sparse data in `Preprocessing`
-- Fix mix sparse/dense handling for `Preprocessing` class
 - Fix state CLI output during analysis memory generation
 - Implement `partition_distance` function for memory saving in cases where only subsets of distance matrices are needed
-- Memory profiling, output, and debugging for sparse and large datasets
 - More closely emulate intra-modal distance scaling behavior for `ViewModalDistBase` and all child views
-- Offload state storage to CPU memory
 - Partition compatibility for `Views`, including much sparse handling
+
+### 1.0.0+2025-01-20
+- Add tentative PCA alternative for sparse data to `Preprocessing`
+- Fix inverse standardization for sparse data in `Preprocessing`
+- Fix mix sparse/dense handling for `Preprocessing` class
+- Memory profiling, output, and debugging for sparse and large datasets
+- Offload state storage to CPU memory
 - Recompile requirements
 - Remove unnecessary modality transforming when perturbation is unused (extreme speedup for all PCA datasets, especially `TemporalBrain`)
 
