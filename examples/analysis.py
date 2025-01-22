@@ -25,9 +25,9 @@ import inept
 # print(torch.cuda.device_count())
 
 # Get args
-import sys
+# import sys
 # run_id_idx = int(sys.argv[1])
-analysis_key_idx = int(sys.argv[1])
+# analysis_key_idx = int(sys.argv[1])
 # stage_override = int(sys.argv[1])
 
 # Set params
@@ -49,20 +49,17 @@ torch.set_grad_enabled(False);
 
 # %% [markdown]
 # - HIGH PRIORITY
-#   - Extent `get_present_func` to class with full state-altering capabilities
-#   - Add more accuracy metrics
-#   - Add 2D functionality
-#   - Add optional UMAP
-# 
-# - LOW PRIORITY
-#   - Switch to `mayavi` instead of mpl to have true 3d and proper layering
+#   - Add SAVING to memories
+#   - Add PCA/UMAP
+#   - Add imputation to comparison analysis
+#   - Maybe use torch.sparse, might not even need PCA on some datasets
 
 # %% [markdown]
-# ### Load All Classes
+# # Load All Classes
 
 # %%
 # Parameters
-run_id_idx = 3
+run_id_idx = 1
 run_id = (
     'brf6n6sn',  # TemporalBrain Random 100 Max
     'rypltvk5',  # MMD-MA Random 100 Max (requires `total_statistics`)
@@ -75,7 +72,7 @@ run_id = (
 )[run_id_idx]
 stage_override = None  # Manually override policy stage selection
 num_nodes_override = None
-max_batch_override = None
+max_batch_override = 1_000
 max_nodes_override = None
 seed_override = None
 
@@ -96,20 +93,8 @@ torch.manual_seed(seed)
 if torch.cuda.is_available(): torch.cuda.manual_seed(seed)
 np.random.seed(seed)
 
-# Load data
-print(f'Loading dataset {config["data"]["dataset"]}...')
-modalities, types, features = data.load_data(config['data']['dataset'], DATA_FOLDER)
-# config['data'] = inept.utilities.overwrite_dict(config['data'], {'standardize': True})  # Old model compatibility
-# config['data'] = inept.utilities.overwrite_dict(config['data'], {'top_variant': [20, 20]})  # Top variant testing
-if num_nodes_override is not None: config['data'] = inept.utilities.overwrite_dict(config['data'], {'num_nodes': num_nodes_override})
-if max_batch_override is not None: config['train'] = inept.utilities.overwrite_dict(config['train'], {'max_batch': max_batch_override})
-ppc = inept.utilities.Preprocessing(**config['data'], device=DEVICE)
-total_statistics = False  # Legacy compatibility
-modalities, features = ppc.fit_transform(modalities, features, total_statistics=total_statistics)
-modalities, types = ppc.subsample(modalities, types)
-modalities = ppc.cast(modalities)
-
 # Get latest policy
+print('Loading model...')
 latest_mdl = [-1, None]  # Pkl
 latest_wgt = [-1, None]  # State dict
 for file in run.files():
@@ -126,12 +111,27 @@ for file in run.files():
 print(f'MDL policy found at stage {latest_mdl[0]}')
 print(f'WGT policy found at stage {latest_wgt[0]}')
 
+# %%
+# Load data
+print(f'Loading dataset {config["data"]["dataset"]}...')
+modalities, types, features = data.load_data(config['data']['dataset'], DATA_FOLDER)
+# config['data'] = inept.utilities.overwrite_dict(config['data'], {'standardize': True})  # Old model compatibility
+# config['data'] = inept.utilities.overwrite_dict(config['data'], {'top_variant': config['data']['pca_dim'], 'pca_dim': None})  # Swap PCA with top variant (testing)
+if num_nodes_override is not None: config['data'] = inept.utilities.overwrite_dict(config['data'], {'num_nodes': num_nodes_override})
+if max_batch_override is not None: config['train'] = inept.utilities.overwrite_dict(config['train'], {'max_batch': max_batch_override})
+ppc = inept.utilities.Preprocessing(**config['data'], device=DEVICE)
+total_statistics = False  # Legacy compatibility
+modalities, features = ppc.fit_transform(modalities, features, total_statistics=total_statistics)
+modalities, types = ppc.subsample(modalities, types)
+modalities = ppc.cast(modalities)
+
 # Load env
 env = inept.environments.trajectory(*modalities, **config['env'], **config['stages']['env'][0], device=DEVICE)
 for weight_stage in config['stages']['env'][1:latest_mdl[0]+1]:
     env.set_rewards(weight_stage)
 
-# Load file
+# %%
+# Load model file
 load_type = 'wgt'
 if load_type == 'mdl' and latest_mdl[0] != -1:
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -157,15 +157,15 @@ labels = types[0][:, 0]
 times = types[0][:, -1]  # Temporary time annotation, will change per-dataset
 
 # %% [markdown]
-# ### Generate Runs
+# # Generate Runs
 
 # %%
 # Choose key
-# TODO: Calculate all, plot one (?)
-# analysis_key_idx = 0
-optimize_memory = True  # Saves memory by shrinking env based on present
-discovery_key = 0  # Auto
-temporal_key = 0  # Auto
+# TODO: Calculate all, plot one
+analysis_key_idx = 0
+optimize_memory = True  # Saves memory by shrinking env based on present, also fixes reward calculation for non-full present mask
+discovery_key = 0  # 0 - Auto
+temporal_key = 0  # 0 - Auto
 perturbation_features = [np.random.choice(len(fs), 10, replace=False) for i, fs in enumerate(features) if (i not in env.reward_distance_target) or (len(env.reward_distance_target) == len(modalities))]
 
 analysis_key, state_manager_class = [
@@ -192,7 +192,22 @@ discovery = discovery[discovery_key]
 temporal = []
 # Reverse alphabetical (ExSeq, MERFISH, smFISH, ISS, MouseVisual)
 temporal_general = {'stages': [[l] for l in np.unique(times)[::-1]]}
+temporal_temporalBrain = {'stages': [
+    ['EaFet2'],
+    ['EaFet2'],
+    ['LaFet1'],
+    ['LaFet2'],
+    ['Inf1'],
+    ['Inf2'],
+    ['Child1'],
+    ['Child2'],
+    ['Adol1'],
+    ['Adol2'],
+    ['Adult1'],
+    ['Adult2'],
+]}
 temporal += [temporal_general]
+temporal += [temporal_temporalBrain]
 # Choose stage order
 temporal = temporal[temporal_key]
 
@@ -204,7 +219,7 @@ memories = {}
 
 # %%
 # Profiling
-profile = True
+profile = False
 if profile: torch.cuda.memory._record_memory_history(max_entries=100000)
 
 # Choose state manager
@@ -216,9 +231,17 @@ state_manager = state_manager_class(
     modal_targets=env.reward_distance_target,
     num_nodes=modalities[0].shape[0],
     dim=env.dim,
+    # vel_threshold=1e-1,  # Temporal testing
 )
-# TODO: Figure out why -1 on repeat for temporal/perturbation?
-get_current_stage = lambda: state_manager.current_stage if state_manager_class in (inept.utilities.TemporalStateManager, inept.utilities.PerturbationStateManager) else -1
+
+# Utility parameters
+get_current_stage = lambda: (
+    state_manager.current_stage
+    if np.array([isinstance(state_manager, cl) for cl in (inept.utilities.TemporalStateManager, inept.utilities.PerturbationStateManager)]).any()
+    else -1
+)
+# TODO: Make perturbation more memory-efficient
+use_modalities = np.array([isinstance(state_manager, cl) for cl in (inept.utilities.PerturbationStateManager,)]).any()
 
 # Initialize
 env.set_modalities(modalities); env.reset(); memories[analysis_key] = defaultdict(lambda: [])
@@ -227,8 +250,7 @@ env.set_modalities(modalities); env.reset(); memories[analysis_key] = defaultdic
 state_vars, end = state_manager(
     # present=present,
     state=env.get_state(),
-    # TODO: Somehow replace the inverse_transform with just the original data? For sparse compatibility
-    modalities=ppc.cast(ppc.inverse_transform(ppc.inverse_cast(modalities)), device='cpu'),
+    modalities=ppc.cast(ppc.inverse_transform(ppc.inverse_cast(modalities)), device='cpu') if use_modalities else modalities,
     labels=labels,
     times=times,
 )
@@ -237,13 +259,15 @@ memory_mask = present if optimize_memory else torch.ones_like(present, device=DE
 full_state = state_vars['state']
 env.set_state(full_state[memory_mask])
 raw_modalities = state_vars['modalities']
-env.set_modalities(ppc.cast(ppc.transform(ppc.inverse_cast([m[memory_mask.cpu()] for m in raw_modalities]))))
+processed_modalities = [m[memory_mask.cpu()] for m in raw_modalities]
+if use_modalities: processed_modalities = ppc.cast(ppc.transform(ppc.inverse_cast(processed_modalities)))
+env.set_modalities(processed_modalities)
 
 # Continue initializing
-memories[analysis_key]['present'].append(present)
-memories[analysis_key]['states'].append(full_state.clone())
+memories[analysis_key]['present'].append(present.cpu())
+memories[analysis_key]['states'].append(full_state.cpu())
 memories[analysis_key]['stages'].append(get_current_stage())
-memories[analysis_key]['rewards'].append(torch.zeros(modalities[0].shape[0], device=DEVICE))
+memories[analysis_key]['rewards'].append(torch.zeros(modalities[0].shape[0]))
 
 # Simulate
 timestep = 1
@@ -288,13 +312,15 @@ while True:
         or (optimize_memory and present_change)
     ):
         raw_modalities = state_vars['modalities']
-        env.set_modalities(ppc.cast(ppc.transform(ppc.inverse_cast([m[memory_mask.cpu()] for m in raw_modalities]))))
+        processed_modalities = [m[memory_mask.cpu()] for m in raw_modalities]
+        if use_modalities: processed_modalities = ppc.cast(ppc.transform(ppc.inverse_cast(processed_modalities)))
+        env.set_modalities(processed_modalities)
 
     # Record
-    memories[analysis_key]['present'].append(present)
-    memories[analysis_key]['states'].append(full_state.clone())
+    memories[analysis_key]['present'].append(present.cpu())
+    memories[analysis_key]['states'].append(full_state.cpu())
     memories[analysis_key]['stages'].append(get_current_stage())
-    memories[analysis_key]['rewards'].append(rewards)
+    memories[analysis_key]['rewards'].append(rewards.cpu())
 
     # End
     if end: break
@@ -309,65 +335,50 @@ memories[analysis_key] = dict(memories[analysis_key])
 
 # Profiling
 if profile:
-    torch.cuda.memory._dump_snapshot('snapshot.pickle')
+    torch.cuda.memory._dump_snapshot('memory_snapshot.pkl')
     torch.cuda.memory._record_memory_history(enabled=None)
 
 # CLI
 print()
 
 # %%
-memories[analysis_key]['rewards'].cpu().mean()
-
-# %%
+# Debug CLI
+## Stages
 stages, counts = np.unique(memories[analysis_key]['stages'], return_counts=True)
-print('Steps per Stage:')
+print('Steps per Stage')
 for s, c in zip(stages, counts):
-    print(f'{s}: {c}')
+    print(f'\t{s}: {c}')
+    
+## Memory
+print('Memory Sizes')
+for k in memories[analysis_key]:
+    t_size = sum([t.element_size() * t.nelement() if isinstance(t, torch.Tensor) else 64/8 for t in memories[analysis_key][k]]) / 1024**3
+    print(f'\t{k} size: {t_size:.3f} Gb')
+
+## Performance
+print(f'Average Reward: {memories[analysis_key]["rewards"].cpu().mean():.3f}')
 
 # %%
-# Perturbation significance analysis
-if 'perturbation' in memories:
-    # Get last idx for each stage
-    stages = memories['perturbation']['stages'].cpu().numpy()
-    unique_stages, unique_idx = np.unique(stages[::-1], return_index=True)
-    unique_idx = stages.shape[0] - unique_idx - 1
-    # unique_stages, unique_idx = unique_stages[::-1], unique_idx[::-1]
+# Save memories - MMD-MA Integration 1k Benchmark
+import gzip
+import pickle
 
-    # Record perturbation feature pairs
-    perturbation_feature_triples = [(i, f, n) for i, (fs, ns) in enumerate(zip(perturbation_features, perturbation_feature_names)) for f, n in zip(fs, ns)]
+# No compression (8,506 KB)
+# with open('memories.pkl', 'wb') as f: pickle.dump(memories, f)
+# with open('memories.pkl', 'rb') as f: memories = pickle.load(f)
 
-    # Compute effect sizes for each
-    effect_sizes = []
-    for stage, idx in zip(unique_stages, unique_idx):
-        # Get state
-        state = memories['perturbation']['states'][idx]
-
-        # Record steady state after integration
-        if stage == 0:
-            steady_state = state
-            continue
-
-        # Get perturbed feature
-        m_idx, pf, pf_name = perturbation_feature_triples[stage-1]
-
-        # Compute effect size
-        effect_size = (state[:, :env.dim] - steady_state[:, :env.dim]).square().sum(dim=-1).sqrt().mean(dim=-1).item()
-        effect_sizes.append(effect_size)
-
-    # Print effect sizes
-    i = 0
-    for j, (pfs, pfns) in enumerate(zip(perturbation_features, perturbation_feature_names)):
-        print(f'Modality {j}:')
-        for pf, pfn in zip(pfs, pfns):
-            print(f'{pfn}:\t{effect_sizes[i]:.02e}')
-            i += 1
-        print()
+# Half-accuracy gzip (3,236 KB)
+with gzip.open('memories.pkl', 'wb') as f:
+    func_attr = lambda attr: attr.type(torch.float16) if attr.dtype in (torch.float32, torch.float64) else attr
+    func_mem = lambda mem: inept.utilities.dict_map(mem, func_attr)
+    pickle.dump(inept.utilities.dict_map(memories, func_mem), f)
+with gzip.open('memories.pkl', 'rb') as f: memories = pickle.load(f)
 
 # %% [markdown]
-# ### Static Visualizations
+# # Static Analyses
 
 # %% [markdown]
-# ##### Loss Plot
+# ## Loss Plot
 
 # %%
 # Load history from wandb
@@ -407,7 +418,7 @@ fname = f'{config["data"]["dataset"]}_performance.pdf'
 fig.savefig(os.path.join(PLOT_FOLDER, fname), dpi=300)
 
 # %% [markdown]
-# ##### Comparison
+# ## Comparison
 
 # %%
 # Method comparison
@@ -504,19 +515,58 @@ if 'integration' in memories:
     fig.savefig(os.path.join(PLOT_FOLDER, fname), dpi=300)
 
 # %% [markdown]
-# ### Dynamic Visualizations
+# ## Perturbation
+
+# %%
+# Perturbation significance analysis
+if 'perturbation' in memories:
+    # Get last idx for each stage
+    stages = memories['perturbation']['stages'].cpu().numpy()
+    unique_stages, unique_idx = np.unique(stages[::-1], return_index=True)
+    unique_idx = stages.shape[0] - unique_idx - 1
+    # unique_stages, unique_idx = unique_stages[::-1], unique_idx[::-1]
+
+    # Record perturbation feature pairs
+    perturbation_feature_triples = [(i, f, n) for i, (fs, ns) in enumerate(zip(perturbation_features, perturbation_feature_names)) for f, n in zip(fs, ns)]
+
+    # Compute effect sizes for each
+    effect_sizes = []
+    for stage, idx in zip(unique_stages, unique_idx):
+        # Get state
+        state = memories['perturbation']['states'][idx]
+
+        # Record steady state after integration
+        if stage == 0:
+            steady_state = state
+            continue
+
+        # Get perturbed feature
+        m_idx, pf, pf_name = perturbation_feature_triples[stage-1]
+
+        # Compute effect size
+        effect_size = (state[:, :env.dim] - steady_state[:, :env.dim]).square().sum(dim=-1).sqrt().mean(dim=-1).item()
+        effect_sizes.append(effect_size)
+
+    # Print effect sizes
+    i = 0
+    for j, (pfs, pfns) in enumerate(zip(perturbation_features, perturbation_feature_names)):
+        print(f'Modality {j}:')
+        for pf, pfn in zip(pfs, pfns):
+            print(f'{pfn}:\t{effect_sizes[i]:.02e}')
+            i += 1
+        print()
+
+# %% [markdown]
+# # Dynamic Visualizations
 
 # %%
 # Prepare data
-skip = 5
+skip = 100
 present = memories[analysis_key]['present'].cpu()[::skip]
 states = memories[analysis_key]['states'].cpu()[::skip]
 stages = memories[analysis_key]['stages'].cpu()[::skip]
 rewards = memories[analysis_key]['rewards'].cpu()[::skip]
-env.set_modalities(modalities)
-env.reset()
-env.get_distance_match()
-modal_dist = env.dist
+base_env = inept.environments.trajectory(torch.empty((0, 0)), **config['env'])
 
 # Parameters
 interval = 1e3*env.delta/3  # Time between frames (3x speedup)
@@ -584,11 +634,12 @@ arguments = {
     'modalities': modalities,
     'labels': labels,
     # Data params
-    'dim': env.dim,
-    'modal_targets': env.reward_distance_target,
-    'temporal_stages': temporal['stages'] if analysis_key == 'temporal' else None,
+    'dim': base_env.dim,
+    'modal_targets': base_env.reward_distance_target,
+    'temporal_stages': temporal['stages'],
     'perturbation_features': perturbation_features,
     'perturbation_feature_names': perturbation_feature_names,
+    'partitions': times if analysis_key in ('temporal',) else None,
     # Arguments
     'interval': interval,
     'skip': skip,
@@ -653,5 +704,4 @@ ani.save(os.path.join(PLOT_FOLDER, fname), writer=writer, dpi=300)
 
 # CLI
 print()
-
 

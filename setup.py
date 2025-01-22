@@ -22,6 +22,7 @@ setup(
     extras_require={
         'dev': [
             'memory-profiler',
+            'memray',
             'pip-tools',
             'snakeviz',
         ],

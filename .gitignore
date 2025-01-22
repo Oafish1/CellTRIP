@@ -7,8 +7,12 @@ __pycache__
 
 # Profiling
 *.prof
+*_profile.*
+
+# Data
 *.pickle
 *.pkl
+*.gzip
 
 # Wandb
 **/wandb/

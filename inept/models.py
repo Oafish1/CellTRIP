@@ -519,6 +519,13 @@ class PPO(nn.Module):
         return action
 
     def act_macro(self, state, *, keys=None, max_batch=None):
+        # Data Checks
+        assert state.shape[0] > 0, 'Empty state matrix passed'
+        if keys is not None: assert len(keys) == state.shape[0], (
+            f'Length of keys vector must equal state dimension 0 ({state.shape[0]}), '
+            f'got {len(keys)} instead.'
+        )
+
         # Act
         if max_batch is not None:
             # Compute `max_batch` at a time with randomized `max_nodes`

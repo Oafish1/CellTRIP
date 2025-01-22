@@ -1,3 +1,19 @@
+### 1.0.0+2025-01-21
+- Add scripts for enhanced memory profiling
+- Additional input checking for model `act_macro`
+- Begin adding SHAP to comparison methods
+- Bugfix for `other_methods` data formatting with numerical feature names
+- Change global header formatting to be consistent with `README`
+- Change memory profiling behavior
+- Fixes for `partition_distance` with string partition labels
+- Fully implement BABEL for imputation
+- Implement baseline perturbation comparison method, `variance`
+- Move `h5_tree` function to `utilities`
+- Profiling for analysis notebook on `TemporalBrain` dataset
+- Remove dynamic analysis reliance on env
+- Rename profile files
+- Updates to `other_methods` README
+
 ### 1.0.0+2025-01-20.2
 - Compression algorithms for analysis memory storage
 - Move additional tensors to CPU for analysis memory

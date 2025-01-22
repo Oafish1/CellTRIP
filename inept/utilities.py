@@ -4,6 +4,7 @@ from time import perf_counter
 import tracemalloc
 import warnings
 
+import h5py
 import matplotlib
 from matplotlib.ticker import ScalarFormatter
 import mpl_toolkits.mplot3d as mp3d
@@ -35,7 +36,7 @@ def partition_distance(data, partitions=None, func=euclidean_distance):
     if partitions is None: return func(data)
 
     # Argument handling
-    if not isinstance(partitions, torch.Tensor): partitions = torch.Tensor(partitions)
+    if not isinstance(partitions, torch.Tensor): partitions = torch.Tensor(np.unique(partitions, return_inverse=True)[1]).long()
 
     # Calculate distance for each partition
     indices = torch.empty([2, 0], dtype=torch.int)
@@ -397,6 +398,33 @@ def dict_map_recursive_tensor_idx_to(dict, idx, device):
     # Apply and return (if needed)
     dict = dict_map(dict, lambda x: recursive_tensor_func(x, subfunc))
     return dict
+
+
+def h5_tree(val, pre=''):
+    "Show the structure of an h5 file as a tree"
+    # https://stackoverflow.com/a/73686304
+    items = len(val)
+    for key, val in val.items():
+        items -= 1
+        if items == 0:
+            # the last item
+            if type(val) == h5py._hl.group.Group:
+                print(pre + '└── ' + key)
+                h5_tree(val, pre+'    ')
+            else:
+                try:
+                    print(pre + '└── ' + key + ' (%d)' % len(val))
+                except TypeError:
+                    print(pre + '└── ' + key + ' (scalar)')
+        else:
+            if type(val) == h5py._hl.group.Group:
+                print(pre + '├── ' + key)
+                h5_tree(val, pre+'│   ')
+            else:
+                try:
+                    print(pre + '├── ' + key + ' (%d)' % len(val))
+                except TypeError:
+                    print(pre + '├── ' + key + ' (scalar)')
 
 
 class Sampler:
