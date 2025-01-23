@@ -1,4 +1,4 @@
-### 1.0.0+2025-01-22 (1-2)
+### 1.0.0+2025-01-22 (1-3)
 - Add `View3D` compatibility with 4+ dimensional state input
 - Add alternative name to `MMD-MA` dataset, `MMDMA`
 - Add arguments to analysis notebook for command-line running capability
@@ -16,6 +16,7 @@
 - Enhanced CLI stage output while running simulation in `analysis`
 - Figure updates
 - Fix `.gitignore` for `other_methods` folder and `.h5` files
+- Fix `README` image links
 - Fix `TemporalBrain` temporal stages in analysis
 - Folder creation capability for `train` notebook
 - Memray profiler preference revisions
