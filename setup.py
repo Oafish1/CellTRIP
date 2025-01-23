@@ -1,15 +1,15 @@
 from setuptools import find_packages, setup
 
-with open('inept/version.py') as f:
+with open('celltrip/version.py') as f:
     exec(f.read())
 
 with open('README.md') as f:
     readme = f.read()
 
 setup(
-    name='inept',
+    name='celltrip',
     author='Noah Cohen Kalafut',
-    description='Independent Node Exploration and Probabilistic Tracing',
+    description='Cell Trajectory Recovery, Imputation, and Perturbation to Uncover Temporal and Spatial Dynamics using Multi-Agent Reinforcement Learning',
     long_description=readme,
     long_description_content_type="text/markdown",
     version=__version__,
@@ -39,6 +39,7 @@ setup(
             'tqdm',
             'umap-learn',
             'wandb[importers]',
+            # Additional CLI requirements: ffmpeg, poppler-utils
         ],
     },
 )

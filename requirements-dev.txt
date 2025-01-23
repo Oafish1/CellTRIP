@@ -7,7 +7,7 @@
 -e file:.
     # via file:///-
 adjusttext==1.3.0
-    # via inept
+    # via celltrip
 alembic==1.13.1
     # via mlflow
 aniso8601==9.0.1
@@ -108,14 +108,14 @@ gunicorn==21.2.0
 h5py==3.11.0
     # via
     #   anndata
-    #   inept
+    #   celltrip
     #   scanpy
 idna==3.7
     # via requests
 importlib-metadata==7.1.0
     # via mlflow
 ipympl==0.9.3
-    # via inept
+    # via celltrip
 ipython==8.12.3
     # via
     #   ipympl
@@ -134,6 +134,7 @@ jinja2==3.1.4
     # via
     #   -c requirements.txt
     #   flask
+    #   memray
     #   mlflow
     #   torch
 joblib==1.4.0
@@ -145,6 +146,8 @@ jupyterlab-widgets==3.0.13
     # via ipywidgets
 kiwisolver==1.4.5
     # via matplotlib
+linkify-it-py==2.0.3
+    # via markdown-it-py
 llvmlite==0.41.1
     # via
     #   numba
@@ -153,8 +156,11 @@ mako==1.3.3
     # via alembic
 markdown==3.6
     # via mlflow
-markdown-it-py==3.0.0
-    # via rich
+markdown-it-py[linkify,plugins]==3.0.0
+    # via
+    #   mdit-py-plugins
+    #   rich
+    #   textual
 markupsafe==2.1.5
     # via
     #   -c requirements.txt
@@ -164,17 +170,21 @@ markupsafe==2.1.5
 matplotlib==3.7.5
     # via
     #   adjusttext
-    #   inept
+    #   celltrip
     #   ipympl
     #   mlflow
     #   scanpy
     #   seaborn
 matplotlib-inline==0.1.7
     # via ipython
+mdit-py-plugins==0.4.2
+    # via markdown-it-py
 mdurl==0.1.2
     # via markdown-it-py
 memory-profiler==0.61.0
-    # via inept
+    # via celltrip
+memray==1.15.0
+    # via celltrip
 mlflow==2.11.3
     # via wandb
 mpmath==1.3.0
@@ -206,10 +216,10 @@ numpy==1.24.4
     #   anndata
     #   biocframe
     #   biocutils
+    #   celltrip
     #   contourpy
     #   genomicranges
     #   h5py
-    #   inept
     #   ipympl
     #   iranges
     #   matplotlib
@@ -291,7 +301,7 @@ packaging==23.2
 pandas==2.0.3
     # via
     #   anndata
-    #   inept
+    #   celltrip
     #   iranges
     #   mlflow
     #   scanpy
@@ -312,7 +322,9 @@ pillow==10.3.0
     #   ipympl
     #   matplotlib
 pip-tools==7.4.1
-    # via inept
+    # via celltrip
+platformdirs==4.3.6
+    # via textual
 polars==0.20.19
     # via
     #   iranges
@@ -360,19 +372,22 @@ pyyaml==6.0.1
 querystring-parser==1.2.4
     # via mlflow
 rds2py==0.5.1
-    # via inept
+    # via celltrip
 requests==2.31.0
     # via
     #   docker
     #   mlflow
     #   wandb
 rich==13.7.1
-    # via wandb
+    # via
+    #   memray
+    #   textual
+    #   wandb
 scanpy==1.9.8
-    # via inept
+    # via celltrip
 scikit-learn==1.6.0
     # via
-    #   inept
+    #   celltrip
     #   mlflow
     #   pynndescent
     #   scanpy
@@ -382,7 +397,7 @@ scipy==1.14.1
     #   -c requirements.txt
     #   adjusttext
     #   anndata
-    #   inept
+    #   celltrip
     #   mlflow
     #   pynndescent
     #   rds2py
@@ -392,7 +407,7 @@ scipy==1.14.1
     #   umap-learn
 seaborn==0.13.2
     # via
-    #   inept
+    #   celltrip
     #   scanpy
 sentry-sdk==1.45.0
     # via wandb
@@ -411,7 +426,7 @@ six==1.16.0
 smmap==5.0.1
     # via gitdb
 snakeviz==2.2.0
-    # via inept
+    # via celltrip
 sqlalchemy==2.0.29
     # via
     #   alembic
@@ -435,6 +450,8 @@ sympy==1.13.3
     #   torch
 tenacity==8.2.3
     # via wandb
+textual==1.0.0
+    # via memray
 threadpoolctl==3.4.0
     # via scikit-learn
 tomli==2.0.1
@@ -445,12 +462,12 @@ tomli==2.0.1
 torch==2.2.2
     # via
     #   -c requirements.txt
-    #   inept
+    #   celltrip
 tornado==6.4.1
     # via snakeviz
 tqdm==4.66.5
     # via
-    #   inept
+    #   celltrip
     #   scanpy
     #   umap-learn
 traitlets==5.14.3
@@ -469,12 +486,15 @@ typing-extensions==4.12.2
     #   -c requirements.txt
     #   alembic
     #   sqlalchemy
+    #   textual
     #   torch
 tzdata==2024.1
     # via pandas
+uc-micro-py==1.0.3
+    # via linkify-it-py
 umap-learn==0.5.6
     # via
-    #   inept
+    #   celltrip
     #   scanpy
 urllib3==2.2.1
     # via
@@ -482,7 +502,7 @@ urllib3==2.2.1
     #   requests
     #   sentry-sdk
 wandb[importers]==0.16.6
-    # via inept
+    # via celltrip
 wcwidth==0.2.13
     # via prompt-toolkit
 werkzeug==3.0.2

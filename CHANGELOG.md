@@ -1,3 +1,35 @@
+### 1.0.0+2025-01-22 (1-2)
+- Add `View3D` compatibility with 4+ dimensional state input
+- Add alternative name to `MMD-MA` dataset, `MMDMA`
+- Add arguments to analysis notebook for command-line running capability
+- Add empty `runs` directory handling to `analysis` comparison
+- Add progress bars to analysis notebook
+- Additional testing functionality in analysis
+- Aggressive memory optimization
+- Allow memray script to pass arguments to source python script
+- Bugfix for handling fp16 while calculating euclidean distance
+- Bugfix for `jamie_helper` script in `other_methods`
+- Bugfixes for `View3D` with new function and casting structure
+- Change header formatting in all major notebooks
+- Change stage indexing in `train` to start at 1 and add compatibility filter in `analysis`
+- Clean data files from remote repository
+- Enhanced CLI stage output while running simulation in `analysis`
+- Figure updates
+- Fix `.gitignore` for `other_methods` folder and `.h5` files
+- Fix `TemporalBrain` temporal stages in analysis
+- Folder creation capability for `train` notebook
+- Memray profiler preference revisions
+- Modify `analysis` output file names
+- Recompile requirements
+- Reduce redundancy in `View` classes
+- Refactor `View` class shared functions to be more computationally efficient
+- Rename `inept` to `cellTRIP` in all cases
+- Rename integration to convergence in `analysis` notebook
+- Revise CLI output for analysis
+- Revise main `README`
+- Revise TODO lists in all major notebooks
+- Utility `convert_video_to_gif` and `convert_pdf_to_png` scripts added to `plots/`
+
 ### 1.0.0+2025-01-21
 - Add scripts for enhanced memory profiling
 - Additional input checking for model `act_macro`

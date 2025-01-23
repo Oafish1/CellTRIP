@@ -169,7 +169,7 @@ def load_data(dataset_name, data_folder):
         features = [F1, F2]
 
     # MMD-MA data
-    elif dataset_name == 'MMD-MA':
+    elif dataset_name in ('MMDMA', 'MMD-MA'):
         dataset_dir = os.path.join(data_folder, 'UnionCom/MMD')
         M1 = pd.read_csv(os.path.join(dataset_dir, 's1_mapped1.txt'), delimiter='\t', header=None).to_numpy()
         M2 = pd.read_csv(os.path.join(dataset_dir, 's1_mapped2.txt'), delimiter='\t', header=None).to_numpy()

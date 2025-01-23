@@ -1,6 +1,7 @@
 # Input data
 X*.txt
 X*.tsv
+X*.h5
 
 # MMD-MA misc output
 alpha_*
@@ -8,7 +9,8 @@ beta_*
 loss.txt
 
 # Method folders
-babel/
-JAMIE/
-ManiNetCluster/
-2019_mmd_wabi/
+/babel/
+/JAMIE/
+/ManiNetCluster/
+/2019_mmd_wabi/
+/scVI/

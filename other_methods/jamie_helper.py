@@ -10,8 +10,8 @@ import jamie
 parser = argparse.ArgumentParser()
 parser.add_argument('fname1', type=str)
 parser.add_argument('fname2', type=str)
-parser.add_argument('-s', '--seed', type=str, default=42)
-parser.add_argument('-t', '--target', type=str)
+parser.add_argument('-s', '--seed', type=int, default=42)
+parser.add_argument('-t', '--target', type=int)
 parser.add_argument('-p', type=int, required=True)
 parsed = parser.parse_args()
 
@@ -26,8 +26,8 @@ projection = jm.fit_transform(dataset=dataset)
 # Impute if needed
 if parsed.target is not None:
     projection = [None for _ in range(2)]
-    projection[parsed.target] = jm.modal_predict(dataset[-parsed.target+1], 1-parsed.target+1)
+    projection[parsed.target-1] = jm.modal_predict(dataset[-parsed.target+1], parsed.target-1)
 
 # Write to file
 for i, proj in enumerate(projection):
-    if proj is not None: np.savetxt(f'P{i+1}.txt', proj)
+    if proj is not None: np.savetxt(f'I{i+1}.txt', proj)
