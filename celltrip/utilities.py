@@ -958,6 +958,7 @@ class View3D(ViewLinesBase):
         self,
         # Data
         present,
+        states_3d,
         rewards,
         modalities,
         labels,
@@ -982,6 +983,8 @@ class View3D(ViewLinesBase):
 
         # Storage
         self.present = present
+        self.states_3d = states_3d if states_3d is not None else self.states
+        self.dim_3d = dim if states_3d is None else 3
         self.rewards = rewards
         self.modalities = modalities
         self.labels = labels
@@ -1010,7 +1013,7 @@ class View3D(ViewLinesBase):
         ]
 
         # Initialize velocity arrows
-        self.get_arrow_xyz_uvw = lambda frame: (self.states[frame, :, :3], self.states[frame, :, dim:dim+3])
+        self.get_arrow_xyz_uvw = lambda frame: (self.states_3d[frame, :, :3], self.states_3d[frame, :, self.dim_3d:self.dim_3d+3])
         self.arrows = self.ax.quiver(
             [], [], [],
             [], [], [],
@@ -1036,9 +1039,9 @@ class View3D(ViewLinesBase):
 
         # Limits
         self.ax.set(
-            xlim=(self.states[present][:, 0].min(), self.states[present][:, 0].max()),
-            ylim=(self.states[present][:, 1].min(), self.states[present][:, 1].max()),
-            zlim=(self.states[present][:, 2].min(), self.states[present][:, 2].max()),
+            xlim=(self.states_3d[present][:, 0].min(), self.states_3d[present][:, 0].max()),
+            ylim=(self.states_3d[present][:, 1].min(), self.states_3d[present][:, 1].max()),
+            zlim=(self.states_3d[present][:, 2].min(), self.states_3d[present][:, 2].max()),
         )
 
         # Legends
@@ -1061,7 +1064,7 @@ class View3D(ViewLinesBase):
         # Adjust nodes
         for i, l in enumerate(np.unique(self.labels)):
             present_labels = self.present[frame] * torch.tensor(self.labels==l)
-            data = self.states[frame, present_labels, :3].T.numpy()
+            data = self.states_3d[frame, present_labels, :3].T.numpy()
             self.nodes[i].set_data(*data[:2])
             self.nodes[i].set_3d_properties(data[2])
 
@@ -1072,10 +1075,10 @@ class View3D(ViewLinesBase):
         # Adjust lines
         # NOTE: Currently calculates invisible lines unoptimally
         for i, (dist, ml, li) in enumerate(zip(self.modal_dist, self.modal_lines, self.line_indices)):
-            ml.set_segments(self.states[frame, li, :3])
+            ml.set_segments(self.states_3d[frame, li, :3])
 
             # Calculate discrepancy
-            latent_dist = partition_distance(self.states[frame, :, :self.dim], partitions=self.partitions)
+            latent_dist = partition_distance(self.states_3d[frame, :, :self.dim], partitions=self.partitions)
             dd_array = latent_dist[li[:, 0], li[:, 1]] - dist[li[:, 0], li[:, 1]]
             if self.partitions is not None: dd_array = dd_array.A1
 
@@ -1153,7 +1156,7 @@ class ViewTemporalDiscrepancy(ViewModalDistBase):
         # Arguments
         # None
         # Styling
-        y_bound=[2, np.inf],  # Bounds for discrepancy chart max
+        y_bound=[.1, np.inf],  # Bounds for discrepancy chart max
         clip_discrepancy=False,  # Clips discrepancy values to inside the chart
         dynamic_ylim=True,  # Change ylim of plot dynamically
         ylim_padding=.05,  # Percentage padding added to top ylim for cleaner presentation
@@ -1231,7 +1234,7 @@ class ViewTemporalDiscrepancy(ViewModalDistBase):
         # Styling
         if self.dynamic_ylim:
             new_ylim = max(y_max, self.current_y_max)
-            new_ylim += self.ylim_padding * new_ylim
+            new_ylim = new_ylim + self.ylim_padding * new_ylim
             self.ax.set_ylim([0, new_ylim])
 
 
@@ -1318,7 +1321,6 @@ class ViewTemporalScatter(ViewLinesBase):
 
         # Update positions and color
         latent_dist_total = partition_distance(self.states[frame, :, :self.dim])
-        # latent_dist_total = euclidean_distance(self.states[frame, :, :self.dim])
         for modal_num in range(len(self.modal_targets)):
             for i, idx in enumerate(self.line_indices[modal_num]):
                 point = self.points[modal_num][i]

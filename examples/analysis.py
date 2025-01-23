@@ -15,8 +15,13 @@ import seaborn as sns
 import sklearn.metrics
 import sklearn.neighbors
 import torch
-from tqdm.auto import tqdm
 import wandb
+
+# Enable text output in notebooks
+import tqdm.auto
+import tqdm.notebook
+tqdm.notebook.tqdm = tqdm.auto.tqdm
+from tqdm import tqdm
 
 import data
 import celltrip
@@ -40,6 +45,7 @@ torch.set_grad_enabled(False);
 
 # %% [markdown]
 # - TODO
+#   - Figure out why MMD-MA inter-cell distances are lower than usual
 #   - Add imputation and perturbation to comparison analysis
 #   - Add named memory saving
 #   - Add PCA/UMAP
@@ -121,6 +127,22 @@ group.add_argument(
     type=int,
     default=5,
     help='Number of steps to advance each frame')
+group.add_argument(
+    '--reduction',
+    choices=('umap', 'pca', 'none'),
+    default='pca',
+    type=str,
+    dest='reduction_type',
+    help='Reduction type to use for high-dimensional projections in 3D visualization')
+group.add_argument(
+    '--force_reduction',
+    action='store_true',
+    help='Force reduction, even if unnecessary')
+group.add_argument(
+    '--reduction_batch',
+    type=int,
+    default=100_000,
+    help='Max number of states to reduce in one computation')
 
 # Legacy compatibility
 group = parser.add_argument_group('Legacy Compatiiblity Parameters')
@@ -140,7 +162,7 @@ group.add_argument(
 # '473vyon2': ISS NR
 
 # Defaults for notebook
-# args = parser.parse_args('--total_statistics -b 1000 rypltvk5 convergence'.split(' '))
+# args = parser.parse_args('-s 20 rypltvk5 temporal'.split(' '))
 args = parser.parse_args()
 
 # Set env vars
@@ -172,18 +194,18 @@ print('\tFinding model')
 latest_mdl = [0, None]  # Pkl
 latest_wgt = [0, None]  # State dict
 # Compatibility with models of the previous naming convention
-for file in run.files():
-    matches = re.findall(f'^(?:models|trained_models)/policy_(\w+).(mdl|wgt)$', file.name)
-    if len(matches) > 0: stage = int(matches[0][0]); ftype = matches[0][1]
-    else: continue
-    if stage == 0: add_one = True; break
-else: add_one = False
+# for file in run.files():
+#     matches = re.findall(f'^(?:models|trained_models)/policy_(\w+).(mdl|wgt)$', file.name)
+#     if len(matches) > 0: stage = int(matches[0][0]); ftype = matches[0][1]
+#     else: continue
+#     if stage == 0: add_one = True; break
+# else: add_one = False
 # Iterate through model files
 for file in run.files():
     matches = re.findall(f'^(?:models|trained_models)/policy_(\w+).(mdl|wgt)$', file.name)
     if len(matches) > 0: stage = int(matches[0][0]); ftype = matches[0][1]
     else: continue
-    if add_one: stage += 1
+    # if add_one: stage += 1
 
     # Record
     latest_known_stage = latest_mdl[0] if ftype == 'mdl' else latest_wgt[0]
@@ -192,6 +214,25 @@ for file in run.files():
         elif ftype == 'wgt': latest_wgt = [stage, file]
 print(f'\t\tMDL policy found at stage {latest_mdl[0]}')
 print(f'\t\tWGT policy found at stage {latest_wgt[0]}')
+
+# Load data
+print(f'\tLoading dataset {config["data"]["dataset"]}')
+modalities, types, features = data.load_data(config['data']['dataset'], DATA_FOLDER)
+# config['data'] = celltrip.utilities.overwrite_dict(config['data'], {'standardize': True})  # Old model compatibility
+# config['data'] = celltrip.utilities.overwrite_dict(config['data'], {'top_variant': config['data']['pca_dim'], 'pca_dim': None})  # Swap PCA with top variant (testing)
+if args.num_nodes is not None: config['data'] = celltrip.utilities.overwrite_dict(config['data'], {'num_nodes': args.num_nodes})
+if args.max_batch is not None: config['train'] = celltrip.utilities.overwrite_dict(config['train'], {'max_batch': args.max_batch})
+ppc = celltrip.utilities.Preprocessing(**config['data'], device=DEVICE)
+modalities, features = ppc.fit_transform(modalities, features, total_statistics=args.total_statistics)
+modalities, types = ppc.subsample(modalities, types)
+modalities = ppc.cast(modalities)
+labels = types[0][:, 0]
+times = types[0][:, -1]
+
+# Load env
+env = celltrip.environments.trajectory(*modalities, **config['env'], **config['stages']['env'][0], device=DEVICE)
+for weight_stage in config['stages']['env'][1:latest_mdl[0]+1]:
+    env.set_rewards(weight_stage)
 
 # Load model file
 load_type = 'WGT'
@@ -215,25 +256,6 @@ else:
     policy = celltrip.models.PPO(**config['policy'])
 policy = policy.to(DEVICE).eval()
 policy.actor.set_action_std(1e-7)
-
-# Load data
-print(f'\tLoading dataset {config["data"]["dataset"]}')
-modalities, types, features = data.load_data(config['data']['dataset'], DATA_FOLDER)
-# config['data'] = celltrip.utilities.overwrite_dict(config['data'], {'standardize': True})  # Old model compatibility
-# config['data'] = celltrip.utilities.overwrite_dict(config['data'], {'top_variant': config['data']['pca_dim'], 'pca_dim': None})  # Swap PCA with top variant (testing)
-if args.num_nodes is not None: config['data'] = celltrip.utilities.overwrite_dict(config['data'], {'num_nodes': args.num_nodes})
-if args.max_batch is not None: config['train'] = celltrip.utilities.overwrite_dict(config['train'], {'max_batch': args.max_batch})
-ppc = celltrip.utilities.Preprocessing(**config['data'], device=DEVICE)
-modalities, features = ppc.fit_transform(modalities, features, total_statistics=args.total_statistics)
-modalities, types = ppc.subsample(modalities, types)
-modalities = ppc.cast(modalities)
-labels = types[0][:, 0]
-times = types[0][:, -1]
-
-# Load env
-env = celltrip.environments.trajectory(*modalities, **config['env'], **config['stages']['env'][0], device=DEVICE)
-for weight_stage in config['stages']['env'][1:latest_mdl[0]+1]:
-    env.set_rewards(weight_stage)
 
 # %% [markdown]
 # ## Run Simulation
@@ -300,7 +322,6 @@ memories = {}
 # #### Generate Simulation
 
 # %%
-# CLI
 print('Running simulation')
 
 # Profiling
@@ -321,7 +342,7 @@ state_manager = state_manager_class(
 
 # Utility parameters
 get_current_stage = lambda: (
-    state_manager.current_stage+1
+    state_manager.current_stage
     if np.array([isinstance(state_manager, cl) for cl in (celltrip.utilities.TemporalStateManager, celltrip.utilities.PerturbationStateManager)]).any()
     else -1
 )
@@ -361,7 +382,7 @@ memories[args.analysis_key]['rewards'].append(torch.zeros(modalities[0].shape[0]
 
 # Simulate
 get_desc = lambda ts, st: f'\tTimestep {ts}' + (f', Stage {st}/{get_max_stage()}' if st != -1 else '')
-timestep = 0; pbar = tqdm(ascii=True, desc=get_desc(timestep, get_current_stage()))  # CLI
+timestep = 0; pbar = tqdm(ascii=True, desc=get_desc(timestep, get_current_stage()), ncols=100)  # CLI
 while True:
     # Step
     state = env.get_state(include_modalities=True)
@@ -436,8 +457,9 @@ if profile:
 # #### CLI Output
 
 # %%
-# Debug CLI
 print('\tStatistics')
+
+# Debug CLI
 ## Stages
 stages, counts = np.unique(memories[args.analysis_key]['stages'], return_counts=True)
 print('\t\tSteps per Stage')
@@ -457,8 +479,9 @@ print(f'\t\tAverage Reward: {memories[args.analysis_key]["rewards"].cpu().mean()
 # #### Save Memories
 
 # %%
-# Save memories - MMD-MA Integration 1k Benchmark
 print('\tSaving/loading memories...')
+
+# Save memories - MMD-MA Integration 1k Benchmark
 import gzip
 import pickle
 
@@ -470,8 +493,8 @@ import pickle
 compressed_type = torch.float16
 with gzip.open('memories.pkl.gzip', 'wb') as f:
     func_attr = lambda attr: attr.type(compressed_type) if attr.dtype not in (torch.long, torch.bool) else attr
-    func_mem = lambda mem: celltrip.utilities.dict_map(mem, func_attr)
-    pickle.dump(celltrip.utilities.dict_map(memories, func_mem), f)
+    func_mem = lambda mem: celltrip.utilities.dict_map(mem, func_attr, inplace=True)
+    pickle.dump(celltrip.utilities.dict_map(memories, func_mem, inplace=True), f)
 with gzip.open('memories.pkl.gzip', 'rb') as f: memories = pickle.load(f)
 
 # %% [markdown]
@@ -485,6 +508,7 @@ print('Plotting static analyses')
 
 # %%
 print('\tTraining rewards')
+
 # Load history from wandb
 history = run.history(samples=2000)
 history['timestep'] = history['end_timestep']
@@ -528,6 +552,7 @@ fig.savefig(os.path.join(PLOT_FOLDER, fname), dpi=300)
 # Method comparison
 if 'convergence' in memories:
     print('\tIntegration comparison')
+    
     # Comparison metrics
     metric_rand = lambda X: np.random.rand()
     metric_silhouette = lambda X: sklearn.metrics.silhouette_score(X, labels)
@@ -631,6 +656,7 @@ if 'convergence' in memories:
 # Perturbation significance analysis
 if 'perturbation' in memories:
     print('\tFeature effect size')
+    
     # Get last idx for each stage
     stages = memories['perturbation']['stages'].cpu().numpy()
     unique_stages, unique_idx = np.unique(stages[::-1], return_index=True)
@@ -661,9 +687,9 @@ if 'perturbation' in memories:
     # Print effect sizes
     i = 0
     for j, (pfs, pfns) in enumerate(zip(perturbation_features, perturbation_feature_names)):
-        print(f'Modality {j}:')
+        print(f'\t\tModality {j}')
         for pf, pfn in zip(pfs, pfns):
-            print(f'{pfn}:\t{effect_sizes[i]:.02e}')
+            print(f'\t\t\t{pfn:<15}{effect_sizes[i]:.02e}')
             i += 1
         print()
 
@@ -671,13 +697,14 @@ if 'perturbation' in memories:
 # # Dynamic Visualizations
 
 # %%
-print('Generating video')
+print('Video plot')
+
 # Prepare data
-present = memories[args.analysis_key]['present'].cpu()[::args.skip]
-states = memories[args.analysis_key]['states'].cpu()[::args.skip]
-stages = memories[args.analysis_key]['stages'].cpu()[::args.skip]
-rewards = memories[args.analysis_key]['rewards'].cpu()[::args.skip]
-base_env = celltrip.environments.trajectory(torch.empty((0, 0)), **config['env'])
+present = memories[args.analysis_key]['present'].cpu()
+states = memories[args.analysis_key]['states'].cpu()
+stages = memories[args.analysis_key]['stages'].cpu()
+rewards = memories[args.analysis_key]['rewards'].cpu()
+base_env = celltrip.environments.trajectory(*[torch.empty((0, 0)) for _ in range(len(modalities))], **config['env'])
 
 # Testing for portions of large datasets
 # sub_idx = np.random.choice(modalities[0].shape[0], 1_000, replace=False)
@@ -688,13 +715,60 @@ base_env = celltrip.environments.trajectory(torch.empty((0, 0)), **config['env']
 # states = torch.concatenate((states, states), dim=-1)
 # base_env.dim *= 2
 
+# Reduce dimensions
+if states.shape[-1] > 2*3 or args.force_reduction:
+    print('\tReducing state dimensionality')
+    # Get idx of last state in designated stage
+    stage_unique, stage_idx = np.unique(stages.numpy()[::-1], return_index=True)
+    stage_idx = memories[args.analysis_key]['stages'].shape[0] - stage_idx - 1
+
+    # Choose reduction type
+    if args.reduction_type == 'umap':
+        import umap
+        fit_reducer = lambda data: umap.UMAP(n_components=3, random_state=args.seed).fit(data)
+        transform_reducer = lambda reducer, data: torch.Tensor(reducer.transform(data))
+    elif args.reduction_type == 'pca':
+        import sklearn.decomposition
+        fit_reducer = lambda data: sklearn.decomposition.PCA(n_components=3, random_state=args.seed).fit(data)
+        transform_reducer = lambda reducer, data: torch.Tensor(reducer.transform(data))
+    elif args.reduction_type is None or args.reduction_type == 'none':
+        initialize_reducer = lambda: None
+        transform_reducer = lambda reducer, data: data
+
+    # Get steady state
+    if args.analysis_key in ('convergence', 'discovery', 'perturbation',):
+        reducer = fit_reducer(states[stage_idx[0]])
+        get_reducer = lambda stage: reducer
+    elif args.analysis_key in ('temporal',):
+        get_reducer = lambda stage: fit_reducer(states[stage_idx[stage]])
+
+    # UMAP
+    states_3d = []; pbar = tqdm(total=states.shape[0]*states.shape[1], ascii=True, ncols=100)
+    for stage in stage_unique:
+        pbar.set_description(f'\t\tProjecting ({stage}/{stage_unique.max()})')
+        stage_states = states[stages==stage].reshape((-1, states.shape[-1]))
+        for i in range(0, stage_states.shape[0], args.reduction_batch):
+            states_3d.append(transform_reducer(get_reducer(stage), stage_states[i:i+args.reduction_batch]))
+            pbar.update(stage_states[i:i+args.reduction_batch].shape[0])
+    pbar.close()
+    states_3d = torch.concatenate(states_3d, dim=0).reshape((*states.shape[:-1], 3))
+    states_3d = torch.concatenate((states_3d, torch.zeros_like(states_3d)), dim=-1)
+else: states_3d = None
+
+# Skip data
+present, states, stages, rewards = present[::args.skip], states[::args.skip], stages[::args.skip], rewards[::args.skip]
+if states_3d is not None: states_3d = states_3d[::args.skip]
+
+# CLI
+print('\tGenerating video')
+
 # Parameters
 interval = 1e3*env.delta/3  # Time between frames (3x speedup)
 min_max_vel = 1e-2 if args.analysis_key in ('convergence', 'discovery') else -1  # Stop at first frame all vels are below target. 0 for full play
 frame_override = None  # Manually enter number of frames to draw
 rotations_per_second = .1  # Camera azimuthal rotations per second
 num_lines = 100
-if args.analysis_key == 'temporal': num_lines *= len(temporal['stages'])
+if args.analysis_key == 'temporal': num_lines *= len(temporal['stages'])**2
 
 # Create plot based on key
 # NOTE: Standard 1-padding all around and between figures
@@ -748,6 +822,7 @@ arguments = {
     # Data
     'present': present,
     'states': states,
+    'states_3d': states_3d,
     'stages': stages,
     'rewards': rewards,
     'modalities': modalities,
@@ -778,7 +853,7 @@ frames = frames[0, 0].item()+1 if len(frames) > 0 else states.shape[0]
 frames = frames if frame_override is None else frame_override
 
 # Update function
-pbar = tqdm(ascii=True, total=frames+1, desc='\t', ncols=10)  # CLI, runs frame 0 twice
+pbar = tqdm(ascii=True, total=frames+1, desc='\t\tRendering', ncols=100)  # CLI, runs frame 0 twice
 def update(frame):
     # Update views
     for view in views:
