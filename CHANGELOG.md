@@ -1,4 +1,4 @@
-### 1.0.0+2025-01-23
+### 1.0.0+2025-01-23 (1-2)
 - Add UMAP and PCA options for high-dimensional projections in `analysis`
 - Bugfix for infinitely scaling discrepancy in `ViewTemporalDiscrepancy`
 - Compatibility with reduced states in `View3D`
@@ -7,6 +7,7 @@
 - Lower tensor precision inplace for saving memories
 - Properly assign number of cell pairings to temporal analysis
 - Refresh runs
+- Rerender gifs with consistent skip and framerate
 - Undo model stage indexing change
 
 ### 1.0.0+2025-01-22 (1-3)
