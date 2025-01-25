@@ -1,4 +1,6 @@
 from collections import defaultdict
+import gzip
+import pickle
 import re
 import os
 import tempfile
@@ -66,8 +68,9 @@ group.add_argument(
 group.add_argument(
     'analysis_key',
     choices=('convergence', 'discovery', 'temporal', 'perturbation'),
+    nargs='+',
     type=str,
-    help='Type of analysis to perform')
+    help='Type of analyses to perform (one or more)')
 group.add_argument(
     '-S', '--seed',
     type=int,
@@ -115,6 +118,10 @@ group.add_argument(
     type=int,
     default=0,
     help='Type of temporal analysis (0: Auto, 1: TemporalBrain)')
+group.add_argument(
+    '--force',
+    action='store_true',
+    help='Rerun analysis even if already stored in memory')
 
 # Video parameters
 group = parser.add_argument_group('Video Parameters')
@@ -162,7 +169,7 @@ group.add_argument(
 # '473vyon2': ISS NR
 
 # Defaults for notebook
-# args = parser.parse_args('-s 20 rypltvk5 temporal'.split(' '))
+# args = parser.parse_args('--total_statistics --force rypltvk5 convergence discovery temporal perturbation'.split(' '))
 args = parser.parse_args()
 
 # Set env vars
@@ -237,12 +244,12 @@ for weight_stage in config['stages']['env'][1:latest_mdl[0]+1]:
 # Load model file
 load_type = 'WGT'
 if load_type == 'MDL' and latest_mdl[0] != 0:
-    print('\t\tLoading MDL model')
+    print('\tLoading MDL model')
     with tempfile.TemporaryDirectory() as tmpdir:
         latest_mdl[1].download(tmpdir, replace=True)
         policy = torch.load(os.path.join(tmpdir, latest_mdl[1].name))
 elif load_type == 'WGT' and latest_wgt[0] != 0:
-    print('\t\tLoading WGT model')
+    print('\tLoading WGT model')
     # Mainly used in the case of old argument names, also generally more secure
     with tempfile.TemporaryDirectory() as tmpdir:
         latest_wgt[1].download(tmpdir, replace=True)
@@ -251,7 +258,7 @@ elif load_type == 'WGT' and latest_wgt[0] != 0:
         policy = celltrip.models.PPO(**config['policy'])
         incompatible_keys = policy.load_state_dict(torch.load(os.path.join(tmpdir, latest_wgt[1].name), weights_only=True))
 else:
-    print('\t\tUsing random model')
+    print('\tGenerating random model')
     # Use random model
     policy = celltrip.models.PPO(**config['policy'])
 policy = policy.to(DEVICE).eval()
@@ -269,12 +276,13 @@ policy.actor.set_action_std(1e-7)
 optimize_memory = True  # Saves memory by shrinking env based on present, also fixes reward calculation for non-full present mask
 perturbation_features = [np.random.choice(len(fs), 10, replace=False) for i, fs in enumerate(features) if (i not in env.reward_distance_target) or (len(env.reward_distance_target) == len(modalities))]
 
+# Define matching state manager classes
 state_manager_class = {
     'convergence': celltrip.utilities.ConvergenceStateManager,
     'discovery': celltrip.utilities.DiscoveryStateManager,
     'temporal': celltrip.utilities.TemporalStateManager,
     'perturbation': celltrip.utilities.PerturbationStateManager,
-}[args.analysis_key]
+}
 
 # Discovery list
 discovery = []
@@ -322,180 +330,181 @@ memories = {}
 # #### Generate Simulation
 
 # %%
-print('Running simulation')
+# Load memories
+fname =                                     f'{args.run_id}'
+if args.stage is not None: fname +=         f'_{args.stage:02}'
+fname +=                                    f'_{config["data"]["dataset"]}'
+fname +=                                    f'_memories.pkl.gzip'
 
-# Profiling
-profile = False
-if profile: torch.cuda.memory._record_memory_history(max_entries=100000)
+# Load memories
+if os.path.exists(fname):
+    print('Loading existing memories')
+    with gzip.open(fname, 'rb') as f: memories = pickle.load(f)
 
-# Choose state manager
-state_manager = state_manager_class(
-    device=DEVICE,
-    discovery=discovery,
-    temporal=temporal,
-    perturbation_features=perturbation_features,
-    modal_targets=env.reward_distance_target,
-    num_nodes=modalities[0].shape[0],
-    dim=env.dim,
-    # vel_threshold=1e-1,  # Temporal testing
-)
+# Run simulation if needed
+for ak in args.analysis_key:
+    if ak not in memories or args.force:
+        print(f'Running {ak} simulation')
 
-# Utility parameters
-get_current_stage = lambda: (
-    state_manager.current_stage
-    if np.array([isinstance(state_manager, cl) for cl in (celltrip.utilities.TemporalStateManager, celltrip.utilities.PerturbationStateManager)]).any()
-    else -1
-)
-get_max_stage = lambda: (
-    len(temporal['stages']) if isinstance(state_manager, celltrip.utilities.TemporalStateManager)
-    else sum([len(pf) for pf in perturbation_features])+1 if isinstance(state_manager, celltrip.utilities.PerturbationStateManager)
-    else -1
-)
-# TODO: Make perturbation more memory-efficient
-use_modalities = np.array([isinstance(state_manager, cl) for cl in (celltrip.utilities.PerturbationStateManager,)]).any()
+        # Profiling
+        profile = False
+        if profile: torch.cuda.memory._record_memory_history(max_entries=100000)
 
-# Initialize
-env.set_modalities(modalities); env.reset(); memories[args.analysis_key] = defaultdict(lambda: [])
+        # Choose state manager
+        state_manager = state_manager_class[ak](
+            device=DEVICE,
+            discovery=discovery,
+            temporal=temporal,
+            perturbation_features=perturbation_features,
+            modal_targets=env.reward_distance_target,
+            num_nodes=modalities[0].shape[0],
+            dim=env.dim,
+            # vel_threshold=1e-1,  # Temporal testing
+        )
 
-# Modify
-state_vars, end = state_manager(
-    # present=present,
-    state=env.get_state(),
-    modalities=ppc.cast(ppc.inverse_transform(ppc.inverse_cast(modalities)), device='cpu') if use_modalities else modalities,
-    labels=labels,
-    times=times,
-)
-present = state_vars['present']
-memory_mask = present if optimize_memory else torch.ones_like(present, device=DEVICE)
-full_state = state_vars['state']
-env.set_state(full_state[memory_mask])
-raw_modalities = state_vars['modalities']
-processed_modalities = [m[memory_mask.cpu()] for m in raw_modalities]
-if use_modalities: processed_modalities = ppc.cast(ppc.transform(ppc.inverse_cast(processed_modalities)))
-env.set_modalities(processed_modalities)
+        # Utility parameters
+        get_current_stage = lambda: (
+            state_manager.current_stage
+            if np.array([ak in akt for akt in ('temporal', 'perturbation')]).any()
+            else -1
+        )
+        get_max_stage = lambda: (
+            len(temporal['stages'])-1 if ak == 'temporal'
+            else sum([len(pf) for pf in perturbation_features])+1 if ak == 'perturbation'
+            else -1
+        )
+        # TODO: Make perturbation more memory-efficient
+        use_modalities = np.array([ak in akt for akt in ('perturbation',)]).any()
 
-# Continue initializing
-memories[args.analysis_key]['present'].append(present.cpu())
-memories[args.analysis_key]['states'].append(full_state.cpu())
-memories[args.analysis_key]['stages'].append(get_current_stage())
-memories[args.analysis_key]['rewards'].append(torch.zeros(modalities[0].shape[0]))
+        # Initialize
+        env.set_modalities(modalities); env.reset(); memories[ak] = defaultdict(lambda: [])
 
-# Simulate
-get_desc = lambda ts, st: f'\tTimestep {ts}' + (f', Stage {st}/{get_max_stage()}' if st != -1 else '')
-timestep = 0; pbar = tqdm(ascii=True, desc=get_desc(timestep, get_current_stage()), ncols=100)  # CLI
-while True:
-    # Step
-    state = env.get_state(include_modalities=True)
-    actions = torch.zeros((modalities[0].shape[0], env.dim), device=DEVICE)
-    actions[present] = policy.act_macro(
-        state if optimize_memory else state[present],
-        keys=torch.arange(modalities[0].shape[0], device=DEVICE)[present],
-        max_batch=config['train']['max_batch'],
-    )
-    rewards = torch.zeros(modalities[0].shape[0], device=DEVICE)
-    new_rewards, _, _ = env.step(actions[present] if optimize_memory else actions, return_itemized_rewards=True)
-    if optimize_memory: rewards[present] = new_rewards
-    else: rewards = new_rewards
-    full_state[present] = env.get_state() if optimize_memory else env.get_state()[present]
-    if not optimize_memory: env.set_state(full_state)  # Don't move un-spawned nodes
-
-    # Modify
-    state_vars, end = state_manager(
-        present=present,
-        state=full_state,
-        modalities=raw_modalities,
-        labels=labels,
-        times=times,
-    )
-    present_change = (state_vars['present'] != present).any()
-    present = state_vars['present']
-    memory_mask = present if optimize_memory else torch.ones_like(present, device=DEVICE)
-    full_state = state_vars['state']
-    env.set_state(full_state[memory_mask])
-    # Only modify if changes
-    if (
-        torch.tensor([(rm != svm).any() for rm, svm in zip(raw_modalities, state_vars['modalities'])]).any()
-        or (optimize_memory and present_change)
-    ):
+        # Modify
+        state_vars, end = state_manager(
+            # present=present,
+            state=env.get_state(),
+            modalities=ppc.cast(ppc.inverse_transform(ppc.inverse_cast(modalities)), device='cpu') if use_modalities else modalities,
+            labels=labels,
+            times=times,
+        )
+        present = state_vars['present']
+        memory_mask = present if optimize_memory else torch.ones_like(present, device=DEVICE)
+        full_state = state_vars['state']
+        env.set_state(full_state[memory_mask])
         raw_modalities = state_vars['modalities']
         processed_modalities = [m[memory_mask.cpu()] for m in raw_modalities]
         if use_modalities: processed_modalities = ppc.cast(ppc.transform(ppc.inverse_cast(processed_modalities)))
         env.set_modalities(processed_modalities)
 
-    # Record
-    memories[args.analysis_key]['present'].append(present.cpu())
-    memories[args.analysis_key]['states'].append(full_state.cpu())
-    memories[args.analysis_key]['stages'].append(get_current_stage())
-    memories[args.analysis_key]['rewards'].append(rewards.cpu())
+        # Continue initializing
+        memories[ak]['present'].append(present.cpu())
+        memories[ak]['states'].append(full_state.cpu())
+        memories[ak]['stages'].append(get_current_stage())
+        memories[ak]['rewards'].append(torch.zeros(modalities[0].shape[0]))
 
-    # CLI
-    timestep += 1
-    update_timestep = 10
-    if timestep % update_timestep == 0:
-        pbar.set_description(get_desc(timestep, get_current_stage()))
-        pbar.update(update_timestep)
+        # Simulate
+        get_desc = lambda ts, st: f'\tTimestep {ts}' + (f', Stage {st+1}/{get_max_stage()+1}' if st != -1 else '')
+        timestep = 0; pbar = tqdm(ascii=True, desc=get_desc(timestep, get_current_stage()), ncols=100)  # CLI
+        while True:
+            # Step
+            state = env.get_state(include_modalities=True)
+            actions = torch.zeros((modalities[0].shape[0], env.dim), device=DEVICE)
+            actions[present] = policy.act_macro(
+                state if optimize_memory else state[present],
+                keys=torch.arange(modalities[0].shape[0], device=DEVICE)[present],
+                max_batch=config['train']['max_batch'],
+            )
+            rewards = torch.zeros(modalities[0].shape[0], device=DEVICE)
+            new_rewards, _, _ = env.step(actions[present] if optimize_memory else actions, return_itemized_rewards=True)
+            if optimize_memory: rewards[present] = new_rewards
+            else: rewards = new_rewards
+            full_state[present] = env.get_state() if optimize_memory else env.get_state()[present]
+            if not optimize_memory: env.set_state(full_state)  # Don't move un-spawned nodes
 
-    # End
-    if end: break
+            # Modify
+            state_vars, end = state_manager(
+                present=present,
+                state=full_state,
+                modalities=raw_modalities,
+                labels=labels,
+                times=times,
+            )
+            present_change = (state_vars['present'] != present).any()
+            present = state_vars['present']
+            memory_mask = present if optimize_memory else torch.ones_like(present, device=DEVICE)
+            full_state = state_vars['state']
+            env.set_state(full_state[memory_mask])
+            # Only modify if changes
+            if (
+                torch.tensor([(rm != svm).any() for rm, svm in zip(raw_modalities, state_vars['modalities'])]).any()
+                or (optimize_memory and present_change)
+            ):
+                raw_modalities = state_vars['modalities']
+                processed_modalities = [m[memory_mask.cpu()] for m in raw_modalities]
+                if use_modalities: processed_modalities = ppc.cast(ppc.transform(ppc.inverse_cast(processed_modalities)))
+                env.set_modalities(processed_modalities)
 
-# CLI
-pbar.close()
+            # Record
+            memories[ak]['present'].append(present.cpu())
+            memories[ak]['states'].append(full_state.cpu())
+            memories[ak]['stages'].append(get_current_stage())
+            memories[ak]['rewards'].append(rewards.cpu())
 
-# Stack
-memories[args.analysis_key]['present'] = torch.stack(memories[args.analysis_key]['present'])
-memories[args.analysis_key]['states'] = torch.stack(memories[args.analysis_key]['states'])
-memories[args.analysis_key]['stages'] = torch.tensor(memories[args.analysis_key]['stages'])
-memories[args.analysis_key]['rewards'] = torch.stack(memories[args.analysis_key]['rewards'])
-memories[args.analysis_key] = dict(memories[args.analysis_key])
+            # CLI
+            timestep += 1
+            update_timestep = 10
+            if timestep % update_timestep == 0:
+                pbar.set_description(get_desc(timestep, get_current_stage()))
+                pbar.update(update_timestep)
 
-# Profiling
-if profile:
-    torch.cuda.memory._dump_snapshot('cuda_profile.pkl')
-    torch.cuda.memory._record_memory_history(enabled=None)
+            # End
+            if end: break
+
+        # CLI
+        pbar.close()
+
+        # Stack
+        memories[ak]['present'] = torch.stack(memories[ak]['present'])
+        memories[ak]['states'] = torch.stack(memories[ak]['states'])
+        memories[ak]['stages'] = torch.tensor(memories[ak]['stages'])
+        memories[ak]['rewards'] = torch.stack(memories[ak]['rewards'])
+        memories[ak] = dict(memories[ak])
+
+        # Profiling
+        if profile:
+            torch.cuda.memory._dump_snapshot('cuda_profile.pkl')
+            torch.cuda.memory._record_memory_history(enabled=None)
+
+        # Save into half-accuracy gzip (8,506 KB -> 3,236 KB)
+        print(f'\tSaving memories')
+        compressed_type = torch.float16
+        with gzip.open(fname, 'wb') as f:
+            func_attr = lambda attr: attr.type(compressed_type) if attr.dtype not in (torch.long, torch.bool) else attr
+            celltrip.utilities.dict_map(memories[ak], func_attr, inplace=True)
+            pickle.dump(memories, f)
 
 # %% [markdown]
-# #### CLI Output
+# #### Memory Summary
 
 # %%
-print('\tStatistics')
+# Statistics
+for ak in args.analysis_key:
+    print(f'Statistics {ak}')
 
-# Debug CLI
-## Stages
-stages, counts = np.unique(memories[args.analysis_key]['stages'], return_counts=True)
-print('\t\tSteps per Stage')
-for s, c in zip(stages, counts):
-    print(f'\t\t\t{s}: {c}')
-    
-## Memory
-print('\t\tMemory Sizes')
-for k in memories[args.analysis_key]:
-    t_size = sum([t.element_size() * t.nelement() if isinstance(t, torch.Tensor) else 64/8 for t in memories[args.analysis_key][k]]) / 1024**3
-    print(f'\t\t\t{k} size: {t_size:.3f} Gb')
+    ## Stages
+    stages, counts = np.unique(memories[ak]['stages'], return_counts=True)
+    print('\tSteps per Stage')
+    for s, c in zip(stages, counts):
+        print(f'\t\t\t{s}\t{c}')
+        
+    ## Memory
+    print('\tCompressed Memory Sizes')
+    for k in memories[ak]:
+        t_size = sum([t.element_size() * t.nelement() if isinstance(t, torch.Tensor) else 64/8 for t in memories[ak][k]]) / 1024**3
+        print(f'\t\t\t{k} size\t{t_size:.3f} Gb')
 
-## Performance
-print(f'\t\tAverage Reward: {memories[args.analysis_key]["rewards"].cpu().mean():.3f}')
-
-# %% [markdown]
-# #### Save Memories
-
-# %%
-print('\tSaving/loading memories...')
-
-# Save memories - MMD-MA Integration 1k Benchmark
-import gzip
-import pickle
-
-# No compression (8,506 KB)
-# with open('memories.pkl', 'wb') as f: pickle.dump(memories, f)
-# with open('memories.pkl', 'rb') as f: memories = pickle.load(f)
-
-# Half-accuracy gzip (3,236 KB)
-compressed_type = torch.float16
-with gzip.open('memories.pkl.gzip', 'wb') as f:
-    func_attr = lambda attr: attr.type(compressed_type) if attr.dtype not in (torch.long, torch.bool) else attr
-    func_mem = lambda mem: celltrip.utilities.dict_map(mem, func_attr, inplace=True)
-    pickle.dump(celltrip.utilities.dict_map(memories, func_mem, inplace=True), f)
-with gzip.open('memories.pkl.gzip', 'rb') as f: memories = pickle.load(f)
+    ## Performance
+    print(f'\tAverage Reward: {memories[ak]["rewards"].cpu().mean():.3f}')
 
 # %% [markdown]
 # ## Static Analyses
@@ -697,209 +706,217 @@ if 'perturbation' in memories:
 # # Dynamic Visualizations
 
 # %%
-print('Video plot')
+print('Plotting dynamic visualizations')
 
-# Prepare data
-present = memories[args.analysis_key]['present'].cpu()
-states = memories[args.analysis_key]['states'].cpu()
-stages = memories[args.analysis_key]['stages'].cpu()
-rewards = memories[args.analysis_key]['rewards'].cpu()
-base_env = celltrip.environments.trajectory(*[torch.empty((0, 0)) for _ in range(len(modalities))], **config['env'])
+# %% [markdown]
+# #### Video
 
-# Testing for portions of large datasets
-# sub_idx = np.random.choice(modalities[0].shape[0], 1_000, replace=False)
-# modalities, labels, times = [m[sub_idx] for m in modalities], labels[sub_idx], times[sub_idx]
-# present, states, rewards = present[:, sub_idx], states[:, sub_idx], rewards[:, sub_idx]
+# %%
+for ak in args.analysis_key:
+    print(f'\tVideo {ak}')
 
-# Testing for larger dims
-# states = torch.concatenate((states, states), dim=-1)
-# base_env.dim *= 2
+    # Prepare data
+    present = memories[ak]['present'].cpu()
+    states = memories[ak]['states'].cpu()
+    stages = memories[ak]['stages'].cpu()
+    rewards = memories[ak]['rewards'].cpu()
+    base_env = celltrip.environments.trajectory(*[torch.empty((0, 0)) for _ in range(len(modalities))], **config['env'])
 
-# Reduce dimensions
-if states.shape[-1] > 2*3 or args.force_reduction:
-    print('\tReducing state dimensionality')
-    # Get idx of last state in designated stage
-    stage_unique, stage_idx = np.unique(stages.numpy()[::-1], return_index=True)
-    stage_idx = memories[args.analysis_key]['stages'].shape[0] - stage_idx - 1
+    # Testing for portions of large datasets
+    # sub_idx = np.random.choice(modalities[0].shape[0], 1_000, replace=False)
+    # modalities, labels, times = [m[sub_idx] for m in modalities], labels[sub_idx], times[sub_idx]
+    # present, states, rewards = present[:, sub_idx], states[:, sub_idx], rewards[:, sub_idx]
 
-    # Choose reduction type
-    if args.reduction_type == 'umap':
-        import umap
-        fit_reducer = lambda data: umap.UMAP(n_components=3, random_state=args.seed).fit(data)
-        transform_reducer = lambda reducer, data: torch.Tensor(reducer.transform(data))
-    elif args.reduction_type == 'pca':
-        import sklearn.decomposition
-        fit_reducer = lambda data: sklearn.decomposition.PCA(n_components=3, random_state=args.seed).fit(data)
-        transform_reducer = lambda reducer, data: torch.Tensor(reducer.transform(data))
-    elif args.reduction_type is None or args.reduction_type == 'none':
-        initialize_reducer = lambda: None
-        transform_reducer = lambda reducer, data: data
+    # Testing for larger dims
+    # states = torch.concatenate((states, states), dim=-1)
+    # base_env.dim *= 2
 
-    # Get steady state
-    if args.analysis_key in ('convergence', 'discovery', 'perturbation',):
-        reducer = fit_reducer(states[stage_idx[0]])
-        get_reducer = lambda stage: reducer
-    elif args.analysis_key in ('temporal',):
-        get_reducer = lambda stage: fit_reducer(states[stage_idx[stage]])
+    # Reduce dimensions
+    if states.shape[-1] > 2*3 or args.force_reduction:
+        print('\t\tReducing state dimensionality')
+        # Get idx of last state in designated stage
+        stage_unique, stage_idx = np.unique(stages.numpy()[::-1], return_index=True)
+        stage_idx = memories[ak]['stages'].shape[0] - stage_idx - 1
 
-    # UMAP
-    states_3d = []; pbar = tqdm(total=states.shape[0]*states.shape[1], ascii=True, ncols=100)
-    for stage in stage_unique:
-        pbar.set_description(f'\t\tProjecting ({stage}/{stage_unique.max()})')
-        stage_states = states[stages==stage].reshape((-1, states.shape[-1]))
-        for i in range(0, stage_states.shape[0], args.reduction_batch):
-            states_3d.append(transform_reducer(get_reducer(stage), stage_states[i:i+args.reduction_batch]))
-            pbar.update(stage_states[i:i+args.reduction_batch].shape[0])
-    pbar.close()
-    states_3d = torch.concatenate(states_3d, dim=0).reshape((*states.shape[:-1], 3))
-    states_3d = torch.concatenate((states_3d, torch.zeros_like(states_3d)), dim=-1)
-else: states_3d = None
+        # Choose reduction type
+        if args.reduction_type == 'umap':
+            import umap
+            fit_reducer = lambda data: umap.UMAP(n_components=3, random_state=args.seed).fit(data)
+            transform_reducer = lambda reducer, data: torch.Tensor(reducer.transform(data))
+        elif args.reduction_type == 'pca':
+            import sklearn.decomposition
+            fit_reducer = lambda data: sklearn.decomposition.PCA(n_components=3, random_state=args.seed).fit(data)
+            transform_reducer = lambda reducer, data: torch.Tensor(reducer.transform(data))
+        elif args.reduction_type is None or args.reduction_type == 'none':
+            initialize_reducer = lambda: None
+            transform_reducer = lambda reducer, data: data
 
-# Skip data
-present, states, stages, rewards = present[::args.skip], states[::args.skip], stages[::args.skip], rewards[::args.skip]
-if states_3d is not None: states_3d = states_3d[::args.skip]
+        # Get steady state
+        if ak in ('convergence', 'discovery', 'perturbation',):
+            reducer = fit_reducer(states[stage_idx[0]])
+            get_reducer = lambda stage: reducer
+        elif ak in ('temporal',):
+            get_reducer = lambda stage: fit_reducer(states[stage_idx[stage]])
 
-# CLI
-print('\tGenerating video')
+        # UMAP
+        get_desc = lambda stage: f'\t\t\tProjecting ({stage}/{stage_unique.max()})'
+        states_3d = []; pbar = tqdm(total=states.shape[0]*states.shape[1], desc=get_desc(0), ascii=True, ncols=100)
+        for stage in stage_unique:
+            pbar.set_description(get_desc(stage))
+            stage_states = states[stages==stage].reshape((-1, states.shape[-1]))
+            for i in range(0, stage_states.shape[0], args.reduction_batch):
+                states_3d.append(transform_reducer(get_reducer(stage), stage_states[i:i+args.reduction_batch]))
+                pbar.update(stage_states[i:i+args.reduction_batch].shape[0])
+        pbar.close()
+        states_3d = torch.concatenate(states_3d, dim=0).reshape((*states.shape[:-1], 3))
+        states_3d = torch.concatenate((states_3d, torch.zeros_like(states_3d)), dim=-1)
+    else: states_3d = None
 
-# Parameters
-interval = 1e3*env.delta/3  # Time between frames (3x speedup)
-min_max_vel = 1e-2 if args.analysis_key in ('convergence', 'discovery') else -1  # Stop at first frame all vels are below target. 0 for full play
-frame_override = None  # Manually enter number of frames to draw
-rotations_per_second = .1  # Camera azimuthal rotations per second
-num_lines = 100
-if args.analysis_key == 'temporal': num_lines *= len(temporal['stages'])**2
-
-# Create plot based on key
-# NOTE: Standard 1-padding all around and between figures
-# NOTE: Left, bottom, width, height
-if args.analysis_key in ('convergence', 'discovery'):
-    figsize = (15, 10)
-    fig = plt.figure(figsize=figsize)
-    axs = [
-        fig.add_axes([1 /figsize[0], 1 /figsize[1], 8 /figsize[0], 8 /figsize[1]], projection='3d'),
-        fig.add_axes([10 /figsize[0], 5.5 /figsize[1], 4 /figsize[0], 3.5 /figsize[1]]),
-        fig.add_axes([10 /figsize[0], 1 /figsize[1], 4 /figsize[0], 3.5 /figsize[1]]),
-    ]
-    views = [
-        celltrip.utilities.View3D,
-        celltrip.utilities.ViewTemporalScatter,
-        celltrip.utilities.ViewSilhouette,
-    ]
-
-elif args.analysis_key == 'temporal':
-    figsize = (15, 10)
-    fig = plt.figure(figsize=figsize)
-    axs = [
-        fig.add_axes([1 /figsize[0], 1 /figsize[1], 8 /figsize[0], 8 /figsize[1]], projection='3d'),
-        fig.add_axes([10 /figsize[0], 5.5 /figsize[1], 4 /figsize[0], 3.5 /figsize[1]]),
-        fig.add_axes([10 /figsize[0], 1 /figsize[1], 4 /figsize[0], 3.5 /figsize[1]]),
-    ]
-    views = [
-        celltrip.utilities.View3D,
-        celltrip.utilities.ViewTemporalScatter,
-        celltrip.utilities.ViewTemporalDiscrepancy,
-    ]
-
-elif args.analysis_key in ('perturbation',):
-    figsize = (20, 10)
-    fig = plt.figure(figsize=figsize)
-    axs = [
-        fig.add_axes([1 /figsize[0], 1 /figsize[1], 8 /figsize[0], 8 /figsize[1]], projection='3d'),
-        fig.add_axes([10 /figsize[0], 5.5 /figsize[1], 8 /figsize[0], 3.5 /figsize[1]]),
-        fig.add_axes([10 /figsize[0], 1 /figsize[1], 3.5 /figsize[0], 3.5 /figsize[1]]),
-        fig.add_axes([14.5 /figsize[0], 1 /figsize[1], 3.5 /figsize[0], 3.5 /figsize[1]]),
-    ]
-    views = [
-        celltrip.utilities.View3D,
-        celltrip.utilities.ViewPerturbationEffect,
-        celltrip.utilities.ViewTemporalScatter,
-        celltrip.utilities.ViewSilhouette,
-    ]
-
-# Initialize views
-arguments = {
-    # Data
-    'present': present,
-    'states': states,
-    'states_3d': states_3d,
-    'stages': stages,
-    'rewards': rewards,
-    'modalities': modalities,
-    'labels': labels,
-    # Data params
-    'dim': base_env.dim,
-    'modal_targets': base_env.reward_distance_target,
-    'temporal_stages': temporal['stages'],
-    'perturbation_features': perturbation_features,
-    'perturbation_feature_names': perturbation_feature_names,
-    'partitions': times if args.analysis_key in ('temporal',) else None,
-    # Arguments
-    'interval': interval,
-    'skip': args.skip,
-    'seed': 42,
-    # Styling
-    'num_lines': num_lines,
-    'ms': 5,  # 3
-    'lw': 1,
-}
-views = [view(**arguments, ax=ax) for view, ax in zip(views, axs)]
-
-# Compile animation
-frames = states[..., env.dim:env.dim+3].square().sum(dim=-1).sqrt().max(dim=-1).values < min_max_vel
-frames = np.array([(frames[i] or frames[i+1]) if i != len(frames)-1 else frames[i] for i in range(len(frames))])  # Disregard interrupted sections of low movement
-frames = np.argwhere(frames)
-frames = frames[0, 0].item()+1 if len(frames) > 0 else states.shape[0]
-frames = frames if frame_override is None else frame_override
-
-# Update function
-pbar = tqdm(ascii=True, total=frames+1, desc='\t\tRendering', ncols=100)  # CLI, runs frame 0 twice
-def update(frame):
-    # Update views
-    for view in views:
-        view.update(frame)
+    # Skip data
+    present, states, stages, rewards = present[::args.skip], states[::args.skip], stages[::args.skip], rewards[::args.skip]
+    if states_3d is not None: states_3d = states_3d[::args.skip]
 
     # CLI
-    update_timestep = 1
-    if frame % update_timestep == 0:
-        pbar.update(update_timestep)
+    print('\t\tGenerating video')
 
-# Test individual frames
-# for frame in range(frames):
-#     update(frame)
-#     # print()
-#     # print('saving')
-#     fig.savefig(os.path.join('temp/plots', f'frame_{frame}.png'), dpi=300)
-#     break
+    # Parameters
+    interval = 1e3*env.delta/3  # Time between frames (3x speedup)
+    min_max_vel = 1e-2 if ak in ('convergence', 'discovery') else -1  # Stop at first frame all vels are below target. 0 for full play
+    frame_override = None  # Manually enter number of frames to draw
+    rotations_per_second = .1  # Camera azimuthal rotations per second
+    num_lines = 100
+    if ak == 'temporal': num_lines *= len(temporal['stages'])**2
 
-# Initialize animation
-ani = animation.FuncAnimation(
-    fig=fig,
-    func=update,
-    frames=frames,
-    interval=interval,
-)
+    # Create plot based on key
+    # NOTE: Standard 1-padding all around and between figures
+    # NOTE: Left, bottom, width, height
+    if ak in ('convergence', 'discovery'):
+        figsize = (15, 10)
+        fig = plt.figure(figsize=figsize)
+        axs = [
+            fig.add_axes([1 /figsize[0], 1 /figsize[1], 8 /figsize[0], 8 /figsize[1]], projection='3d'),
+            fig.add_axes([10 /figsize[0], 5.5 /figsize[1], 4 /figsize[0], 3.5 /figsize[1]]),
+            fig.add_axes([10 /figsize[0], 1 /figsize[1], 4 /figsize[0], 3.5 /figsize[1]]),
+        ]
+        views = [
+            celltrip.utilities.View3D,
+            celltrip.utilities.ViewTemporalScatter,
+            celltrip.utilities.ViewSilhouette,
+        ]
 
-# Display animation as it renders
-# plt.show()
+    elif ak == 'temporal':
+        figsize = (15, 10)
+        fig = plt.figure(figsize=figsize)
+        axs = [
+            fig.add_axes([1 /figsize[0], 1 /figsize[1], 8 /figsize[0], 8 /figsize[1]], projection='3d'),
+            fig.add_axes([10 /figsize[0], 5.5 /figsize[1], 4 /figsize[0], 3.5 /figsize[1]]),
+            fig.add_axes([10 /figsize[0], 1 /figsize[1], 4 /figsize[0], 3.5 /figsize[1]]),
+        ]
+        views = [
+            celltrip.utilities.View3D,
+            celltrip.utilities.ViewTemporalScatter,
+            celltrip.utilities.ViewTemporalDiscrepancy,
+        ]
 
-# Display complete animation
-# from IPython.display import HTML
-# HTML(ani.to_jshtml())
+    elif ak in ('perturbation',):
+        figsize = (20, 10)
+        fig = plt.figure(figsize=figsize)
+        axs = [
+            fig.add_axes([1 /figsize[0], 1 /figsize[1], 8 /figsize[0], 8 /figsize[1]], projection='3d'),
+            fig.add_axes([10 /figsize[0], 5.5 /figsize[1], 8 /figsize[0], 3.5 /figsize[1]]),
+            fig.add_axes([10 /figsize[0], 1 /figsize[1], 3.5 /figsize[0], 3.5 /figsize[1]]),
+            fig.add_axes([14.5 /figsize[0], 1 /figsize[1], 3.5 /figsize[0], 3.5 /figsize[1]]),
+        ]
+        views = [
+            celltrip.utilities.View3D,
+            celltrip.utilities.ViewPerturbationEffect,
+            celltrip.utilities.ViewTemporalScatter,
+            celltrip.utilities.ViewSilhouette,
+        ]
 
-# Save animation
-# NOTE: Requires `sudo apt-get install ffmpeg`
-file_type = 'mp4' if not args.gif else 'gif'
-if file_type == 'mp4': writer = animation.FFMpegWriter(fps=int(1e3/interval), extra_args=['-vcodec', 'libx264'], bitrate=8e3)  # Faster
-elif file_type == 'gif': writer = animation.FFMpegWriter(fps=int(1e3/interval))  # Slower
-fname =                                     f'{args.run_id}'
-if args.stage is not None: fname +=         f'_{args.stage:02}'
-fname +=                                    f'_{config["data"]["dataset"]}'
-fname +=                                    f'_{args.analysis_key}'
-fname +=                                    f'.{file_type}'
-ani.save(os.path.join(PLOT_FOLDER, fname), writer=writer, dpi=300)
+    # Initialize views
+    arguments = {
+        # Data
+        'present': present,
+        'states': states,
+        'states_3d': states_3d,
+        'stages': stages,
+        'rewards': rewards,
+        'modalities': modalities,
+        'labels': labels,
+        # Data params
+        'dim': base_env.dim,
+        'modal_targets': base_env.reward_distance_target,
+        'temporal_stages': temporal['stages'],
+        'perturbation_features': perturbation_features,
+        'perturbation_feature_names': perturbation_feature_names,
+        'partitions': times if ak in ('temporal',) else None,
+        # Arguments
+        'interval': interval,
+        'skip': args.skip,
+        'seed': 42,
+        # Styling
+        'num_lines': num_lines,
+        'ms': 5,  # 3
+        'lw': 1,
+    }
+    views = [view(**arguments, ax=ax) for view, ax in zip(views, axs)]
 
-# CLI
-pbar.close()
+    # Compile animation
+    frames = states[..., env.dim:env.dim+3].square().sum(dim=-1).sqrt().max(dim=-1).values < min_max_vel
+    frames = np.array([(frames[i] or frames[i+1]) if i != len(frames)-1 else frames[i] for i in range(len(frames))])  # Disregard interrupted sections of low movement
+    frames = np.argwhere(frames)
+    frames = frames[0, 0].item()+1 if len(frames) > 0 else states.shape[0]
+    frames = frames if frame_override is None else frame_override
+
+    # Update function
+    pbar = tqdm(ascii=True, total=frames+1, desc='\t\tRendering', ncols=100)  # CLI, runs frame 0 twice
+    def update(frame):
+        # Update views
+        for view in views:
+            view.update(frame)
+
+        # CLI
+        update_timestep = 1
+        if frame % update_timestep == 0:
+            pbar.update(update_timestep)
+
+    # Test individual frames
+    # for frame in range(frames):
+    #     update(frame)
+    #     # print()
+    #     # print('saving')
+    #     fig.savefig(os.path.join('temp/plots', f'frame_{frame}.png'), dpi=300)
+    #     break
+
+    # Initialize animation
+    ani = animation.FuncAnimation(
+        fig=fig,
+        func=update,
+        frames=frames,
+        interval=interval,
+    )
+
+    # Display animation as it renders
+    # plt.show()
+
+    # Display complete animation
+    # from IPython.display import HTML
+    # HTML(ani.to_jshtml())
+
+    # Save animation
+    # NOTE: Requires `sudo apt-get install ffmpeg`
+    file_type = 'mp4' if not args.gif else 'gif'
+    if file_type == 'mp4': writer = animation.FFMpegWriter(fps=int(1e3/interval), extra_args=['-vcodec', 'libx264'], bitrate=8e3)  # Faster
+    elif file_type == 'gif': writer = animation.FFMpegWriter(fps=int(1e3/interval))  # Slower
+    fname =                                     f'{args.run_id}'
+    if args.stage is not None: fname +=         f'_{args.stage:02}'
+    fname +=                                    f'_{config["data"]["dataset"]}'
+    fname +=                                    f'_{ak}'
+    fname +=                                    f'.{file_type}'
+    ani.save(os.path.join(PLOT_FOLDER, fname), writer=writer, dpi=300)
+
+    # CLI
+    pbar.close()
 
 

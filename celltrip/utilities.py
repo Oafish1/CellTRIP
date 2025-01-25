@@ -681,24 +681,31 @@ class Preprocessing:
                 np.array(np.mean(m, axis=0 if not total_statistics else None).reshape((1, -1)))
                 for m, m_sparse in zip(modalities, self.is_sparse_transform)
             ]
-            self.standardize_std = [
+            get_standardize_std = lambda total_statistics: [
                 np.std(m, axis=0 if not total_statistics else None, keepdims=True)
                 if not m_sparse else
-                np.array(np.sqrt(m.power(2).mean(axis=0 if not total_statistics else None) - np.square(m.mean(axis=0 if not total_statistics else None))))
+                np.array(np.sqrt(m.power(2).mean(axis=0 if not total_statistics else None) - np.square(m.mean(axis=0 if not total_statistics else None))).reshape((1, -1)))
                 for m, m_sparse in zip(modalities, self.is_sparse_transform)
             ]
+            self.standardize_std = get_standardize_std(total_statistics)
 
         # Filtering
         if self.top_variant is not None:
+            # Calculate per-feature variance if needed
+            st_std = self.standardize_std if not total_statistics else get_standardize_std(False)
+
+            # Compute mask
             self.filter_mask = [
                 np.argsort(std[0])[:-int(var+1):-1]
                 if var is not None else None
-                for std, var in zip(self.standardize_std, self.top_variant)
+                for std, var in zip(st_std, self.top_variant)
             ]
             modalities = [m[:, mask] if mask is not None else m for m, mask in zip(modalities, self.filter_mask)]
             
-            self.standardize_mean = [st[:, mask] if mask is not None else st for m, st, mask in zip(modalities, self.standardize_mean, self.filter_mask)]
-            self.standardize_std = [st[:, mask] if mask is not None else st for m, st, mask in zip(modalities, self.standardize_std, self.filter_mask)]
+            # Mask mean and std if needed
+            if not total_statistics:
+                self.standardize_mean = [st[:, mask] if mask is not None else st for m, st, mask in zip(modalities, self.standardize_mean, self.filter_mask)]
+                self.standardize_std = [st[:, mask] if mask is not None else st for m, st, mask in zip(modalities, self.standardize_std, self.filter_mask)]
 
         # PCA
         if self.pca_dim is not None:

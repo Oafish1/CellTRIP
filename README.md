@@ -12,11 +12,11 @@ cellTRIP confers several unique advantages over comparable methods:
 
 | Application | Preview | Description | Performance |
 | --- | --- | --- | --- |
-| Multimodal integration | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/rypltvk5_MMD-MA_convergence.gif" width="400"> | Policy trained on 300 simulated single-cells with multimodal input applied to an integration environment | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/rypltvk5_MMD-MA_comparison.png" width="200"> |
-| Cross-modal imputation | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/32jqyk54_MERFISH_convergence.gif" width="400"> | Imputation of spatial data from gene expression, simulated until convergence using a cellTRIP trained model | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/rypltvk5_MMD-MA_comparison.png" width="200"> |
-| Development simulation | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/32jqyk54_MERFISH_discovery.gif" width="400"> | Cell differentiation simulation on single-cell brain data, with cellTRIP agents controlling cell movement in the previously unseed environment |  |
-| Trajectory recovery, inference, and prediction | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/brf6n6sn_TemporalBrain_temporal.gif" width="400"> | Trajectory estimation on single-cell multimodal human brain data across several age groups | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/rypltvk5_MMD-MA_comparison.png" width="200"> |
-| Perturbation analysis | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/c8zsunc9_ISS_perturbation.gif" width="400"> | Estimated effect size calculation of randomly selected genes from a cellTRIP imputation model on spatial data | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/rypltvk5_MMD-MA_comparison.png" width="200"> |
+| Multimodal integration | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/rypltvk5_MMD-MA_convergence.gif" width="300"> | Policy trained on 300 simulated single-cells with multimodal input applied to an integration environment | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/rypltvk5_MMD-MA_comparison.png" width="200"> |
+| Cross-modal imputation | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/32jqyk54_MERFISH_convergence.gif" width="300"> | Imputation of spatial data from gene expression, simulated until convergence using a cellTRIP trained model | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/32jqyk54_MERFISH_comparison.png" width="200"> |
+| Development simulation | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/32jqyk54_MERFISH_discovery.gif" width="300"> | Cell differentiation simulation on single-cell brain data, with cellTRIP agents controlling cell movement in the previously unseed environment |  |
+| Trajectory recovery, inference, and prediction | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/brf6n6sn_TemporalBrain_temporal.gif" width="300"> | Trajectory estimation on single-cell multimodal human brain data across several age groups | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/rypltvk5_MMD-MA_comparison.png" width="200"> |
+| Perturbation analysis | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/c8zsunc9_ISS_perturbation.gif" width="300"> | Estimated effect size calculation of randomly selected genes from a cellTRIP imputation model on spatial data | <img src="https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots/c8zsunc9_ISS_comparison.png" width="200"> |
 
 
 ## Installation Instructions (~7 minutes)
@@ -27,9 +27,7 @@ To install cellTRIP, first clone and navigate to the repository,
 git clone https://github.com/Oafish1/cellTRIP
 cd cellTRIP
 
-# cellTRIP may also be installed directly from GitHub without cloning, but
-# does not have version controlled dependencies, and is therefore not
-# recommended
+# cellTRIP may also be installed directly from GitHub without cloning, but does not have version controlled dependencies, and is therefore not recommended
 pip install celltrip@git+https://git@github.com/Oafish1/cellTRIP
 ```
 
@@ -52,7 +50,6 @@ sudo apt-get install ffmpeg poppler-utils
 pip install -r requirements.txt
 pip install -e .
 ```
-<!-- python -m piptools compile -->
 
 
 ## Usage
@@ -68,3 +65,16 @@ or as a python package,
 ```python
 # TODO
 ```
+
+After training the model, analysis can be performed using the `examples/analysis.py` CLI interface,
+
+```bash
+# TODO
+```
+
+this script will generate...
+
+
+<!-- DEV NOTES -->
+<!-- Compiling requirements: python -m piptools compile -->
+<!-- Find https://raw.githubusercontent.com/Oafish1/cellTRIP/refs/heads/main/plots, Replace ./plots to test images -->

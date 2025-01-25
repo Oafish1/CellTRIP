@@ -1,8 +1,23 @@
-### 1.0.0+2025-01-23 (1-2)
+### 1.0.0+2025-01-24
+- `TemporalBrain` preliminary video output
+- Add memory saving/loading for multiple analysis keys in `analysis`
+- Automatic overwriting for `convert_video_to_gif` script
+- Capability to run multiple analysis keys in the same call for `analysis`
+- Change memory save location for analyses
+- Correct stage printout for simulation
+- Fix in `Preprocessing` std for sparse data with `total_statistics` enabled
+- General reruns for MMD-MA, MERFISH, and ISS
+- Improve GIF quality
+- Move memory readouts after compression and saving/loading
+- README additions and revisions
+- Script for running other scripts on files of all matching extensions, primarily for `plots` folder
+
+### 1.0.0+2025-01-23 (1-3)
 - Add UMAP and PCA options for high-dimensional projections in `analysis`
 - Bugfix for infinitely scaling discrepancy in `ViewTemporalDiscrepancy`
 - Compatibility with reduced states in `View3D`
 - Fix incorrect identification of `modal_targets` using `base_env` in analysis
+- Fix minor progress bar formatting issue with description not propagating until first completed iteration
 - Formatting for `tqdm` in `analysis`, especially for notebooks
 - Lower tensor precision inplace for saving memories
 - Properly assign number of cell pairings to temporal analysis
