@@ -718,6 +718,8 @@ class Preprocessing:
                 # sklearn.decomposition.TruncatedSVD(n_components=dim).fit(m)
                 if dim is not None else None
                 for m, m_sparse, dim in zip(modalities, self.is_sparse_transform, self.pca_dim)]
+            
+        return self
 
     def transform(self, modalities, features=None, **kwargs):
         # Filtering
@@ -1199,6 +1201,10 @@ class ViewTemporalDiscrepancy(ViewModalDistBase):
             [', '.join([str(s) for s in stage]) for stage in self.temporal_stages],
         )
         self.ax.set_xticklabels(self.ax.get_xticklabels(), rotation=45, ha='center', va='baseline')
+        max_height = max([l.get_window_extent(renderer=self.ax.figure.canvas.get_renderer()).height for l in self.ax.get_xticklabels()])
+        fontsize = self.ax.get_xticklabels()[0].get_size()
+        pad = fontsize / 2 + max_height / 2
+        self.ax.tick_params(axis='x', pad=pad)
         self.ax.set_xlim([-.5, len(self.temporal_stages)-.5])
         self.ax.set_ylim([0, 1]); self.current_y_max = 0
         self.ax.set_title('Temporal Discrepancy')

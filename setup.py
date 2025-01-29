@@ -9,7 +9,7 @@ with open('README.md') as f:
 setup(
     name='celltrip',
     author='Noah Cohen Kalafut',
-    description='Cell Trajectory Recovery, Imputation, and Perturbation to Uncover Temporal and Spatial Dynamics using Multi-Agent Reinforcement Learning',
+    description='CellTRIP, a Multi-Agent Reinforcement Learning Approach for Cell Trajectory Recovery, Cross-Modal Imputation, and Perturbation in Time and Space',
     long_description=readme,
     long_description_content_type="text/markdown",
     version=__version__,

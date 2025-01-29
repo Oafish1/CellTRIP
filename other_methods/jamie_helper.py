@@ -13,6 +13,7 @@ parser.add_argument('fname2', type=str)
 parser.add_argument('-s', '--seed', type=int, default=42)
 parser.add_argument('-t', '--target', type=int)
 parser.add_argument('-p', type=int, required=True)
+parser.add_argument('--suffix', type=str)
 parsed = parser.parse_args()
 
 # Load data
@@ -26,8 +27,11 @@ projection = jm.fit_transform(dataset=dataset)
 # Impute if needed
 if parsed.target is not None:
     projection = [None for _ in range(2)]
-    projection[parsed.target-1] = jm.modal_predict(dataset[-parsed.target+1], parsed.target-1)
+    projection[parsed.target-1] = jm.modal_predict(dataset[2-parsed.target], 2-parsed.target)
 
 # Write to file
 for i, proj in enumerate(projection):
-    if proj is not None: np.savetxt(f'I{i+1}.txt', proj)
+    fname = f'P{i+1}' if parsed.target is None else f'I{i+1}'
+    if parsed.suffix is not None: fname += f'_{parsed.suffix}'
+    fname += '.txt'
+    if proj is not None: np.savetxt(fname, proj)

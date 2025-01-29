@@ -17,6 +17,7 @@ parser.add_argument('fname1', type=str)
 parser.add_argument('fname2', type=str)
 parser.add_argument('-a', '--align', type=str, required=True)
 parser.add_argument('-p', type=int, required=True)
+parser.add_argument('--suffix', type=str)
 parsed = parser.parse_args()
 
 # Load data
@@ -41,4 +42,7 @@ else:
 
 # Write to file
 for i, proj in enumerate(projection):
-    np.savetxt(f'P{i+1}.txt', proj)
+    fname = f'P{i+1}'
+    if parsed.suffix is not None: fname += f'_{parsed.suffix}'
+    fname += '.txt'
+    np.savetxt(fname, proj)

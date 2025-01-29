@@ -1,10 +1,29 @@
-### 1.0.0+2025-01-24
+### 1.0.0+2025-01-27
+- Add automatic method selection in `other_methods` notebook
+- Add CLI output for `other_methods` notebook
+- Add imputation comparison visualization
+- Add preprocessing to other method runs
+- Additional CLI output for integration comparison
+- Apply skip before projection for `analysis`
+- Change title and name capitalization
+- Fix `ViewTemporalDiscrepancy` x-label positioning
+- Fix arrow formatting for comparison
+- Fix for `jamie_helper` imputing wrong modality
+- Multi-run validation capability for alternate methods
+- Revise `analysis` comparison plot
+- Revise return behavior for `Preprocessing` class
+- Summary statistics and visualization for other methods in comparison
+- Use lazy loading for comparison plot
+- Use WandB run id for other method preprocessing
+
+### 1.0.0+2025-01-24 (1-2)
 - `TemporalBrain` preliminary video output
 - Add memory saving/loading for multiple analysis keys in `analysis`
 - Automatic overwriting for `convert_video_to_gif` script
 - Capability to run multiple analysis keys in the same call for `analysis`
 - Change memory save location for analyses
 - Correct stage printout for simulation
+- Fix CLI `analysis` output indentation (x2)
 - Fix in `Preprocessing` std for sparse data with `total_statistics` enabled
 - General reruns for MMD-MA, MERFISH, and ISS
 - Improve GIF quality
