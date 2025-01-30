@@ -19,10 +19,18 @@ parsed = parser.parse_args()
 # Load data
 X1, X2 = np.loadtxt(parsed.fname1), np.loadtxt(parsed.fname2)
 dataset = [X1, X2]
+input_dataset = dataset
+
+# Seed and random select
+# TODO: Replace
+if parsed.target is not None:
+    np.random.seed(parsed.seed)
+    rand_idx = np.random.choice(dataset[2-parsed.target].shape[0], int(.8*dataset[2-parsed.target].shape[0]), replace=False)
+    input_dataset = [d[rand_idx] for d in input_dataset]
 
 # Project
 jm = jamie.JAMIE(manual_seed=parsed.seed)
-projection = jm.fit_transform(dataset=dataset)
+projection = jm.fit_transform(dataset=input_dataset)
 
 # Impute if needed
 if parsed.target is not None:

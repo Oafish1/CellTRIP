@@ -1,9 +1,10 @@
 from collections import defaultdict
 import gzip
+import os
 import pickle
 import re
-import os
 import tempfile
+import warnings
 
 import matplotlib as mpl
 import matplotlib.collections as mpl_col
@@ -47,13 +48,14 @@ torch.set_grad_enabled(False);
 
 # %% [markdown]
 # - TODO
-#   - Figure out why MMD-MA inter-cell distances are lower than usual
-#   - Add imputation and perturbation to comparison analysis
-#   - Add named memory saving
-#   - Add PCA/UMAP
-#   - Add arguments like wandb username/project, etc.
-#   - Find out how wandb can be used locally
-#   - Add bash script to loop through a script on files of a particular extension
+#   - Synchronize colors for each method
+#   - Add perturbation and trajectory
+#   - Try using known reference points (i.e. positional data) to impute absolute, rather than relative, values
+#   - Maybe add buffer to perturbation analysis start
+#   - Add arguments like wandb username/project, etc. as well as local db
+
+# %% [markdown]
+# ## Arguments
 
 # %%
 # Arguments
@@ -126,6 +128,10 @@ group.add_argument(
 # Video parameters
 group = parser.add_argument_group('Video Parameters')
 group.add_argument(
+    '--novid',
+    action='store_true',
+    help='Skip video generation')
+group.add_argument(
     '-g', '--gif',
     action='store_true',
     help='Output as a GIF rather than MP4')
@@ -169,7 +175,8 @@ group.add_argument(
 # '473vyon2': ISS NR
 
 # Defaults for notebook
-# args = parser.parse_args('--total_statistics --force rypltvk5 convergence discovery temporal perturbation'.split(' '))
+# args = parser.parse_args('--total_statistics rypltvk5 convergence discovery temporal perturbation'.split(' '))
+# args = parser.parse_args('--novid 32jqyk54 convergence discovery temporal perturbation'.split(' '))
 args = parser.parse_args()
 
 # Set env vars
@@ -182,7 +189,7 @@ os.environ['CUDA_VISIBLE_DEVICES']=args.gpu
 # Load run
 print(f'Loading run {args.run_id}')
 api = wandb.Api()
-run = api.run(f'oafish/cellTRIP/{args.run_id}')
+run = api.run(f'oafish/CellTRIP/{args.run_id}')
 config = defaultdict(lambda: {})
 for k, v in run.config.items():
     dict_name, key = k.split('/')
@@ -190,11 +197,11 @@ for k, v in run.config.items():
 config = dict(config)
 
 # Reproducibility
-seed = args.seed if args.seed is not None else config['note']['seed']
+notebook_seed = args.seed if args.seed is not None else config['note']['seed']  # Potentially destructive if randomly sampled
 # torch.use_deterministic_algorithms(True)
-torch.manual_seed(seed)
-if torch.cuda.is_available(): torch.cuda.manual_seed(seed)
-np.random.seed(seed)
+torch.manual_seed(notebook_seed)
+if torch.cuda.is_available(): torch.cuda.manual_seed(notebook_seed)
+np.random.seed(notebook_seed)
 
 # Get latest policy
 print('\tFinding model')
@@ -240,6 +247,7 @@ times = types[0][:, -1]
 env = celltrip.environments.trajectory(*modalities, **config['env'], **config['stages']['env'][0], device=DEVICE)
 for weight_stage in config['stages']['env'][1:latest_mdl[0]+1]:
     env.set_rewards(weight_stage)
+application_type = 'integration' if len(env.reward_distance_target) == len(modalities) else 'imputation'
 
 # Load model file
 load_type = 'WGT'
@@ -272,7 +280,6 @@ policy.actor.set_action_std(1e-7)
 
 # %%
 # Choose key
-# TODO: Calculate all, plot one
 optimize_memory = True  # Saves memory by shrinking env based on present, also fixes reward calculation for non-full present mask
 perturbation_features = [np.random.choice(len(fs), 10, replace=False) for i, fs in enumerate(features) if (i not in env.reward_distance_target) or (len(env.reward_distance_target) == len(modalities))]
 
@@ -555,34 +562,10 @@ fname = f'{args.run_id}_{config["data"]["dataset"]}_performance.pdf'
 fig.savefig(os.path.join(PLOT_FOLDER, fname), dpi=300)
 
 # %% [markdown]
-# #### Performance Comparison
+# #### Integration Performance Comparison
 
 # %%
-# Method comparison
-if 'convergence' in memories:
-    print('\tIntegration comparison')
-    
-    # Comparison metrics
-    metric_rand = lambda X: np.random.rand()
-    metric_silhouette = lambda X: sklearn.metrics.silhouette_score(X, labels)
-    metric_ch_score = lambda X: sklearn.metrics.calinski_harabasz_score(X, labels)
-    def metric_knn_ami(X):
-        knn = sklearn.neighbors.KNeighborsClassifier(n_neighbors=10)
-        knn.fit(X, labels)
-        pred = knn.predict(X)
-        return sklearn.metrics.adjusted_mutual_info_score(labels, pred)
-
-    metric_tuples = {
-        'rand': (metric_rand, {'label': 'Random'}),
-        'sc': (metric_silhouette, {'label': 'Silhouette Coefficient'}),
-        'knn_ami': (metric_knn_ami, {'label': 'KNN Adjusted Mutual Information'}),
-        'ch': (metric_ch_score, {'label': 'Calinski Harabasz Index', 'scale': 'log'}),
-    }
-
-    # Select metrics
-    metric_x, kwargs_x = metric_tuples['ch']
-    metric_y, kwargs_y = metric_tuples['knn_ami']
-
+def get_other_methods(prefix):
     # Get other methods
     method_results = {}
     try:
@@ -592,21 +575,76 @@ if 'convergence' in memories:
     for name in method_names:
         # Get output files
         files = os.listdir(os.path.join(method_dir, name))
-        r = re.compile('^P\d+.txt$')
+        r = re.compile(f'^{prefix}(\d+)(?:_(\d+))?.txt$')
         files = list(filter(r.match, files))
 
         # Record
-        for i, file in enumerate(files):
-            proj = np.loadtxt(os.path.join(method_dir, name, file))
-            method_results[(name, i)] = proj
+        for file in files:
+            modality, seed = r.match(file)[1], r.match(file)[2]
+            method_results[(name, modality, seed)] = os.path.join(method_dir, name, file)
 
-    # Add cellTRIP
-    method_results[('cellTRIP', -1)] = memories['convergence']['states'][-1].detach().cpu()
+    return method_results
+
+# %%
+# Comparison metrics
+metric_rand = lambda X: np.random.rand()
+metric_silhouette = lambda X: sklearn.metrics.silhouette_score(X, labels)
+metric_ch_score = lambda X: sklearn.metrics.calinski_harabasz_score(X, labels)
+def metric_knn_ami(X):
+    knn = sklearn.neighbors.KNeighborsClassifier(n_neighbors=10)
+    knn.fit(X, labels)
+    pred = knn.predict(X)
+    return sklearn.metrics.adjusted_mutual_info_score(labels, pred)
+
+# Metric metadata
+metric_tuples = {
+    'rand': (metric_rand, {'label': 'Random'}),
+    'sc': (metric_silhouette, {'label': 'Silhouette Coefficient'}),
+    'knn_ami': (metric_knn_ami, {'label': 'KNN Adjusted Mutual Information'}),
+    'ch': (metric_ch_score, {'label': 'Calinski Harabasz Index', 'scale': 'log'}),
+}
+
+# Metric selection per analysis type
+comparison_dict = {
+    'integration': {
+        'prefix': 'P',
+        'metrics': (metric_tuples['ch'], metric_tuples['knn_ami']),
+    }
+}
+
+# Integration method comparison
+desired_application = 'integration'
+if 'convergence' in args.analysis_key and application_type == desired_application:
+    print(f'\tComparison Integration')
+
+    # Select metrics
+    (metric_x, kwargs_x), (metric_y, kwargs_y) = comparison_dict[desired_application]['metrics']
+
+    # Get other methods
+    method_results = get_other_methods(comparison_dict["convergence"]["prefix"])
+
+    # Add CellTRIP
+    method_results[('CellTRIP', '-1', notebook_seed)] = memories['convergence']['states'][-1].detach().cpu()
 
     # Compile and calculate performances
-    performance = pd.DataFrame(columns=['Method', 'Modality', 'x', 'y'])
-    for key, data in method_results.items():
-        performance.loc[performance.shape[0]] = [key[0], key[1], metric_x(data), metric_y(data)]
+    raw_performance = pd.DataFrame(columns=['Method', 'Modality', 'Seed', 'x', 'y'])
+    for key, fname in method_results.items():
+        method, modality, seed = key
+        if method == 'CellTRIP': data = fname
+        else: data = np.loadtxt(fname)
+        raw_performance.loc[raw_performance.shape[0]] = [*key, metric_x(data), metric_y(data)]
+
+    # Aggregate to group statistics
+    group = raw_performance.groupby(['Method', 'Modality'])
+    group_mean = group[['x', 'y']].mean().rename(columns=lambda n: f'{n}_mean')
+    group_var = group[['x', 'y']].var().rename(columns=lambda n: f'{n}_var')
+    group_count = group[['x']].count().rename(columns={'x': 'Count'})
+    performance = group_mean.join(group_var).join(group_count).fillna(0).reset_index()
+
+    # Print statistics
+    print(f'\t\t{"Method":<10}\tModal\tx Mean\tx Var\ty Mean\ty Var\tCount')
+    for i, r in performance.sort_values('Modality').iterrows():
+        print(f'\t\t{r["Method"]:<8}\t{r["Modality"]}\t{r["x_mean"]:.3f}\t{r["x_var"]:.3f}\t{r["y_mean"]:.3f}\t{r["y_var"]:.3f}\t{r["Count"]}')
 
     # Plot with text
     fig, ax = plt.subplots(1, 1, figsize=(6, 6), sharex=True, layout='constrained')
@@ -618,44 +656,147 @@ if 'convergence' in memories:
         
         # Plot
         ax.scatter(
-            r['x'],
-            r['y'],
+            r['x_mean'],
+            r['y_mean'],
             color=method_colors[r['Method']],
             s=100,
         )
 
         # Cross lines
-        ax.axvline(x=r['x'], ls='--', alpha=.1, color='black', zorder=.3)
-        ax.axhline(y=r['y'], ls='--', alpha=.1, color='black', zorder=.3)
+        ax.plot([r['x_mean']-r['x_var'], r['x_mean']+r['x_var']], 2*[r['y_mean']], ls='--', color='gray', zorder=.3)
+        ax.plot(2*[r['x_mean']], [r['y_mean']-r['y_var'], r['y_mean']+r['y_var']], ls='--', color='gray', zorder=.3)
 
         # Annotate
         text = f'{r["Method"]}' + (f' ({r["Modality"]})' if r['Modality'] != -1 else '')
         annotations.append(ax.text(
-            r['x'], r['y'], text,
+            r['x_mean'], r['y_mean'], text,
             ha='center', va='center', fontsize='large'))
 
     # Styling
-    ax.spines[['right', 'top', 'bottom', 'left']].set_visible(False)
+    # ax.spines[['right', 'top', 'bottom', 'left']].set_visible(False)
+    # ax.axvline(x=0, ls='-', alpha=.6, color='black', zorder=.1)
+    # ax.axhline(y=0, ls='-', alpha=.6, color='black', zorder=.1)
     ax.set(
         **{'x'+k: v for k, v in kwargs_x.items()},
         **{'y'+k: v for k, v in kwargs_y.items()},
     )
-    ax.axvline(x=0, ls='-', alpha=.6, color='black', zorder=.1)
-    ax.axhline(y=0, ls='-', alpha=.6, color='black', zorder=.1)
+    ax.tick_params(axis='both', which='both', bottom=True, left=True)
 
     # Adjust Annotation Positions
     from adjustText import adjust_text
     adjust_text(
         annotations,
-        expand=(1.2, 2),
-        arrowprops=dict(arrowstyle='->', color='black', zorder=.3),
+        # add_objects=ax.get_children()[0],
+        expand=(2, 3), 
+        arrowprops=dict(
+            arrowstyle='-|>',
+            mutation_scale=10,
+            shrinkA=2, shrinkB=7,
+            color='black',
+        ),
     )
 
     # Save plot
     fname =                                     f'{args.run_id}'
     if args.stage is not None: fname +=         f'_{args.stage:02}'
     fname +=                                    f'_{config["data"]["dataset"]}'
-    fname +=                                    f'_comparison.pdf'
+    fname +=                                    f'_comparison'
+    fname +=                                    f'_{desired_application}.pdf'
+    fig.savefig(os.path.join(PLOT_FOLDER, fname), dpi=300)
+
+# %% [markdown]
+# #### Imputation Performance Comparison
+
+# %%
+# Single modality imputation
+if 'convergence' in args.analysis_key and application_type == 'imputation' and len(env.reward_distance_target) == 1:
+    # Get other methods
+    method_results = get_other_methods('I')
+
+    # Add CellTRIP
+    raw_celltrip = memories['convergence']['states'][-1].detach().cpu()[:, :env.dim]
+    # shrunk_celltrip = sklearn.decomposition.PCA(n_components=modalities[env.reward_distance_target[0]].shape[1]).fit_transform(raw_celltrip)
+    method_results[('CellTRIP', env.reward_distance_target[0]+1, notebook_seed)] = raw_celltrip
+
+    # Calculate modal dist
+    # raw_modalities = ppc.cast(ppc.inverse_transform(ppc.inverse_cast(modalities)))
+    modal_dist = [celltrip.utilities.euclidean_distance(m) for m in modalities]
+
+    # Compile and calculate performances
+    raw_performance = None
+    for key, fname in method_results.items():
+        method, modality, seed = key
+        if method == 'CellTRIP': data = fname
+        else: data = np.loadtxt(fname)
+        data = torch.Tensor(data)
+
+        # Scale results
+        if method == 'CellTRIP': data = data * np.sqrt(data.shape[1])
+        # if not method == 'CellTRIP': data = data / ppc.standardize_std[int(modality)-1]
+
+        # Compute error
+        data_dist = celltrip.utilities.euclidean_distance(data)
+        sample_mse = (data_dist - modal_dist[int(modality)-1].cpu()).square().mean(dim=-1)
+        feature_mse = (data_dist - modal_dist[int(modality)-1].cpu()).square().mean(dim=0)
+
+        # Record
+        df = pd.DataFrame({'Method': method, 'Modality': modality, 'Seed': seed, 'Metric': 'Sample Inter-Cell MSE', 'Value': sample_mse})
+        if raw_performance is None: raw_performance = df
+        else: raw_performance = pd.concat((raw_performance, df), ignore_index=True, axis=0)
+
+    # Fill NA (For non-random methods)
+    raw_performance = raw_performance.fillna(0)
+
+    # Plot performances
+    main_metric = 'Sample Inter-Cell MSE'
+
+    # Filter to only the best result from each method
+    best_seeds = (
+        raw_performance.loc[raw_performance['Metric'] == main_metric]
+        .groupby(['Method', 'Modality', 'Seed'])[['Value']].mean().reset_index()
+        .sort_values('Value', ascending=False).groupby(['Method', 'Modality'])[['Seed']].first().reset_index().to_numpy()
+    )
+    mask = np.zeros(raw_performance.shape[0], dtype=bool)
+    for idx in best_seeds:
+        mask += (raw_performance.to_numpy()[:, :3] == idx).all(axis=-1)
+    filtered_performance = raw_performance.iloc[mask]
+
+    # Generate visuals
+    filtered_performance = filtered_performance.loc[filtered_performance['Metric'] == main_metric]
+    order = filtered_performance['Method'].unique()
+    fig, ax = plt.subplots(1, 1, figsize=(3, 6), sharex=True, layout='constrained')
+    sns.boxplot(
+        data=filtered_performance,
+        x='Method', y='Value', hue='Method',
+        order=order,
+        ax=ax)
+    with warnings.catch_warnings(record=False) as w:
+        warnings.simplefilter('ignore')
+        sns.stripplot(
+            data=filtered_performance.sample(frac=.05),
+            x='Method', y='Value', hue='Method',
+            order=order,
+            size=2, palette=sns.color_palette(['black']), legend=False, dodge=False, ax=ax)
+
+    # Styling
+    ax.set(title=main_metric, xlabel=None, ylabel=None)
+    ax.tick_params(axis='both', which='both', bottom=False, left=True)
+    ax.set_yscale('log')
+
+    # Xlabels
+    ax.set_xticks(ax.get_xticks())
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='center', va='baseline')
+    max_height = max([l.get_window_extent(renderer=ax.figure.canvas.get_renderer()).height for l in ax.get_xticklabels()])
+    fontsize = ax.get_xticklabels()[0].get_size()
+    pad = fontsize / 2 + max_height / 2
+    ax.tick_params(axis='x', pad=pad)
+
+    # Save plot
+    fname =                                     f'{args.run_id}'
+    if args.stage is not None: fname +=         f'_{args.stage:02}'
+    fname +=                                    f'_{config["data"]["dataset"]}'
+    fname +=                                    f'_comparison'
+    fname +=                                    f'_imputation.pdf'
     fig.savefig(os.path.join(PLOT_FOLDER, fname), dpi=300)
 
 # %% [markdown]
@@ -703,7 +844,7 @@ if 'perturbation' in memories:
         print()
 
 # %% [markdown]
-# # Dynamic Visualizations
+# ## Dynamic Visualizations
 
 # %%
 print('Plotting dynamic visualizations')
@@ -713,6 +854,7 @@ print('Plotting dynamic visualizations')
 
 # %%
 for ak in args.analysis_key:
+    if args.novid: break
     print(f'\tVideo {ak}')
 
     # Prepare data
@@ -731,6 +873,10 @@ for ak in args.analysis_key:
     # states = torch.concatenate((states, states), dim=-1)
     # base_env.dim *= 2
 
+    # Skip data
+    present, states, stages, rewards = present[::args.skip], states[::args.skip], stages[::args.skip], rewards[::args.skip]
+    # if states_3d is not None: states_3d = states_3d[::args.skip]
+
     # Reduce dimensions
     if states.shape[-1] > 2*3 or args.force_reduction:
         print('\t\tReducing state dimensionality')
@@ -741,11 +887,11 @@ for ak in args.analysis_key:
         # Choose reduction type
         if args.reduction_type == 'umap':
             import umap
-            fit_reducer = lambda data: umap.UMAP(n_components=3, random_state=args.seed).fit(data)
+            fit_reducer = lambda data: umap.UMAP(n_components=3, random_state=notebook_seed).fit(data)
             transform_reducer = lambda reducer, data: torch.Tensor(reducer.transform(data))
         elif args.reduction_type == 'pca':
             import sklearn.decomposition
-            fit_reducer = lambda data: sklearn.decomposition.PCA(n_components=3, random_state=args.seed).fit(data)
+            fit_reducer = lambda data: sklearn.decomposition.PCA(n_components=3, random_state=notebook_seed).fit(data)
             transform_reducer = lambda reducer, data: torch.Tensor(reducer.transform(data))
         elif args.reduction_type is None or args.reduction_type == 'none':
             initialize_reducer = lambda: None
@@ -770,11 +916,8 @@ for ak in args.analysis_key:
         pbar.close()
         states_3d = torch.concatenate(states_3d, dim=0).reshape((*states.shape[:-1], 3))
         states_3d = torch.concatenate((states_3d, torch.zeros_like(states_3d)), dim=-1)
-    else: states_3d = None
-
-    # Skip data
-    present, states, stages, rewards = present[::args.skip], states[::args.skip], stages[::args.skip], rewards[::args.skip]
-    if states_3d is not None: states_3d = states_3d[::args.skip]
+    else:
+        states_3d = None
 
     # CLI
     print('\t\tGenerating video')
@@ -854,7 +997,7 @@ for ak in args.analysis_key:
         # Arguments
         'interval': interval,
         'skip': args.skip,
-        'seed': 42,
+        'seed': notebook_seed,
         # Styling
         'num_lines': num_lines,
         'ms': 5,  # 3
@@ -870,7 +1013,7 @@ for ak in args.analysis_key:
     frames = frames if frame_override is None else frame_override
 
     # Update function
-    pbar = tqdm(ascii=True, total=frames+1, desc='\t\tRendering', ncols=100)  # CLI, runs frame 0 twice
+    pbar = tqdm(ascii=True, total=frames+1, desc='\t\t\tRendering', ncols=100)  # CLI, runs frame 0 twice
     def update(frame):
         # Update views
         for view in views:

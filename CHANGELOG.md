@@ -1,3 +1,10 @@
+### 1.0.0+2025-01-29
+- Add video generation skip argument to `analysis`
+- File exports
+- Fix label leak for MLP and KNN comparison methods
+- Remove notebook seed from `Variation` method
+- Training/validation for other imputation methods
+
 ### 1.0.0+2025-01-27
 - Add automatic method selection in `other_methods` notebook
 - Add CLI output for `other_methods` notebook
