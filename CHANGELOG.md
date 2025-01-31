@@ -1,3 +1,13 @@
+### 1.0.0+2025-01-30
+- Add `total_statistics` legacy compatibility to `other_methods` notebook
+- Additional CLI output and revisions for `analysis`
+- Bugfix for integration comparison
+- Complete reruns for MMD-MA, MERFISH, and ISS visualizations
+- Figure directory cleanup
+- Figure updates
+- File name change for loss plot from `_performance.pdf` to `_loss.pdf`
+- Reruns for `other_methods` on MMD-MA, MERFISH, and ISS
+
 ### 1.0.0+2025-01-29
 - Add video generation skip argument to `analysis`
 - File exports

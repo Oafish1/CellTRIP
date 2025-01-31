@@ -48,6 +48,9 @@ torch.set_grad_enabled(False);
 
 # %% [markdown]
 # - TODO
+#   - Add outdir, datadir, etc.
+#   - Get file location rather than `abspath`
+#   - Perturbation analysis for all features, filtered to only important ones, as well as .txt output
 #   - Synchronize colors for each method
 #   - Add perturbation and trajectory
 #   - Try using known reference points (i.e. positional data) to impute absolute, rather than relative, values
@@ -175,9 +178,10 @@ group.add_argument(
 # '473vyon2': ISS NR
 
 # Defaults for notebook
-# args = parser.parse_args('--total_statistics rypltvk5 convergence discovery temporal perturbation'.split(' '))
-# args = parser.parse_args('--novid 32jqyk54 convergence discovery temporal perturbation'.split(' '))
-args = parser.parse_args()
+# args = parser.parse_args('--novid --total_statistics rypltvk5 convergence discovery temporal perturbation'.split(' '))  # MMD-MA
+# args = parser.parse_args('--novid 32jqyk54 convergence discovery temporal perturbation'.split(' '))  # MERFISH
+# args = parser.parse_args('--novid c8zsunc9 convergence discovery temporal perturbation'.split(' '))  # ISS
+args = parser.parse_args()  # Script (TODO: Add auto-detection)
 
 # Set env vars
 os.environ['CUDA_VISIBLE_DEVICES']=args.gpu
@@ -558,7 +562,7 @@ ax.spines[['right', 'top']].set_visible(False)
 ax.set_xlim([0, history['timestep'].max()])
 
 # Save plot
-fname = f'{args.run_id}_{config["data"]["dataset"]}_performance.pdf'
+fname = f'{args.run_id}_{config["data"]["dataset"]}_loss.pdf'
 fig.savefig(os.path.join(PLOT_FOLDER, fname), dpi=300)
 
 # %% [markdown]
@@ -621,7 +625,7 @@ if 'convergence' in args.analysis_key and application_type == desired_applicatio
     (metric_x, kwargs_x), (metric_y, kwargs_y) = comparison_dict[desired_application]['metrics']
 
     # Get other methods
-    method_results = get_other_methods(comparison_dict["convergence"]["prefix"])
+    method_results = get_other_methods(comparison_dict[desired_application]["prefix"])
 
     # Add CellTRIP
     method_results[('CellTRIP', '-1', notebook_seed)] = memories['convergence']['states'][-1].detach().cpu()
@@ -731,7 +735,7 @@ if 'convergence' in args.analysis_key and application_type == 'imputation' and l
         data = torch.Tensor(data)
 
         # Scale results
-        if method == 'CellTRIP': data = data * np.sqrt(data.shape[1])
+        if method == 'CellTRIP': data = data * np.sqrt(data.shape[1])  # TODO: See if this is justified
         # if not method == 'CellTRIP': data = data / ppc.standardize_std[int(modality)-1]
 
         # Compute error
@@ -841,7 +845,6 @@ if 'perturbation' in memories:
         for pf, pfn in zip(pfs, pfns):
             print(f'\t\t\t{pfn:<15}{effect_sizes[i]:.02e}')
             i += 1
-        print()
 
 # %% [markdown]
 # ## Dynamic Visualizations
@@ -1061,5 +1064,8 @@ for ak in args.analysis_key:
 
     # CLI
     pbar.close()
+
+# %%
+print('Done\n')
 
 
