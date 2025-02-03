@@ -19,7 +19,7 @@ class trajectory:
         # Data
         *modalities,
         # Params
-        dim=2,
+        dim=16,
         pos_bound=10,
         pos_rand_bound=1,
         vel_bound=1,

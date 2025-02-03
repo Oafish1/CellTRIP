@@ -1,3 +1,12 @@
+### 1.0.0+2025-02-03
+- Add notebook auto detection for `analysis` and `train` scripts
+- Add script functionality to `train` notebook
+- Change default arguments for a variety of classes and functions
+- Clean up notebook requirements
+- Figure revisions
+- Legacy compatibility with missing default arguments
+- Reorganize arguments in `analysis`
+
 ### 1.0.0+2025-01-30
 - Add `total_statistics` legacy compatibility to `other_methods` notebook
 - Additional CLI output and revisions for `analysis`

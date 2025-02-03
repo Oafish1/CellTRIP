@@ -138,6 +138,21 @@ class time_logger():
         print(f'Total: {running_total}')
 
 
+def is_notebook() -> bool:
+    # Detect if the running shell is a notebook
+    # https://stackoverflow.com/a/39662359
+    try:
+        shell = get_ipython().__class__.__name__
+        if shell == 'ZMQInteractiveShell':
+            return True   # Jupyter notebook or qtconsole
+        elif shell == 'TerminalInteractiveShell':
+            return False  # Terminal running IPython
+        else:
+            return False  # Other type (?)
+    except NameError:
+        return False      # Probably standard Python interpreter
+
+
 class EarlyStopping:
     """
     Early stopping class with a few trigger methods
@@ -244,8 +259,8 @@ def split_state(
     state,
     idx=None,
     max_nodes=None,
-    sample_strategy='random',
-    reproducible_strategy=None,
+    sample_strategy='random-proximity',
+    reproducible_strategy='hash',
     dimension=None,  # Should be the full positional dim (including velocity)
     return_mask=False,
 ):
@@ -284,7 +299,6 @@ def split_state(
         torch.manual_seed(reproducible_strategy)
 
     else:
-        # TODO: Verify works
         raise ValueError(f'Reproducible strategy \'{reproducible_strategy}\' not found.')
 
     # Enforce max nodes
@@ -644,11 +658,11 @@ class Preprocessing:
     def __init__(
         self,
         # Standardize
-        standardize=False,
+        standardize=True,
         # Filtering
-        top_variant=None,
+        top_variant=int(4e4),
         # PCA
-        pca_dim=None,
+        pca_dim=512,
         pca_copy=True,  # Set to false if too much memory being used
         # Subsampling
         num_nodes=None,
@@ -672,6 +686,8 @@ class Preprocessing:
     def fit(self, modalities, *args, total_statistics=False, **kwargs):
         # Parameters
         self.is_sparse_transform = [scipy.sparse.issparse(m) for m in modalities]
+        if isinstance(self.top_variant, int): self.top_variant = len(modalities) * [self.top_variant]
+        if isinstance(self.pca_dim, int): self.pca_dim = len(modalities) * [self.pca_dim]
 
         # Standardize
         if self.standardize or self.top_variant is not None:

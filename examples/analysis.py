@@ -1,3 +1,4 @@
+# %%
 from collections import defaultdict
 import gzip
 import os
@@ -7,11 +8,8 @@ import tempfile
 import warnings
 
 import matplotlib as mpl
-import matplotlib.collections as mpl_col
-import matplotlib.gridspec as mpl_grid
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-import mpl_toolkits.mplot3d as mp3d
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -48,6 +46,7 @@ torch.set_grad_enabled(False);
 
 # %% [markdown]
 # - TODO
+#   - Maybe filter loss plot to selected stage?
 #   - Add outdir, datadir, etc.
 #   - Get file location rather than `abspath`
 #   - Perturbation analysis for all features, filtered to only important ones, as well as .txt output
@@ -63,109 +62,40 @@ torch.set_grad_enabled(False);
 # %%
 # Arguments
 import argparse
+parser = argparse.ArgumentParser(description='Create a video of the specified CellTRIP model')
 
-parser = argparse.ArgumentParser(description='Create a video of the specified model')
-group = parser.add_argument_group('Main Parameters')
-group.add_argument(
-    'run_id',
-    type=str,
-    help='Run ID from WandB to use for processing')
-group.add_argument(
-    'analysis_key',
-    choices=('convergence', 'discovery', 'temporal', 'perturbation'),
-    nargs='+',
-    type=str,
-    help='Type of analyses to perform (one or more)')
-group.add_argument(
-    '-S', '--seed',
-    type=int,
-    help='Override simulation seed')
-group.add_argument(
-    '--gpu',
-    default='0',
-    type=str,
-    help='GPU(s) to use')
+# Main parameters
+group = parser.add_argument_group('General')
+group.add_argument('run_id', type=str, help='Run ID from WandB to use for processing')
+group.add_argument('analysis_key', choices=('convergence', 'discovery', 'temporal', 'perturbation'), nargs='+', type=str, help='Type of analyses to perform (one or more)')
+group.add_argument('-S', '--seed', type=int, help='Override simulation seed')
+group.add_argument('--gpu', default='0', type=str, help='GPU(s) to use')
 
 # Model parameters
-group = parser.add_argument_group('Simulation Parameters')
-group.add_argument(
-    '-b', '--batch',
-    metavar='MAX_BATCH',
-    dest='max_batch',
-    type=int,
-    help='Override number of nodes which can calculate actions simultaneously')
-group.add_argument(
-    '--num',
-    metavar='NUM_NODES',
-    dest='num_nodes',
-    type=int,
-    help='Override number of nodes to take from data')
-group.add_argument(
-    '--nodes',
-    metavar='NUM_NEIGHBORS',
-    dest='max_nodes',
-    type=int,
-    help='Override neighbors considered by each node')
-group.add_argument(
-    '--stage',
-    type=int,
-    help='Override model stage to use. 0 is random initialization')
+group = parser.add_argument_group('Simulation')
+group.add_argument('-b', '--batch', metavar='MAX_BATCH', dest='max_batch', type=int, help='Override number of nodes which can calculate actions simultaneously')
+group.add_argument('--num', metavar='NUM_NODES', dest='num_nodes', type=int, help='Override number of nodes to take from data')
+group.add_argument('--nodes', metavar='NUM_NEIGHBORS', dest='max_nodes', type=int, help='Override neighbors considered by each node')
+group.add_argument('--stage', type=int, help='Override model stage to use. 0 is random initialization')
 
 # Simulation specific arguments
-group = parser.add_argument_group('Analysis Parameters')
-group.add_argument(
-    '--discovery_key',
-    type=int,
-    default=0,
-    help='Type of discovery analysis (0: Auto)')
-group.add_argument(
-    '--temporal_key',
-    type=int,
-    default=0,
-    help='Type of temporal analysis (0: Auto, 1: TemporalBrain)')
-group.add_argument(
-    '--force',
-    action='store_true',
-    help='Rerun analysis even if already stored in memory')
+group = parser.add_argument_group('Analysis')
+group.add_argument('--discovery_key', type=int, default=0, help='Type of discovery analysis (0: Auto)')
+group.add_argument('--temporal_key', type=int, default=0, help='Type of temporal analysis (0: Auto, 1: TemporalBrain)')
+group.add_argument('--force', action='store_true', help='Rerun analysis even if already stored in memory')
 
 # Video parameters
-group = parser.add_argument_group('Video Parameters')
-group.add_argument(
-    '--novid',
-    action='store_true',
-    help='Skip video generation')
-group.add_argument(
-    '-g', '--gif',
-    action='store_true',
-    help='Output as a GIF rather than MP4')
-group.add_argument(
-    '-s', '--skip',
-    type=int,
-    default=5,
-    help='Number of steps to advance each frame')
-group.add_argument(
-    '--reduction',
-    choices=('umap', 'pca', 'none'),
-    default='pca',
-    type=str,
-    dest='reduction_type',
-    help='Reduction type to use for high-dimensional projections in 3D visualization')
-group.add_argument(
-    '--force_reduction',
-    action='store_true',
-    help='Force reduction, even if unnecessary')
-group.add_argument(
-    '--reduction_batch',
-    type=int,
-    default=100_000,
-    help='Max number of states to reduce in one computation')
+group = parser.add_argument_group('Video')
+group.add_argument('--novid', action='store_true', help='Skip video generation')
+group.add_argument('-g', '--gif', action='store_true', help='Output as a GIF rather than MP4')
+group.add_argument('-s', '--skip', type=int, default=5, help='Number of steps to advance each frame')
+group.add_argument('--reduction', choices=('umap', 'pca', 'none'), default='pca', type=str, dest='reduction_type', help='Reduction type to use for high-dimensional projections in 3D visualization')
+group.add_argument('--force_reduction', action='store_true', help='Force reduction, even if unnecessary')
+group.add_argument('--reduction_batch', type=int, default=100_000, help='Max number of states to reduce in one computation')
 
 # Legacy compatibility
-group = parser.add_argument_group('Legacy Compatiiblity Parameters')
-group.add_argument(
-    '--total_statistics',
-    action='store_true',
-    help='Compatibility argument to compute mean and variance over all samples')
+group = parser.add_argument_group('Legacy Compatiiblity')
+group.add_argument('--total_statistics', action='store_true', help='Compatibility argument to compute mean and variance over all samples')
 
 # List of common runs
 # 'brf6n6sn': TemporalBrain Random 100 Max
@@ -177,11 +107,13 @@ group.add_argument(
 # 'vb1x7bae': MERFISH NR
 # '473vyon2': ISS NR
 
-# Defaults for notebook
-# args = parser.parse_args('--novid --total_statistics rypltvk5 convergence discovery temporal perturbation'.split(' '))  # MMD-MA
-# args = parser.parse_args('--novid 32jqyk54 convergence discovery temporal perturbation'.split(' '))  # MERFISH
-# args = parser.parse_args('--novid c8zsunc9 convergence discovery temporal perturbation'.split(' '))  # ISS
-args = parser.parse_args()  # Script (TODO: Add auto-detection)
+# Notebook defaults and script handling
+if not celltrip.utilities.is_notebook():
+    args = parser.parse_args()
+else:
+    args = parser.parse_args('--novid --total_statistics rypltvk5 convergence discovery temporal perturbation'.split(' '))  # MMD-MA
+    # args = parser.parse_args('--novid 32jqyk54 convergence discovery temporal perturbation'.split(' '))  # MERFISH
+    # args = parser.parse_args('--novid c8zsunc9 convergence discovery temporal perturbation'.split(' '))  # ISS
 
 # Set env vars
 os.environ['CUDA_VISIBLE_DEVICES']=args.gpu
@@ -240,6 +172,9 @@ modalities, types, features = data.load_data(config['data']['dataset'], DATA_FOL
 # config['data'] = celltrip.utilities.overwrite_dict(config['data'], {'top_variant': config['data']['pca_dim'], 'pca_dim': None})  # Swap PCA with top variant (testing)
 if args.num_nodes is not None: config['data'] = celltrip.utilities.overwrite_dict(config['data'], {'num_nodes': args.num_nodes})
 if args.max_batch is not None: config['train'] = celltrip.utilities.overwrite_dict(config['train'], {'max_batch': args.max_batch})
+for k in ('standardize', 'pca_dim', 'top_variant'):
+    # Legacy compatibility for missing default arguments
+    if k not in config['data']: config['data'][k] = None
 ppc = celltrip.utilities.Preprocessing(**config['data'], device=DEVICE)
 modalities, features = ppc.fit_transform(modalities, features, total_statistics=args.total_statistics)
 modalities, types = ppc.subsample(modalities, types)
