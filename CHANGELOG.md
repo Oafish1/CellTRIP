@@ -1,3 +1,8 @@
+### 1.0.0+2025-02-04
+- Figure revisions
+- Fix `README` comparison image links
+- Increase resolution of loss plots
+
 ### 1.0.0+2025-02-03
 - Add notebook auto detection for `analysis` and `train` scripts
 - Add script functionality to `train` notebook
