@@ -1,5 +1,6 @@
-### 1.0.0+2025-02-06
+### 1.0.0+2025-02-06 (1-2)
 - Additional warnings and checks for perturbation analysis
+- Figure exports
 - Figure naming corrections
 - Figure updates
 - Perturbation comparison figure sorting and additional functionality
