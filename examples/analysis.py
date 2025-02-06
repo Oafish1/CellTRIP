@@ -47,6 +47,8 @@ torch.set_grad_enabled(False);
 # %% [markdown]
 # - TODO
 #   - Get file location rather than `abspath`
+#   - Add arrows to perturbation visualization
+#   - No rotation versions of vids
 #   - Apply inverse transform to imputation results and other methods
 #   - Add imputation visualization for dim > 2
 #   - Add outdir, datadir, etc.
@@ -54,6 +56,7 @@ torch.set_grad_enabled(False);
 #   - .txt output for perturbations
 #   - Filter perturbations for video
 #   - Add trajectory
+#   - Examine lockfile requirements for gzip
 
 # %% [markdown]
 # # Arguments
@@ -110,10 +113,10 @@ group.add_argument('--total_statistics', action='store_true', help='Compatibilit
 if not celltrip.utilities.is_notebook():
     args = parser.parse_args()
 else:
-    args = parser.parse_args('--novid --total_statistics rypltvk5 convergence discovery temporal perturbation'.split(' '))  # MMD-MA
-    # args = parser.parse_args('--novid 32jqyk54 convergence discovery temporal perturbation'.split(' '))  # MERFISH
-    # args = parser.parse_args('--novid --force 32jqyk54 perturbation'.split(' '))  # MERFISH force perturbation
+    # args = parser.parse_args('--novid --total_statistics rypltvk5 convergence discovery temporal perturbation'.split(' '))  # MMD-MA
+    args = parser.parse_args('--novid 32jqyk54 convergence discovery temporal perturbation'.split(' '))  # MERFISH
     # args = parser.parse_args('--novid c8zsunc9 convergence discovery temporal perturbation'.split(' '))  # ISS
+    # args = parser.parse_args('--gpu 1 brf6n6sn temporal'.split(' '))  # TemporalBrain
 
 # Set env vars
 os.environ['CUDA_VISIBLE_DEVICES']=args.gpu
@@ -522,7 +525,7 @@ for i, st in enumerate(stage_titles):
     upper = history['timestep'][stage_idx[i]]
     center = (upper + lower) / 2
     trans = mpl.transforms.blended_transform_factory(ax.transData, ax.transAxes)
-    ax.text(center, .05, st, ha='center', va='bottom', alpha=.5, transform=trans)
+    ax.text(center, .05, st, ha='center', va='bottom', alpha=.75, transform=trans)
 
 # Labels
 ax.set_xlabel('Timestep')
@@ -885,6 +888,11 @@ if 'perturbation' in args.analysis_key:
     # Record perturbation feature pairs
     perturbation_feature_triples = [(i, f, n) for i, (fs, ns) in enumerate(zip(perturbation_features, perturbation_feature_names)) for f, n in zip(fs, ns)]
 
+    # Check memories
+    assert len(perturbation_feature_triples) == len(unique_idx)-1, (
+        '`perturbation_features` and `memories` do not have the same '
+        'features, please run perturbation using `--force`')
+
     # Compute effect sizes for each
     effect_sizes = []
     for stage, idx, pft in zip(unique_stages, unique_idx, [[]]+perturbation_feature_triples):
@@ -961,16 +969,31 @@ if 'perturbation' in args.analysis_key:
     for modality in env.modalities_to_return:
         # Filter to modality
         filtered_df = feature_importance.loc[feature_importance['Modality'] == str(modality+1)]
-        # Filter to top based on CellTRIP
-        num_top = 20
-        top_features = filtered_df.loc[filtered_df['Method'] == 'CellTRIP'].sort_values('Importance', ascending=False)['Feature'].to_list()[:num_top]
-        filtered_df = filtered_df.loc[filtered_df['Feature'].isin(top_features)]
+        # Filter to top and sort based on CellTRIP
+        num_top = 40
+        sorted_features = filtered_df.loc[filtered_df['Method'] == 'CellTRIP'].sort_values('Importance', ascending=False)['Feature'].to_numpy()
+        filtered_df['_sort'] = filtered_df['Feature'].map(lambda f: np.argwhere(sorted_features == f))
+        filtered_df = filtered_df.sort_values('_sort')
+        filtered_df = filtered_df.loc[filtered_df['_sort'] < num_top]
 
+        # Generate plot
         fig, ax = plt.subplots(1, 1, figsize=(12, 4), layout='constrained')
         sns.barplot(
             data=filtered_df,
             x='Feature', y='Importance', hue='Method',
             ax=ax)
+        
+        # Labels
+        ax.set_xticks(ax.get_xticks())
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=80, ha='center', va='baseline')
+        max_height = max([l.get_window_extent(renderer=ax.figure.canvas.get_renderer()).height for l in ax.get_xticklabels()])
+        fontsize = ax.get_xticklabels()[0].get_size()
+        pad = fontsize / 2 + max_height / 2
+        ax.tick_params(axis='x', pad=pad)
+
+        # Styling
+        ax.spines[['right', 'top', 'left']].set_visible(False)
+        ax.set_yscale('log')
         
         # Save plot
         fname =                                     f'{args.run_id}'

@@ -1,3 +1,10 @@
+### 1.0.0+2025-02-06
+- Additional warnings and checks for perturbation analysis
+- Figure naming corrections
+- Figure updates
+- Perturbation comparison figure sorting and additional functionality
+- Rerun MERFISH perturbation
+
 ### 1.0.0+2025-02-05
 - Add absolute imputation method involving pinning and least squares
 - Add imputation visualization for all methods and seeds
