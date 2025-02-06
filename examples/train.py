@@ -18,10 +18,11 @@ if not os.path.isdir(MODEL_FOLDER): os.makedirs(MODEL_FOLDER)
 
 # %% [markdown]
 # - TODO
+#   - Record which partition is used in WandB
 #   - Add module handling defaults
 #   - Add train and validation to imputation
 #   - Add folder and wandb arguments
-#   - Record which partition is used in WandB
+#   - Refactor utilities to many different modules
 #   - Check that rewards are normalized after (?) advantage
 #   - Rerun imputation applications with scaled=False (?) and total_statistics=True
 #   - Make sure that `scaled=True` on `euclidean_dist` for env partitions is justified
@@ -37,7 +38,7 @@ if not os.path.isdir(MODEL_FOLDER): os.makedirs(MODEL_FOLDER)
 #   - [Residual SA](https://github.com/openai/multi-agent-emergence-environments/blob/bafaf1e11e6398624116761f91ae7c93b136f395/ma_policy/layers.py#L89)
 
 # %% [markdown]
-# ## Arguments
+# # Arguments
 
 # %%
 # Arguments
@@ -149,7 +150,7 @@ for num in env_stages_encoded:
 os.environ['CUDA_VISIBLE_DEVICES']=arg_groups['General']['gpu']
 
 # %% [markdown]
-# ## Load Data
+# # Load Data
 
 # %%
 # Reproducibility
@@ -183,7 +184,7 @@ else:
         print('Episode groups: ' + ', '.join([f'{n} ({c})' for n, c in zip(names, counts)]))
 
 # %% [markdown]
-# ## Train Policy
+# # Train Policy
 
 # %%
 # Tracking parameters

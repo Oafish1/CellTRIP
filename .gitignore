@@ -4,6 +4,7 @@ __pycache__
 
 # Models
 **/models/*
+**/wandb
 
 # Profiling
 *.prof
@@ -22,6 +23,9 @@ __pycache__
 
 # Temp
 **/temp/
+
+# Extracted images
+frame_*.png
 
 # Hidden
 **/hidden_*

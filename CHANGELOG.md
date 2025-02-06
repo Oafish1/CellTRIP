@@ -1,3 +1,24 @@
+### 1.0.0+2025-02-05
+- Add absolute imputation method involving pinning and least squares
+- Add imputation visualization for all methods and seeds
+- Add inverse transform to `other_methods` perturbation
+- Add performance metrics for CellTRIP imputation pinning
+- Add utility script to convert GIF to consituent frames
+- Additional CLI preview in `README`
+- Allow gaps in loss plot
+- Aspect ratio changes for loss plot
+- Clean figures after creation in `analysis`
+- Extend perturbation analysis to all features by default
+- Figure folder reorganization
+- Fix variance feature importance calculation in `other_methods`
+- Flowchart, schematic, and MERFISH figure updates
+- Highlight `CellTRIP` results for integration and imputation
+- Increase default GIF resolution
+- Reformat notebook markdown header size usage
+- Reruns
+- Revise stage step and feature effect size CLI display to be more vertically space-efficient
+- Undo loss plot resolution changes
+
 ### 1.0.0+2025-02-04
 - Figure revisions
 - Fix `README` comparison image links

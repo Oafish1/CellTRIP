@@ -1,5 +1,5 @@
-# %%
 from collections import defaultdict
+import colorsys
 import gzip
 import os
 import pickle
@@ -46,18 +46,17 @@ torch.set_grad_enabled(False);
 
 # %% [markdown]
 # - TODO
-#   - Maybe filter loss plot to selected stage?
-#   - Add outdir, datadir, etc.
 #   - Get file location rather than `abspath`
-#   - Perturbation analysis for all features, filtered to only important ones, as well as .txt output
-#   - Synchronize colors for each method
-#   - Add perturbation and trajectory
-#   - Try using known reference points (i.e. positional data) to impute absolute, rather than relative, values
-#   - Maybe add buffer to perturbation analysis start
+#   - Apply inverse transform to imputation results and other methods
+#   - Add imputation visualization for dim > 2
+#   - Add outdir, datadir, etc.
 #   - Add arguments like wandb username/project, etc. as well as local db
+#   - .txt output for perturbations
+#   - Filter perturbations for video
+#   - Add trajectory
 
 # %% [markdown]
-# ## Arguments
+# # Arguments
 
 # %%
 # Arguments
@@ -113,13 +112,14 @@ if not celltrip.utilities.is_notebook():
 else:
     args = parser.parse_args('--novid --total_statistics rypltvk5 convergence discovery temporal perturbation'.split(' '))  # MMD-MA
     # args = parser.parse_args('--novid 32jqyk54 convergence discovery temporal perturbation'.split(' '))  # MERFISH
+    # args = parser.parse_args('--novid --force 32jqyk54 perturbation'.split(' '))  # MERFISH force perturbation
     # args = parser.parse_args('--novid c8zsunc9 convergence discovery temporal perturbation'.split(' '))  # ISS
 
 # Set env vars
 os.environ['CUDA_VISIBLE_DEVICES']=args.gpu
 
 # %% [markdown]
-# ## Load Data, Model, and Environment
+# # Load Data, Model, and Environment
 
 # %%
 # Load run
@@ -212,15 +212,24 @@ policy = policy.to(DEVICE).eval()
 policy.actor.set_action_std(1e-7)
 
 # %% [markdown]
-# ## Run Simulation
+# # Run Simulation
 
 # %% [markdown]
-# #### Parameter Presets
+# ## Parameter Presets
 
 # %%
 # Choose key
 optimize_memory = True  # Saves memory by shrinking env based on present, also fixes reward calculation for non-full present mask
-perturbation_features = [np.random.choice(len(fs), 10, replace=False) for i, fs in enumerate(features) if (i not in env.reward_distance_target) or (len(env.reward_distance_target) == len(modalities))]
+# perturbation_features = [  # 10 Random
+#     np.random.choice(len(fs), 10, replace=False)
+#     if (i not in env.reward_distance_target) or (len(env.reward_distance_target) == len(modalities))
+#     else []
+#     for i, fs in enumerate(features)]
+perturbation_features = [  # All features
+    np.arange(len(fs))
+    if (i not in env.reward_distance_target) or (len(env.reward_distance_target) == len(modalities))
+    else []
+    for i, fs in enumerate(features)]
 
 # Define matching state manager classes
 state_manager_class = {
@@ -273,7 +282,7 @@ perturbation_feature_names = [[fnames[pf] for pf in pfs] for pfs, fnames in zip(
 memories = {}
 
 # %% [markdown]
-# #### Generate Simulation
+# ## Generate Simulation
 
 # %%
 # Load memories
@@ -430,7 +439,7 @@ for ak in args.analysis_key:
             pickle.dump(memories, f)
 
 # %% [markdown]
-# #### Memory Summary
+# ## Memory Summary
 
 # %%
 # Statistics
@@ -439,69 +448,22 @@ for ak in args.analysis_key:
 
     ## Stages
     stages, counts = np.unique(memories[ak]['stages'], return_counts=True)
-    print('\tSteps per Stage')
-    for s, c in zip(stages, counts):
-        print(f'\t\t\t{s}\t{c}')
+    print('\tSteps per Stage: ' + ', '.join([f'{s} ({c})' for s, c in zip(stages, counts)]))
         
     ## Memory
     print('\tCompressed Memory Sizes')
     for k in memories[ak]:
         t_size = sum([t.element_size() * t.nelement() if isinstance(t, torch.Tensor) else 64/8 for t in memories[ak][k]]) / 1024**3
-        print(f'\t\t\t{k} size\t{t_size:.3f} Gb')
+        print(f'\t\t{k} size\t{t_size:.3f} Gb')
 
     ## Performance
     print(f'\tAverage Reward: {memories[ak]["rewards"].cpu().mean():.3f}')
 
 # %% [markdown]
-# ## Static Analyses
+# # Static Analyses
 
 # %%
 print('Plotting static analyses')
-
-# %% [markdown]
-# #### Loss Plot
-
-# %%
-print('\tTraining rewards')
-
-# Load history from wandb
-history = run.history(samples=2000)
-history['timestep'] = history['end_timestep']
-history['Runtime (h)'] = history['_runtime'] / 60**2
-
-# Plot
-fig, ax = plt.subplots(1, 1, figsize=(18, 6), layout='constrained')
-def plot_without_zeros(x, y, **kwargs):
-    x, y = x[np.argwhere(y != 0).flatten()], y[np.argwhere(y != 0).flatten()]
-    ax.plot(x, y, **kwargs)
-ax.plot(history['timestep'], history['average_reward'], color='black', lw=3, label='Average Reward')
-plot_without_zeros(history['timestep'], history['rewards/bound'], color='red', alpha=.75, lw=2, label='Boundary Penalty')
-plot_without_zeros(history['timestep'], history['rewards/velocity'], color='goldenrod', alpha=.75, lw=2, label='Velocity Penalty')
-plot_without_zeros(history['timestep'], history['rewards/action'], color='green', alpha=.75, lw=2, label='Action Penalty')
-plot_without_zeros(history['timestep'], history['rewards/distance'], color='blue', alpha=.75, lw=2, label='Distance Reward')
-plot_without_zeros(history['timestep'], history['rewards/origin'], color='darkorange', alpha=.75, lw=2, label='Origin Reward')
-
-# Stage ticks
-unique, stage_idx = np.unique(history['stage'][::-1], return_index=True)
-stage_idx = len(history['stage']) - stage_idx
-stage_idx = stage_idx[:-1]
-[ax.axvline(x=history['timestep'][idx], color='black', alpha=.5, linestyle='dashed', lw=1) for idx in stage_idx]
-
-# Labels
-ax.set_xlabel('Timestep')
-ax.set_ylabel('Reward')
-ax.legend(loc='lower right', ncols=3)
-
-# Styling
-ax.spines[['right', 'top']].set_visible(False)
-ax.set_xlim([0, history['timestep'].max()])
-
-# Save plot
-fname = f'{args.run_id}_{config["data"]["dataset"]}_loss.pdf'
-fig.savefig(os.path.join(PLOT_FOLDER, fname), dpi=300)
-
-# %% [markdown]
-# #### Integration Performance Comparison
 
 # %%
 def get_other_methods(prefix):
@@ -523,6 +485,61 @@ def get_other_methods(prefix):
             method_results[(name, modality, seed)] = os.path.join(method_dir, name, file)
 
     return method_results
+
+# %% [markdown]
+# ## Loss Plot
+
+# %%
+print('\tTraining rewards')
+
+# Load history from wandb
+history = run.history(samples=2e3)
+history['timestep'] = history['end_timestep']
+history['Runtime (h)'] = history['_runtime'] / 60**2
+
+# Plot
+fig, ax = plt.subplots(1, 1, figsize=(18, 2), layout='constrained')
+def plot_without_zeros(x, y, **kwargs):
+    y = y.copy(); y[y==0] = np.nan
+    ax.plot(x, y, **kwargs)
+ax.plot(history['timestep'], history['average_reward'], color='black', lw=3, label='Average Reward')
+plot_without_zeros(history['timestep'], history['rewards/bound'], color='red', alpha=.75, lw=2, label='Boundary Penalty')
+plot_without_zeros(history['timestep'], history['rewards/velocity'], color='goldenrod', alpha=.75, lw=2, label='Velocity Penalty')
+plot_without_zeros(history['timestep'], history['rewards/action'], color='green', alpha=.75, lw=2, label='Action Penalty')
+plot_without_zeros(history['timestep'], history['rewards/distance'], color='blue', alpha=.75, lw=2, label='Distance Reward')
+plot_without_zeros(history['timestep'], history['rewards/origin'], color='darkorange', alpha=.75, lw=2, label='Origin Reward')
+
+# Stage ticks
+unique, stage_idx = np.unique(history['stage'][::-1], return_index=True)
+stage_idx = len(history['stage']) - stage_idx
+stage_idx = stage_idx[:-1]
+[ax.axvline(x=history['timestep'][idx], color='black', alpha=.5, linestyle='dashed', lw=1) for idx in stage_idx]
+
+# Stage labels
+stage_titles = ['Boundary', 'Origin', 'Action & Velocity', 'Distance']
+for i, st in enumerate(stage_titles):
+    lower = history['timestep'][stage_idx[i-1]] if i != 0 else 0
+    upper = history['timestep'][stage_idx[i]]
+    center = (upper + lower) / 2
+    trans = mpl.transforms.blended_transform_factory(ax.transData, ax.transAxes)
+    ax.text(center, .05, st, ha='center', va='bottom', alpha=.5, transform=trans)
+
+# Labels
+ax.set_xlabel('Timestep')
+ax.set_ylabel('Reward')
+ax.legend(loc='lower right', ncols=3)
+
+# Styling
+ax.spines[['right', 'top']].set_visible(False)
+ax.set_xlim([0, history['timestep'].max()])
+
+# Save plot
+fname = f'{args.run_id}_{config["data"]["dataset"]}_loss.pdf'
+fig.savefig(os.path.join(PLOT_FOLDER, fname), transparent=True, dpi=300)
+plt.close(fig)
+
+# %% [markdown]
+# ## Integration Performance Comparison
 
 # %%
 # Comparison metrics
@@ -554,7 +571,7 @@ comparison_dict = {
 # Integration method comparison
 desired_application = 'integration'
 if 'convergence' in args.analysis_key and application_type == desired_application:
-    print(f'\tComparison Integration')
+    print(f'\tIntegration performance comparison')
 
     # Select metrics
     (metric_x, kwargs_x), (metric_y, kwargs_y) = comparison_dict[desired_application]['metrics']
@@ -606,10 +623,11 @@ if 'convergence' in args.analysis_key and application_type == desired_applicatio
         ax.plot(2*[r['x_mean']], [r['y_mean']-r['y_var'], r['y_mean']+r['y_var']], ls='--', color='gray', zorder=.3)
 
         # Annotate
-        text = f'{r["Method"]}' + (f' ({r["Modality"]})' if r['Modality'] != -1 else '')
+        text = f'{r["Method"]}' + (f' ({r["Modality"]})' if r['Modality'] != '-1' else '')
+        color = 'black' if r['Method'] != 'CellTRIP' else 'red'
         annotations.append(ax.text(
             r['x_mean'], r['y_mean'], text,
-            ha='center', va='center', fontsize='large'))
+            ha='center', va='center', color=color, fontsize='large'))
 
     # Styling
     # ax.spines[['right', 'top', 'bottom', 'left']].set_visible(False)
@@ -641,21 +659,54 @@ if 'convergence' in args.analysis_key and application_type == desired_applicatio
     fname +=                                    f'_{config["data"]["dataset"]}'
     fname +=                                    f'_comparison'
     fname +=                                    f'_{desired_application}.pdf'
-    fig.savefig(os.path.join(PLOT_FOLDER, fname), dpi=300)
+    fig.savefig(os.path.join(PLOT_FOLDER, fname), transparent=True, dpi=300)
+    plt.close(fig)
 
 # %% [markdown]
-# #### Imputation Performance Comparison
+# ## Imputation
+
+# %%
+imputation_order = np.unique([k[0] for k in get_other_methods('I')]).tolist() + ['CellTRIP']
 
 # %%
 # Single modality imputation
 if 'convergence' in args.analysis_key and application_type == 'imputation' and len(env.reward_distance_target) == 1:
+    print(f'\tPinning CellTRIP results to feature space')
+
+    # Get steady state
+    steady_state = memories['convergence']['states'][-1].detach().cpu()[:, :env.dim].numpy()
+    # PCA into desired dimensions
+    if steady_state.shape[1] != modalities[env.reward_distance_target[0]].shape[1]:
+        steady_state = sklearn.decomposition.PCA(n_components=modalities[env.reward_distance_target[0]].shape[1]).fit_transform(steady_state)
+
+    # Choose pinning points (TODO: Add train/val)
+    source_points = steady_state
+    target_points = modalities[env.reward_distance_target[0]].detach().cpu().numpy()
+    # Solve for transformation
+    # TODO: Add this math to paper
+    A = np.hstack([source_points, np.ones((source_points.shape[0], 1))])
+    B = target_points
+    T = np.linalg.lstsq(A, B, rcond=None)[0]
+    # Apply transformation
+    pinned_points = np.dot(A, T)
+
+# %% [markdown]
+# ### Performance Comparison
+
+# %%
+# Single modality imputation
+if 'convergence' in args.analysis_key and application_type == 'imputation' and len(env.reward_distance_target) == 1:
+    print(f'\tImputation performance comparison')
+
+    # Get steady state
+    steady_state = memories['convergence']['states'][-1].detach().cpu()[:, :env.dim] * np.sqrt(modalities[env.reward_distance_target[0]].shape[1])  # Multiplication undoes CellTRIP's feature scaling in `euclidean_distance`
+    # steady_state = sklearn.decomposition.PCA(n_components=modalities[env.reward_distance_target[0]].shape[1]).fit_transform(steady_state)
+
     # Get other methods
     method_results = get_other_methods('I')
 
     # Add CellTRIP
-    raw_celltrip = memories['convergence']['states'][-1].detach().cpu()[:, :env.dim]
-    # shrunk_celltrip = sklearn.decomposition.PCA(n_components=modalities[env.reward_distance_target[0]].shape[1]).fit_transform(raw_celltrip)
-    method_results[('CellTRIP', env.reward_distance_target[0]+1, notebook_seed)] = raw_celltrip
+    method_results[('CellTRIP', str(env.reward_distance_target[0]+1), notebook_seed)] = pinned_points
 
     # Calculate modal dist
     # raw_modalities = ppc.cast(ppc.inverse_transform(ppc.inverse_cast(modalities)))
@@ -669,17 +720,18 @@ if 'convergence' in args.analysis_key and application_type == 'imputation' and l
         else: data = np.loadtxt(fname)
         data = torch.Tensor(data)
 
-        # Scale results
-        if method == 'CellTRIP': data = data * np.sqrt(data.shape[1])  # TODO: See if this is justified
-        # if not method == 'CellTRIP': data = data / ppc.standardize_std[int(modality)-1]
-
         # Compute error
         data_dist = celltrip.utilities.euclidean_distance(data)
         sample_mse = (data_dist - modal_dist[int(modality)-1].cpu()).square().mean(dim=-1)
         feature_mse = (data_dist - modal_dist[int(modality)-1].cpu()).square().mean(dim=0)
+        raw_sample_mse = ((data - target_points)**2).mean(dim=-1)
+        raw_feature_mse = ((data - target_points)**2).mean(dim=-1)
 
         # Record
-        df = pd.DataFrame({'Method': method, 'Modality': modality, 'Seed': seed, 'Metric': 'Sample Inter-Cell MSE', 'Value': sample_mse})
+        df = pd.DataFrame({'Method': method, 'Modality': modality, 'Seed': seed, 'Metric': 'Inter-Cell MSE', 'Value': sample_mse})
+        df = pd.concat((df, pd.DataFrame({'Method': method, 'Modality': modality, 'Seed': seed, 'Metric': 'Feature Inter-Cell MSE', 'Value': feature_mse})))
+        df = pd.concat((df, pd.DataFrame({'Method': method, 'Modality': modality, 'Seed': seed, 'Metric': 'MSE', 'Value': raw_sample_mse})))
+        df = pd.concat((df, pd.DataFrame({'Method': method, 'Modality': modality, 'Seed': seed, 'Metric': 'Feature MSE', 'Value': raw_feature_mse})))
         if raw_performance is None: raw_performance = df
         else: raw_performance = pd.concat((raw_performance, df), ignore_index=True, axis=0)
 
@@ -687,48 +739,57 @@ if 'convergence' in args.analysis_key and application_type == 'imputation' and l
     raw_performance = raw_performance.fillna(0)
 
     # Plot performances
-    main_metric = 'Sample Inter-Cell MSE'
+    metrics_to_plot = ('Inter-Cell MSE', 'MSE')
+    fig, axs = plt.subplots(
+        1, len(metrics_to_plot), figsize=(3*len(metrics_to_plot), 4),
+        # sharey=True,
+        layout='constrained')
+    for i, (ax, metric) in enumerate(zip(axs, metrics_to_plot)):
+        # Filter to only the best result from each method
+        best_seeds = (
+            raw_performance.loc[raw_performance['Metric'] == metric]
+            .groupby(['Method', 'Modality', 'Seed'])[['Value']].mean().reset_index()
+            .sort_values('Value', ascending=False).groupby(['Method', 'Modality'])[['Seed']].first().reset_index().to_numpy()
+        )
+        mask = np.zeros(raw_performance.shape[0], dtype=bool)
+        for idx in best_seeds:
+            mask += (raw_performance.to_numpy()[:, :3] == idx).all(axis=-1)
+        filtered_performance = raw_performance.iloc[mask]
 
-    # Filter to only the best result from each method
-    best_seeds = (
-        raw_performance.loc[raw_performance['Metric'] == main_metric]
-        .groupby(['Method', 'Modality', 'Seed'])[['Value']].mean().reset_index()
-        .sort_values('Value', ascending=False).groupby(['Method', 'Modality'])[['Seed']].first().reset_index().to_numpy()
-    )
-    mask = np.zeros(raw_performance.shape[0], dtype=bool)
-    for idx in best_seeds:
-        mask += (raw_performance.to_numpy()[:, :3] == idx).all(axis=-1)
-    filtered_performance = raw_performance.iloc[mask]
-
-    # Generate visuals
-    filtered_performance = filtered_performance.loc[filtered_performance['Metric'] == main_metric]
-    order = filtered_performance['Method'].unique()
-    fig, ax = plt.subplots(1, 1, figsize=(3, 6), sharex=True, layout='constrained')
-    sns.boxplot(
-        data=filtered_performance,
-        x='Method', y='Value', hue='Method',
-        order=order,
-        ax=ax)
-    with warnings.catch_warnings(record=False) as w:
-        warnings.simplefilter('ignore')
-        sns.stripplot(
-            data=filtered_performance.sample(frac=.05),
+        # Generate visuals
+        filtered_performance = filtered_performance.loc[filtered_performance['Metric'] == metric]
+        order = filtered_performance.loc[filtered_performance['Metric'] == metric].groupby('Method')['Value'].mean().sort_values(ascending=False).index.to_list()
+        sns.boxplot(
+            data=filtered_performance,
             x='Method', y='Value', hue='Method',
             order=order,
-            size=2, palette=sns.color_palette(['black']), legend=False, dodge=False, ax=ax)
+            hue_order=imputation_order,
+            ax=ax)
+        with warnings.catch_warnings(record=False) as w:
+            warnings.simplefilter('ignore')
+            sns.stripplot(
+                data=filtered_performance.sample(frac=.05),
+                x='Method', y='Value', hue='Method',
+                order=order,
+                hue_order=imputation_order,
+                size=2, palette=sns.color_palette(['black']), legend=False, dodge=False, ax=ax)
 
-    # Styling
-    ax.set(title=main_metric, xlabel=None, ylabel=None)
-    ax.tick_params(axis='both', which='both', bottom=False, left=True)
-    ax.set_yscale('log')
+        # Styling
+        ax.set(title=metric, xlabel=None, ylabel=None)
+        ax.set_yscale('log')
+        ax.spines[['right', 'top']].set_visible(False)
+        # if i == 0: ax.tick_params(axis='both', which='both', bottom=False, left=True)
+        ax.tick_params(axis='both', which='both', bottom=False, left=True)
 
-    # Xlabels
-    ax.set_xticks(ax.get_xticks())
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='center', va='baseline')
-    max_height = max([l.get_window_extent(renderer=ax.figure.canvas.get_renderer()).height for l in ax.get_xticklabels()])
-    fontsize = ax.get_xticklabels()[0].get_size()
-    pad = fontsize / 2 + max_height / 2
-    ax.tick_params(axis='x', pad=pad)
+        # Xlabels
+        ax.set_xticks(ax.get_xticks())
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='center', va='baseline')
+        max_height = max([l.get_window_extent(renderer=ax.figure.canvas.get_renderer()).height for l in ax.get_xticklabels()])
+        fontsize = ax.get_xticklabels()[0].get_size()
+        pad = fontsize / 2 + max_height / 2
+        ax.tick_params(axis='x', pad=pad)
+        method_loc = np.argwhere(np.array(order) == 'CellTRIP')[0][0]
+        ax.get_xticklabels()[method_loc].set_color('red')
 
     # Save plot
     fname =                                     f'{args.run_id}'
@@ -736,15 +797,84 @@ if 'convergence' in args.analysis_key and application_type == 'imputation' and l
     fname +=                                    f'_{config["data"]["dataset"]}'
     fname +=                                    f'_comparison'
     fname +=                                    f'_imputation.pdf'
-    fig.savefig(os.path.join(PLOT_FOLDER, fname), dpi=300)
+    fig.savefig(os.path.join(PLOT_FOLDER, fname), transparent=True, dpi=300)
+    plt.close(fig)
 
 # %% [markdown]
-# #### Feature Importance
+# ### Method Error Visualization
+
+# %%
+# Single modality imputation
+if 'convergence' in args.analysis_key and application_type == 'imputation' and len(env.reward_distance_target) == 1 and modalities[env.reward_distance_target[0]].shape[1] == 2:
+    print(f'\tImputation method error visualization')
+
+    # Get other methods
+    method_results = get_other_methods('I')
+    # Add CellTRIP
+    method_results[('CellTRIP', str(env.reward_distance_target[0]+1), notebook_seed)] = pinned_points
+    # Add Measured
+    method_results[('Measured', str(env.reward_distance_target[0]+1), None)] = target_points
+
+    # Precalculate params - get cartesian coordinates
+    centered_points = target_points - target_points.mean(axis=0)
+    r = (centered_points**2).sum(axis=-1)**(1/2)
+    theta = np.arctan2(centered_points[:, 1], centered_points[:, 0])
+    # Aggregate colors
+    hue = theta / (2*np.pi) + .5
+    value = .2 + .8 * (r - r.min()) / (r.max() - r.min())
+    saturation = .8 * np.ones_like(r)
+    position_colors = [colorsys.hsv_to_rgb(h, s, v) for h, s, v in zip(hue, saturation, value)]
+
+    # Plot
+    scatter_kwargs = {'s': 5}
+    for i, (key, fname) in enumerate(method_results.items()):
+        method, modality, seed = key
+        if method in ('Measured', 'CellTRIP'): data = fname
+        else: data = np.loadtxt(fname)
+
+        ## Base color
+        base_color = np.array([.7, .7, .7, 1.])
+
+        ## Error colors
+        # Get errors
+        errors = ((data - target_points)**2).mean(axis=-1)
+        error_scale = 1
+        errors = (error_scale/r.std())*np.clip(errors, 0, (r.std()/error_scale))
+        error_color = np.array([1., 0., 0., 1.])
+        error_colors = error_color.reshape((1, -1)) * errors.reshape((-1, 1)) + base_color.reshape((1, -1)) * (1 - errors.reshape((-1, 1)))
+
+        # Create figure
+        fig, axs = plt.subplots(1, 2, figsize=(8, 4), layout='constrained')
+        # Plot points
+        axs[0].scatter(*data.T, c=position_colors, **scatter_kwargs)
+        axs[1].scatter(*data.T, c=error_colors, **scatter_kwargs)
+        # Labels
+        axs[0].set_ylabel(method, color='black' if method != 'CellTRIP' else 'red')
+        axs[0].set_title('Positions')
+        axs[1].set_title('Error')
+        # Stylize
+        for ax in axs:
+            ax.set(xticklabels=[], xticks=[], yticklabels=[], yticks=[])
+            ax.spines[['right', 'top', 'bottom', 'left']].set_visible(False)
+
+        # Save plot
+        fname =                                     f'{args.run_id}'
+        if args.stage is not None: fname +=         f'_{args.stage:02}'
+        fname +=                                    f'_{config["data"]["dataset"]}'
+        fname +=                                    f'_comparison_imputation_visualization.pdf'
+        fname +=                                    f'_{modality}_{method}'
+        if seed is not None: fname +=               f'_{seed}'
+        fname +=                                    f'.pdf'
+        fig.savefig(os.path.join(PLOT_FOLDER, fname), transparent=True, dpi=300)
+        plt.close(fig)
+
+# %% [markdown]
+# ## Perturbation
 
 # %%
 # Perturbation significance analysis
-if 'perturbation' in memories:
-    print('\tFeature effect size')
+if 'perturbation' in args.analysis_key:
+    print('\tCalculating feature effect size')
     
     # Get last idx for each stage
     stages = memories['perturbation']['stages'].cpu().numpy()
@@ -757,7 +887,7 @@ if 'perturbation' in memories:
 
     # Compute effect sizes for each
     effect_sizes = []
-    for stage, idx in zip(unique_stages, unique_idx):
+    for stage, idx, pft in zip(unique_stages, unique_idx, [[]]+perturbation_feature_triples):
         # Get state
         state = memories['perturbation']['states'][idx]
 
@@ -766,29 +896,99 @@ if 'perturbation' in memories:
             steady_state = state
             continue
 
+        # Move to next modality if needed, assumes triples advance modalities ortholinearly
+        while pft[0] + 1 > len(effect_sizes): effect_sizes.append([])
+
         # Get perturbed feature
         m_idx, pf, pf_name = perturbation_feature_triples[stage-1]
 
         # Compute effect size
         effect_size = (state[:, :env.dim] - steady_state[:, :env.dim]).square().sum(dim=-1).sqrt().mean(dim=-1).item()
-        effect_sizes.append(effect_size)
+        effect_sizes[-1].append(effect_size)
 
     # Print effect sizes
-    i = 0
-    for j, (pfs, pfns) in enumerate(zip(perturbation_features, perturbation_feature_names)):
-        print(f'\t\tModality {j}')
-        for pf, pfn in zip(pfs, pfns):
-            print(f'\t\t\t{pfn:<15}{effect_sizes[i]:.02e}')
-            i += 1
+    for i, (pfs, pfns, ess) in enumerate(zip(perturbation_features, perturbation_feature_names, effect_sizes)):
+        # Filter to top features
+        num_top = 3
+        top_idx = np.argsort(ess)[:-(num_top+1):-1]
+        pfs, pfns, ess = np.array(pfs)[top_idx], np.array(pfns)[top_idx], np.array(ess)[top_idx]
+
+        # CLI
+        print(f'\t\tModality {i}: ' + ', '.join([f'{pfn} ({es:.02e})' for pfn, es in zip(pfns, ess)]))
 
 # %% [markdown]
-# ## Dynamic Visualizations
+# ### Comparison
+
+# %%
+if 'perturbation' in args.analysis_key:
+    print('\tPerturbation Comparison')
+
+    # Get other methods
+    method_results = get_other_methods('F')
+    # Add CellTRIP
+    for i, ess in enumerate(effect_sizes): method_results[('CellTRIP', str(i+1), notebook_seed)] = effect_sizes[i]
+
+    # Aggregate results
+    feature_importance = None
+    for i, (key, fname) in enumerate(method_results.items()):
+        method, modality, seed = key
+        if method == 'CellTRIP': data = fname
+        else: data = np.loadtxt(fname)
+        data = np.array(data)
+
+        # Filter to requested features
+        try: idx = perturbation_features[(int(modality)-1)]
+        except: continue
+        if method != 'CellTRIP': data = data[idx]
+        # Scale
+        data /= data.sum()
+
+        # Format to df
+        df = pd.DataFrame({
+            'Method': method,
+            'Modality': modality,
+            'Seed': seed,
+            'Feature': perturbation_feature_names[(int(modality)-1)],
+            'Importance': data,
+        })
+        if feature_importance is None: feature_importance = df
+        else: feature_importance = pd.concat((feature_importance, df))
+
+    # Take average over all seeds
+    # feature_importance = feature_importance.groupby(['Method', 'Modality', 'Feature'])[['Importance']].mean().reset_index()
+
+    # Generate plots
+    for modality in env.modalities_to_return:
+        # Filter to modality
+        filtered_df = feature_importance.loc[feature_importance['Modality'] == str(modality+1)]
+        # Filter to top based on CellTRIP
+        num_top = 20
+        top_features = filtered_df.loc[filtered_df['Method'] == 'CellTRIP'].sort_values('Importance', ascending=False)['Feature'].to_list()[:num_top]
+        filtered_df = filtered_df.loc[filtered_df['Feature'].isin(top_features)]
+
+        fig, ax = plt.subplots(1, 1, figsize=(12, 4), layout='constrained')
+        sns.barplot(
+            data=filtered_df,
+            x='Feature', y='Importance', hue='Method',
+            ax=ax)
+        
+        # Save plot
+        fname =                                     f'{args.run_id}'
+        if args.stage is not None: fname +=         f'_{args.stage:02}'
+        fname +=                                    f'_{config["data"]["dataset"]}'
+        fname +=                                    f'_comparison_perturbation'
+        fname +=                                    f'_{modality+1}.pdf'
+        fig.savefig(os.path.join(PLOT_FOLDER, fname), transparent=True, dpi=300)
+        plt.close(fig)
+
+# %% [markdown]
+# # Dynamic Visualizations
 
 # %%
 print('Plotting dynamic visualizations')
 
 # %% [markdown]
-# #### Video
+# ## Video
 
 # %%
 for ak in args.analysis_key:
@@ -968,6 +1168,7 @@ for ak in args.analysis_key:
     #     # print()
     #     # print('saving')
     #     fig.savefig(os.path.join('temp/plots', f'frame_{frame}.png'), dpi=300)
+    #     plt.close(fig)
     #     break
 
     # Initialize animation
