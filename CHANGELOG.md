@@ -1,3 +1,8 @@
+### 1.0.0+2025-02-09
+- Add visualization for original input modalities
+- Figure revisions
+- New CellTRIP logo
+
 ### 1.0.0+2025-02-07
 - Figure revisions
 

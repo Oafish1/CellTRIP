@@ -74,17 +74,21 @@ group.add_argument('-S', '--seed', type=int, help='Override simulation seed')
 group.add_argument('--gpu', default='0', type=str, help='GPU(s) to use')
 
 # Model parameters
-group = parser.add_argument_group('Simulation')
+group = parser.add_argument_group('Model')
 group.add_argument('-b', '--batch', metavar='MAX_BATCH', dest='max_batch', type=int, help='Override number of nodes which can calculate actions simultaneously')
 group.add_argument('--num', metavar='NUM_NODES', dest='num_nodes', type=int, help='Override number of nodes to take from data')
 group.add_argument('--nodes', metavar='NUM_NEIGHBORS', dest='max_nodes', type=int, help='Override neighbors considered by each node')
 group.add_argument('--stage', type=int, help='Override model stage to use. 0 is random initialization')
 
 # Simulation specific arguments
-group = parser.add_argument_group('Analysis')
+group = parser.add_argument_group('Simulation')
 group.add_argument('--discovery_key', type=int, default=0, help='Type of discovery analysis (0: Auto)')
 group.add_argument('--temporal_key', type=int, default=0, help='Type of temporal analysis (0: Auto, 1: TemporalBrain)')
 group.add_argument('--force', action='store_true', help='Rerun analysis even if already stored in memory')
+
+# Analysis arguments
+group = parser.add_argument_group('Analysis')
+group.add_argument('--original', action='store_true', help='Visualize input data')
 
 # Video parameters
 group = parser.add_argument_group('Video')
@@ -113,10 +117,9 @@ group.add_argument('--total_statistics', action='store_true', help='Compatibilit
 if not celltrip.utilities.is_notebook():
     args = parser.parse_args()
 else:
-    # args = parser.parse_args('--novid --total_statistics rypltvk5 convergence discovery temporal perturbation'.split(' '))  # MMD-MA
-    args = parser.parse_args('--total_statistics rypltvk5 temporal'.split(' '))  # MMD-MA Temporal Test
-    # args = parser.parse_args('--novid 32jqyk54 convergence discovery temporal perturbation'.split(' '))  # MERFISH
-    # args = parser.parse_args('--novid c8zsunc9 convergence discovery temporal perturbation'.split(' '))  # ISS
+    # args = parser.parse_args('--novid --original --total_statistics rypltvk5 convergence discovery temporal perturbation'.split(' '))  # MMD-MA
+    args = parser.parse_args('--novid --original 32jqyk54 convergence discovery temporal perturbation'.split(' '))  # MERFISH
+    # args = parser.parse_args('--novid --original c8zsunc9 convergence discovery temporal perturbation'.split(' '))  # ISS
     # args = parser.parse_args('--gpu 1 brf6n6sn temporal'.split(' '))  # TemporalBrain
 
 # Set env vars
@@ -183,6 +186,7 @@ ppc = celltrip.utilities.Preprocessing(**config['data'], device=DEVICE)
 modalities, features = ppc.fit_transform(modalities, features, total_statistics=args.total_statistics)
 modalities, types = ppc.subsample(modalities, types)
 modalities = ppc.cast(modalities)
+# Assumes modalities are aligned
 labels = types[0][:, 0]
 times = types[0][:, -1]
 
@@ -541,6 +545,56 @@ ax.set_xlim([0, history['timestep'].max()])
 fname = f'{args.run_id}_{config["data"]["dataset"]}_loss.pdf'
 fig.savefig(os.path.join(PLOT_FOLDER, fname), transparent=True, dpi=300)
 plt.close(fig)
+
+# %% [markdown]
+# ## Original Data Visualization
+
+# %%
+if args.original:
+    print(f'\tOriginal data visualization')
+
+    # Get vertical sections
+    times_to_use = times if types[0].shape[1] > 1 else -np.ones_like(times)
+    unique_times = np.unique(times_to_use)
+
+    # Create figure
+    fig_shape = (len(unique_times), len(modalities))
+    fig, axs = plt.subplots(*fig_shape, figsize=[8*sh for sh in fig_shape[::-1]])
+    axs = axs.reshape(fig_shape)
+
+    # Plot
+    import umap
+    for i, time in enumerate(unique_times):
+        for j, m in enumerate(modalities):
+            # Generate UMAP
+            # TODO: Maybe save this for use when imputing non-spatial modalities?
+            m = m.detach().cpu().numpy()
+            m_reduced = umap.UMAP(n_components=2, n_jobs=1, random_state=notebook_seed).fit_transform(m[times_to_use == time])
+
+            # Plot
+            # TODO: Make compatible with temporal
+            for l in np.unique(labels):
+                axs[i][j].scatter(*m_reduced[labels == l].T, label=l)
+
+            # Labels
+            if i == 0: axs[0][j].set_title(f'Modality {j+1}')
+
+            # Styling
+            axs[i][j].spines[['right', 'top']].set_visible(False)
+
+        # Labels
+        if time != -1: axs[i][0].set_ylabel(time)
+
+    # Styling
+    axs[0][-1].legend()
+
+    # Save plot
+    fname =                                     f'{args.run_id}'
+    if args.stage is not None: fname +=         f'_{args.stage:02}'
+    fname +=                                    f'_{config["data"]["dataset"]}'
+    fname +=                                    f'_original.pdf'
+    fig.savefig(os.path.join(PLOT_FOLDER, fname), transparent=True, dpi=300)
+    plt.close(fig)
 
 # %% [markdown]
 # ## Integration Performance Comparison
@@ -1049,7 +1103,7 @@ for ak in args.analysis_key:
         # Choose reduction type
         if args.reduction_type == 'umap':
             import umap
-            fit_reducer = lambda data: umap.UMAP(n_components=3, random_state=notebook_seed).fit(data)
+            fit_reducer = lambda data: umap.UMAP(n_components=3, n_jobs=1, random_state=notebook_seed).fit(data)
             transform_reducer = lambda reducer, data: torch.Tensor(reducer.transform(data))
         elif args.reduction_type == 'pca':
             import sklearn.decomposition
