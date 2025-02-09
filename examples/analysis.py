@@ -114,7 +114,8 @@ if not celltrip.utilities.is_notebook():
     args = parser.parse_args()
 else:
     # args = parser.parse_args('--novid --total_statistics rypltvk5 convergence discovery temporal perturbation'.split(' '))  # MMD-MA
-    args = parser.parse_args('--novid 32jqyk54 convergence discovery temporal perturbation'.split(' '))  # MERFISH
+    args = parser.parse_args('--total_statistics rypltvk5 temporal'.split(' '))  # MMD-MA Temporal Test
+    # args = parser.parse_args('--novid 32jqyk54 convergence discovery temporal perturbation'.split(' '))  # MERFISH
     # args = parser.parse_args('--novid c8zsunc9 convergence discovery temporal perturbation'.split(' '))  # ISS
     # args = parser.parse_args('--gpu 1 brf6n6sn temporal'.split(' '))  # TemporalBrain
 
@@ -1043,7 +1044,7 @@ for ak in args.analysis_key:
         print('\t\tReducing state dimensionality')
         # Get idx of last state in designated stage
         stage_unique, stage_idx = np.unique(stages.numpy()[::-1], return_index=True)
-        stage_idx = memories[ak]['stages'].shape[0] - stage_idx - 1
+        stage_idx = stages.shape[0] - stage_idx - 1
 
         # Choose reduction type
         if args.reduction_type == 'umap':
@@ -1063,6 +1064,7 @@ for ak in args.analysis_key:
             reducer = fit_reducer(states[stage_idx[0]])
             get_reducer = lambda stage: reducer
         elif ak in ('temporal',):
+            # TODO: Maybe add handling for skipped stages?
             get_reducer = lambda stage: fit_reducer(states[stage_idx[stage]])
 
         # UMAP

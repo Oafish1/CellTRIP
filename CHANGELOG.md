@@ -1,5 +1,9 @@
-### 1.0.0+2025-02-06 (1-2)
+### 1.0.0+2025-02-07
+- Figure revisions
+
+### 1.0.0+2025-02-06 (1-3)
 - Additional warnings and checks for perturbation analysis
+- Bugfix for dimensionality reduction on video
 - Figure exports
 - Figure naming corrections
 - Figure updates
