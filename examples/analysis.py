@@ -16,6 +16,7 @@ import seaborn as sns
 import sklearn.metrics
 import sklearn.neighbors
 import torch
+import umap
 import wandb
 
 # Enable text output in notebooks
@@ -46,11 +47,11 @@ torch.set_grad_enabled(False);
 
 # %% [markdown]
 # - TODO
+#   - Allow original data transform to be inactive in the case of 2 dimensions already
+#   - Add imputation visualization for dim > 2 (Use original data transform)
 #   - Get file location rather than `abspath`
-#   - Add arrows to perturbation visualization
 #   - No rotation versions of vids
 #   - Apply inverse transform to imputation results and other methods
-#   - Add imputation visualization for dim > 2
 #   - Add outdir, datadir, etc.
 #   - Add arguments like wandb username/project, etc. as well as local db
 #   - .txt output for perturbations
@@ -283,8 +284,10 @@ temporal += [temporal_temporalBrain]
 # Choose stage order
 temporal = temporal[args.temporal_key]
 
-# Perturbation feature names
+# Perturbation extras
 perturbation_feature_names = [[fnames[pf] for pf in pfs] for pfs, fnames in zip(perturbation_features, features)]
+perturbation_feature_tuples = [(i, f, n) for i, (fs, ns) in enumerate(zip(perturbation_features, perturbation_feature_names)) for f, n in zip(fs, ns)]
+perturbation_feature_tuples = [(*pft, i) for i, pft in enumerate(perturbation_feature_tuples)]
 
 # Initialize memories
 memories = {}
@@ -468,6 +471,103 @@ for ak in args.analysis_key:
     print(f'\tAverage Reward: {memories[ak]["rewards"].cpu().mean():.3f}')
 
 # %% [markdown]
+# # Transforms
+
+# %%
+# Make transforms
+print('Initializing transforms')
+
+# Case variables
+total_representatives = ('convergence', 'discovery', 'perturbation')
+total_representative = total_representatives[
+    np.argwhere(np.isin(total_representatives, args.analysis_key))[0][0]
+] if np.isin(total_representatives, args.analysis_key).any() else None
+temporal_representatives = ('temporal',)
+temporal_representative = temporal_representatives[
+    np.argwhere(np.isin(temporal_representatives, args.analysis_key))[0][0]
+] if np.isin(temporal_representatives, args.analysis_key).any() else None
+
+# Steady states (`steady_state`)
+print('\tSteady states')
+steady_state = defaultdict(lambda: [])
+# Temporal case
+if temporal_representative:
+    # Cast states, etc.
+    present = memories[temporal_representative]['present'].cpu().numpy()
+    states = memories[temporal_representative]['states'].cpu().numpy()
+    stages = memories[temporal_representative]['stages'].cpu().numpy()
+    rewards = memories[temporal_representative]['rewards'].cpu().numpy()
+    # Get last idx for each stage
+    stage_unique, stage_idx = np.unique(stages[::-1], return_index=True)
+    stage_idx = stages.shape[0] - stage_idx - 1
+    # Record
+    for temporal_num, temporal_stage in enumerate(temporal['stages']):
+        steady_state['temporal'].append(states[stage_idx[temporal_num], present[stage_idx[temporal_num]]])
+# Default case
+if total_representative:
+    # Cast states, etc.
+    present = memories[total_representative]['present'].cpu().numpy()
+    states = memories[total_representative]['states'].cpu().numpy()
+    stages = memories[total_representative]['stages'].cpu().numpy()
+    rewards = memories[total_representative]['rewards'].cpu().numpy()
+    # Get last idx for each stage
+    stage_unique, stage_idx = np.unique(stages[::-1], return_index=True)
+    stage_idx = stages.shape[0] - stage_idx - 1
+    # Record
+    steady_state['total'].append(states[stage_idx[0]])
+
+# Original data transforms (`transform_original`)
+print('\tOriginal data')
+transform_original_2d = defaultdict(lambda: [])
+# Base
+def temp_func(m):
+    reducer = umap.UMAP(n_components=2, n_jobs=1, random_state=notebook_seed).fit(m)
+    return lambda x: reducer.transform(x)
+# Temporal case
+if temporal_representative:
+    for temporal_stage in temporal['stages']:
+        for m in modalities:
+            m = m.detach().cpu().numpy()
+            mask = np.isin(times, temporal_stage)
+            transform_original_2d['temporal'].append(celltrip.utilities.LazyComputation(temp_func, m[mask]))
+# Default case
+if total_representative:
+    for m in modalities:
+        m = m.detach().cpu().numpy()
+        transform_original_2d['total'].append(celltrip.utilities.LazyComputation(temp_func, m))
+
+# Single modality imputation pinning functions (`transform_pin`)
+print(f'\tPinning CellTRIP results to feature space')
+transform_pin = defaultdict(lambda: [])
+# Base
+def temp_func(source_points):
+    # TODO: Add train-val
+    # PCA into desired dimensions
+    pinning_reducer_transform = lambda x: x
+    # if ss.shape[1] != modalities[env.reward_distance_target[0]].shape[1]:
+    #     pinning_reducer = sklearn.decomposition.PCA(n_components=modalities[env.reward_distance_target[0]].shape[1])
+    #     pinning_reducer_transform = lambda x: pinning_reducer.transform(x)
+    #     ss = pinning_reducer.fit_transform(ss)
+    target_points = modalities[env.reward_distance_target[0]].detach().cpu().numpy()
+    # Solve for transformation
+    A = np.hstack([source_points, np.ones((source_points.shape[0], 1))])
+    B = target_points
+    pinning_matrix = np.linalg.lstsq(A, B, rcond=None)[0]
+    # Define transformation function
+    def pin_points(points):
+        reduced_points = pinning_reducer_transform(points.reshape([-1, points.shape[-1]])).reshape([*points.shape[:-1], -1])
+        A = np.concatenate([reduced_points, np.ones((*reduced_points.shape[:-1], 1))], axis=-1)
+        return np.dot(A, pinning_matrix)
+    return pin_points
+# Temporal case
+if temporal_representative:
+    for temporal_num, temporal_stage in enumerate(temporal['stages']):
+        transform_pin['temporal'].append(celltrip.utilities.LazyComputation(temp_func, steady_state['temporal'][temporal_num][:, :env.dim]))
+# Default case
+if total_representative:
+    transform_pin['total'].append(celltrip.utilities.LazyComputation(temp_func, steady_state['total'][0][:, :env.dim]))
+
+# %% [markdown]
 # # Static Analyses
 
 # %%
@@ -517,7 +617,7 @@ plot_without_zeros(history['timestep'], history['rewards/action'], color='green'
 plot_without_zeros(history['timestep'], history['rewards/distance'], color='blue', alpha=.75, lw=2, label='Distance Reward')
 plot_without_zeros(history['timestep'], history['rewards/origin'], color='darkorange', alpha=.75, lw=2, label='Origin Reward')
 
-# Stage ticks
+# Stage ticks (first of each stage)
 unique, stage_idx = np.unique(history['stage'][::-1], return_index=True)
 stage_idx = len(history['stage']) - stage_idx
 stage_idx = stage_idx[:-1]
@@ -563,16 +663,13 @@ if args.original:
     axs = axs.reshape(fig_shape)
 
     # Plot
-    import umap
     for i, time in enumerate(unique_times):
         for j, m in enumerate(modalities):
             # Generate UMAP
-            # TODO: Maybe save this for use when imputing non-spatial modalities?
             m = m.detach().cpu().numpy()
-            m_reduced = umap.UMAP(n_components=2, n_jobs=1, random_state=notebook_seed).fit_transform(m[times_to_use == time])
+            m_reduced = transform_original_2d['temporal' if len(unique_times) > 1 else 'total'][j](m[times_to_use == time])
 
             # Plot
-            # TODO: Make compatible with temporal
             for l in np.unique(labels):
                 axs[i][j].scatter(*m_reduced[labels == l].T, label=l)
 
@@ -724,51 +821,29 @@ if 'convergence' in args.analysis_key and application_type == desired_applicatio
 # ## Imputation
 
 # %%
+# Determine imputation method order
 imputation_order = np.unique([k[0] for k in get_other_methods('I')]).tolist() + ['CellTRIP']
-
-# %%
-# Single modality imputation
-if 'convergence' in args.analysis_key and application_type == 'imputation' and len(env.reward_distance_target) == 1:
-    print(f'\tPinning CellTRIP results to feature space')
-
-    # Get steady state
-    steady_state = memories['convergence']['states'][-1].detach().cpu()[:, :env.dim].numpy()
-    # PCA into desired dimensions
-    if steady_state.shape[1] != modalities[env.reward_distance_target[0]].shape[1]:
-        steady_state = sklearn.decomposition.PCA(n_components=modalities[env.reward_distance_target[0]].shape[1]).fit_transform(steady_state)
-
-    # Choose pinning points (TODO: Add train/val)
-    source_points = steady_state
-    target_points = modalities[env.reward_distance_target[0]].detach().cpu().numpy()
-    # Solve for transformation
-    # TODO: Add this math to paper
-    A = np.hstack([source_points, np.ones((source_points.shape[0], 1))])
-    B = target_points
-    T = np.linalg.lstsq(A, B, rcond=None)[0]
-    # Apply transformation
-    pinned_points = np.dot(A, T)
 
 # %% [markdown]
 # ### Performance Comparison
 
 # %%
 # Single modality imputation
-if 'convergence' in args.analysis_key and application_type == 'imputation' and len(env.reward_distance_target) == 1:
-    print(f'\tImputation performance comparison')
-
-    # Get steady state
-    steady_state = memories['convergence']['states'][-1].detach().cpu()[:, :env.dim] * np.sqrt(modalities[env.reward_distance_target[0]].shape[1])  # Multiplication undoes CellTRIP's feature scaling in `euclidean_distance`
-    # steady_state = sklearn.decomposition.PCA(n_components=modalities[env.reward_distance_target[0]].shape[1]).fit_transform(steady_state)
-
+if total_representative and len(env.reward_distance_target) == 1:
+    print(f'\tSingle modality imputation performance comparison')
+    # TODO: Add inverse transform here
+    
     # Get other methods
     method_results = get_other_methods('I')
-
     # Add CellTRIP
-    method_results[('CellTRIP', str(env.reward_distance_target[0]+1), notebook_seed)] = pinned_points
-
+    # Multiplication undoes CellTRIP's feature scaling in `euclidean_distance`
+    method_results[('CellTRIP', str(env.reward_distance_target[0]+1), notebook_seed)] = transform_pin['total'][0](
+        steady_state['total'][0][:, :3] * np.sqrt(modalities[env.reward_distance_target[0]].shape[1]))
     # Calculate modal dist
     # raw_modalities = ppc.cast(ppc.inverse_transform(ppc.inverse_cast(modalities)))
     modal_dist = [celltrip.utilities.euclidean_distance(m) for m in modalities]
+    # Add target data
+    target_points = modalities[env.reward_distance_target[0]].cpu().numpy()
 
     # Compile and calculate performances
     raw_performance = None
@@ -783,7 +858,7 @@ if 'convergence' in args.analysis_key and application_type == 'imputation' and l
         sample_mse = (data_dist - modal_dist[int(modality)-1].cpu()).square().mean(dim=-1)
         feature_mse = (data_dist - modal_dist[int(modality)-1].cpu()).square().mean(dim=0)
         raw_sample_mse = ((data - target_points)**2).mean(dim=-1)
-        raw_feature_mse = ((data - target_points)**2).mean(dim=-1)
+        raw_feature_mse = ((data - target_points)**2).mean(dim=0)
 
         # Record
         df = pd.DataFrame({'Method': method, 'Modality': modality, 'Seed': seed, 'Metric': 'Inter-Cell MSE', 'Value': sample_mse})
@@ -862,18 +937,18 @@ if 'convergence' in args.analysis_key and application_type == 'imputation' and l
 # ### Method Error Visualization
 
 # %%
-# Single modality imputation
-if 'convergence' in args.analysis_key and application_type == 'imputation' and len(env.reward_distance_target) == 1 and modalities[env.reward_distance_target[0]].shape[1] == 2:
+# Single 2D modality imputation
+if total_representative and len(env.reward_distance_target) == 1 and modalities[env.reward_distance_target[0]].shape[1] == 2:
     print(f'\tImputation method error visualization')
 
     # Get other methods
     method_results = get_other_methods('I')
     # Add CellTRIP
-    method_results[('CellTRIP', str(env.reward_distance_target[0]+1), notebook_seed)] = pinned_points
+    method_results[('CellTRIP', str(env.reward_distance_target[0]+1), notebook_seed)] = transform_pin['total'][0](steady_state['total'][0][:, :3])
     # Add Measured
-    method_results[('Measured', str(env.reward_distance_target[0]+1), None)] = target_points
+    method_results[('Measured', str(env.reward_distance_target[0]+1), None)] = modalities[env.reward_distance_target[0]].cpu().numpy()
 
-    # Precalculate params - get cartesian coordinates
+    # Precalculate params - get polar coordinates
     centered_points = target_points - target_points.mean(axis=0)
     r = (centered_points**2).sum(axis=-1)**(1/2)
     theta = np.arctan2(centered_points[:, 1], centered_points[:, 0])
@@ -940,17 +1015,14 @@ if 'perturbation' in args.analysis_key:
     unique_idx = stages.shape[0] - unique_idx - 1
     # unique_stages, unique_idx = unique_stages[::-1], unique_idx[::-1]
 
-    # Record perturbation feature pairs
-    perturbation_feature_triples = [(i, f, n) for i, (fs, ns) in enumerate(zip(perturbation_features, perturbation_feature_names)) for f, n in zip(fs, ns)]
-
     # Check memories
-    assert len(perturbation_feature_triples) == len(unique_idx)-1, (
+    assert len(perturbation_feature_tuples) == len(unique_idx)-1, (
         '`perturbation_features` and `memories` do not have the same '
         'features, please run perturbation using `--force`')
 
     # Compute effect sizes for each
     effect_sizes = []
-    for stage, idx, pft in zip(unique_stages, unique_idx, [[]]+perturbation_feature_triples):
+    for stage, idx, pft in zip(unique_stages, unique_idx, [[]]+perturbation_feature_tuples):
         # Get state
         state = memories['perturbation']['states'][idx]
 
@@ -961,9 +1033,6 @@ if 'perturbation' in args.analysis_key:
 
         # Move to next modality if needed, assumes triples advance modalities ortholinearly
         while pft[0] + 1 > len(effect_sizes): effect_sizes.append([])
-
-        # Get perturbed feature
-        m_idx, pf, pf_name = perturbation_feature_triples[stage-1]
 
         # Compute effect size
         effect_size = (state[:, :env.dim] - steady_state[:, :env.dim]).square().sum(dim=-1).sqrt().mean(dim=-1).item()
@@ -978,6 +1047,140 @@ if 'perturbation' in args.analysis_key:
 
         # CLI
         print(f'\t\tModality {i}: ' + ', '.join([f'{pfn} ({es:.02e})' for pfn, es in zip(pfns, ess)]))
+
+# %% [markdown]
+# ### Visualization
+
+# %%
+if 'perturbation' in args.analysis_key:
+    print('\tPerturbation visualization')
+
+    # Run for top features
+    num_top_features = 7
+    df = pd.DataFrame(
+        [(*pft, es) for pft, es in zip(perturbation_feature_tuples, sum(effect_sizes, []))],
+        columns=['Modality', 'Modal Index', 'Feature Name', 'Stage Num', 'Effect Size'])
+    df = df.sort_values('Effect Size', ascending=False)
+    df = df.groupby('Modality').head(num_top_features)
+
+    # Make plot
+    fig, axs = plt.subplots(len(env.modalities_to_return), num_top_features, figsize=(num_top_features*8, len(env.modalities_to_return)*8))
+    if len(axs.shape) < 2: axs = axs.reshape((1, -1))
+
+    modal_counts = defaultdict(lambda: 0)
+    for _, row in df.iterrows():
+        # Get ax
+        ax = axs[int(row['Modality']), modal_counts[row['Modality']]]
+        modal_counts[row['Modality']] += 1
+
+        # Get last idx for each stage
+        stages = memories['perturbation']['stages'].cpu().numpy()
+        unique_stages, unique_idx = np.unique(stages[::-1], return_index=True)
+        unique_idx = stages.shape[0] - unique_idx - 1
+
+        # Get perturbation subset
+        begin_idx = unique_idx[row['Stage Num']-1] + 1
+        end_idx = unique_idx[row['Stage Num']]
+        states = memories['perturbation']['states'].cpu().numpy()[begin_idx:end_idx+1]
+
+        # Pin to desired space
+        pinned_states = transform_pin['total'][0](states[:, :, :env.dim])
+
+        # Take means by regions
+        square_size = max([np.max(pinned_states[:, i]) - np.min(pinned_states[:, i]) for i in range(2)]) / 10.
+        xs, ys = np.meshgrid(
+            np.arange(np.min(pinned_states[:, :, 0]), np.max(pinned_states[:, :, 0]), square_size),
+            np.arange(np.min(pinned_states[:, :, 1]), np.max(pinned_states[:, :, 1]), square_size))
+        xs, ys = xs.flatten(), ys.flatten()
+        mean_states = []; total = 0
+        for x, y in zip(xs, ys):
+            state = pinned_states[0]
+            bottom_left = np.array([x, y])
+            top_right = bottom_left + square_size
+            mask = (state >= bottom_left) * (state < top_right)
+            mask = mask.prod(axis=-1).astype(bool)
+            if mask.sum() > 0:
+                mean_states.append(pinned_states[:, mask].mean(axis=1, keepdims=True))
+        mean_states = np.concatenate(mean_states, axis=1)
+
+        # Plot original data
+        for l in np.unique(labels):
+            ax.scatter(*pinned_states[0, labels == l].T, label=l, alpha=.2)
+
+        # Arrow params
+        states_to_use = mean_states
+
+        # Get most interesting arrows
+        total_movement = np.linalg.norm(states_to_use[1:] - states_to_use[:-1], ord=2, axis=-1).sum(axis=0)
+        num_top = 50
+        top_arrows = np.argsort(total_movement)[:-(num_top+1):-1]
+
+        # Plot movement
+        for i in top_arrows:
+            # Filter to non-small movements
+            threshold = 5e-3
+            moving_pos_mask = []
+            prev_pos = None
+            for pos in states_to_use[:, i]:
+                if prev_pos is None:
+                    moving_pos_mask.append(True)
+                    prev_pos = pos.copy()
+                    continue
+
+                # Calculate dist
+                dist = np.linalg.norm(pos - prev_pos, ord=2, axis=-1)
+
+                # Record
+                moving_pos_mask.append(dist > threshold)
+                if moving_pos_mask[-1]: prev_pos = pos
+
+            # Get moving states
+            moving_states = states_to_use[moving_pos_mask, i]
+
+            # Skip if too short
+            if moving_states.shape[0] < 2: continue
+
+            # Compute total movement
+            start_pos = moving_states[0]
+            end_pos = moving_states[-1]
+            diff_pos = end_pos - start_pos
+            r = (diff_pos**2).sum(axis=-1)**(1/2)
+            theta = np.arctan2(diff_pos[1], diff_pos[0])
+            # Aggregate colors
+            hue = theta / (2*np.pi) + .5
+            value = .4 + .2 * min(r / .1, 1.)
+            saturation = .8
+            color = colorsys.hsv_to_rgb(hue, saturation, value)
+
+            # Plot lines
+            ax.plot(*moving_states.T, color=color)
+
+            # Plot arrow heads
+            lookback_frames = max(int(.1*moving_states.shape[0]), 1)
+            start_pos = moving_states[-(lookback_frames+1)]
+            end_pos = moving_states[-1]
+            diff_pos = end_pos - start_pos
+            # origin = square_size * np.floor(start_pos / square_size) + square_size / 2
+            ax.arrow(*start_pos, *diff_pos, width=0, head_width=.05, color=color)
+
+        # Labels
+        ax.set_title(row['Feature Name'])
+        if modal_counts[row['Modality']] == 1: ax.set_ylabel(f'Modality {row["Modality"]+1}')
+        if modal_counts[row['Modality']] == num_top_features and int(row['Modality']) == 0:
+            legend = ax.legend()
+            for lh in legend.legend_handles: lh.set_alpha(1)
+
+        # Styling
+        ax.set(xticklabels=[], xticks=[], yticklabels=[], yticks=[])
+        ax.spines[['right', 'top', 'bottom', 'left']].set_visible(False)
+
+    # Save plot
+    fname =                                     f'{args.run_id}'
+    if args.stage is not None: fname +=         f'_{args.stage:02}'
+    fname +=                                    f'_{config["data"]["dataset"]}'
+    fname +=                                    f'_perturbation_velocity.pdf'
+    fig.savefig(os.path.join(PLOT_FOLDER, fname), transparent=True, dpi=300)
+    plt.close(fig)
 
 # %% [markdown]
 # ### Comparison
@@ -1094,6 +1297,7 @@ for ak in args.analysis_key:
     # if states_3d is not None: states_3d = states_3d[::args.skip]
 
     # Reduce dimensions
+    # TODO: Maybe add to transforms section?
     if states.shape[-1] > 2*3 or args.force_reduction:
         print('\t\tReducing state dimensionality')
         # Get idx of last state in designated stage

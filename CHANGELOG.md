@@ -1,3 +1,17 @@
+### 1.0.0+2025-02-11
+- Additional visualizations for perturbation mean velocity plot
+- CLI changes
+- Extend perturbation mean velocity plot to top genes by effect size
+- Perturbation feature data formatting changes
+- Plot reruns
+- QOL transformation updates
+- Standardize transformation functions
+- `LazyComputation` utility class
+
+### 1.0.0+2025-02-10
+- Add pinning function
+- Add perturbation mean velocity plot for chosen gene
+
 ### 1.0.0+2025-02-09
 - Add visualization for original input modalities
 - Figure revisions
@@ -86,7 +100,6 @@
 - Use WandB run id for other method preprocessing
 
 ### 1.0.0+2025-01-24 (1-2)
-- `TemporalBrain` preliminary video output
 - Add memory saving/loading for multiple analysis keys in `analysis`
 - Automatic overwriting for `convert_video_to_gif` script
 - Capability to run multiple analysis keys in the same call for `analysis`
@@ -99,6 +112,7 @@
 - Move memory readouts after compression and saving/loading
 - README additions and revisions
 - Script for running other scripts on files of all matching extensions, primarily for `plots` folder
+- `TemporalBrain` preliminary video output
 
 ### 1.0.0+2025-01-23 (1-3)
 - Add UMAP and PCA options for high-dimensional projections in `analysis`

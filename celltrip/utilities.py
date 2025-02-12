@@ -653,6 +653,19 @@ def subsample_nodes(*DS, num_nodes, **kwargs):
     return clean_return(ret, **kwargs)
 
 
+class LazyComputation:
+    "Lazily compute specified function once on first call"
+    def __init__(self, init_func, *args, **kwargs):
+        self.init_func = init_func
+        self.args, self.kwargs = args, kwargs
+        self.func = None
+
+    def __call__(self, x):
+        if self.func is None:
+            self.func = self.init_func(*self.args, **self.kwargs)
+        return self.func(x)
+
+
 class Preprocessing:
     "Apply modifications to input modalities based on given arguments. Takes np.array as input"
     def __init__(
