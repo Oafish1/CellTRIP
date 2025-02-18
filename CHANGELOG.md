@@ -1,3 +1,13 @@
+### 1.0.0+2025-02-17
+- Figure updates
+- Revise TODO lists
+
+### 1.0.0+2025-02-13
+- Fix figure 1/2 crop
+
+### 1.0.0+2025-02-12
+- Revise TODO organization
+
 ### 1.0.0+2025-02-11
 - Additional visualizations for perturbation mean velocity plot
 - CLI changes
