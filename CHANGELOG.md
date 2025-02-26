@@ -1,3 +1,51 @@
+### 1.0.0+2025-02-25
+- Add Cython build file
+- Add decorator `catch_on_exit` to hook Ray cancel
+- Add fast sampling method to `AdvancedMemoryBuffer`
+- Add memory usage decorator
+- Add profiling decorator
+- Approximate `running_statistics` in `AdvancedMemoryBuffer` for efficiency
+- Argument standardization and key filtering for `DistributedManager`
+- Change behavior of `is_list_like`
+- Disable Ray deduplication
+- Dynamic worker allocation based on estimated memory and VRAM usage
+- Enhanced policy update CLI
+- Fix `_flat_index_to_index` from `AdvancedMemoryBuffer` and add inverse
+- Fix `propagate_rewards` for `prune=None`
+- Fix deadlocks from canceling
+- Heavily optimize `split_state`
+- New `decorators` module
+- Offload major computations to C backend
+- Optimize `propagate_rewards` and fix bottlenecks
+- Probably 10-100x speedup in total
+- Smart rollout and update
+
+### 1.0.0+2025-02-23
+- Add `try_catch` decorator utility to print errors and tracebacks for Ray
+- Add storage appending to memories
+- Fix `proximity` `split_state` `sample_strategy` to sample from position rather than modalities
+- Fix for `split_state` reproducibility and compatibility with `max_nodes` and `idx` arguments, very minor performance hit
+- Fix snakeviz hosting arguments
+
+### 1.0.0+2025-02-22
+- Add basic training loop to `new_train` notebook
+- QOL distributed CLI updates
+- Utility class functions and logic
+
+### 1.0.0+2025-02-20
+- Improve thread-safety with threading locks
+
+### 1.0.0+2025-02-19
+- Additional parameter storage for main model
+- Ray implementations and locking `PolicyManager` class
+- Remove old models from `PPO` class
+- Memory appending for `AdvancedMemoryBuffer`
+- Updates and more future handling for `DistributedManager` class
+
+### 1.0.0+2025-02-18
+- Add early stopping to environment
+- Add multithreaded forward and ray outlines
+
 ### 1.0.0+2025-02-17
 - Figure updates
 - Revise TODO lists

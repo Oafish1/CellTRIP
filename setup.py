@@ -15,9 +15,10 @@ setup(
     version=__version__,
     packages=find_packages(),
     install_requires=[
+        'numpy',
+        'ray[default]',
         'scipy>=1.13.0',  # For sparse, ~1.13.0
         'torch',
-        'numpy',
     ],
     extras_require={
         'dev': [

@@ -61,6 +61,126 @@ def partition_distance(data, partitions=None, func=euclidean_distance):
     return scipy.sparse.coo_matrix((dist.values(), dist.indices()), shape=dist.shape).tocsr()
 
 
+def split_state(
+    state,
+    idx=None,
+    max_nodes=None,
+    sample_strategy='random-proximity',
+    reproducible_strategy=None,  # 'hash'
+    sample_dim=None,  # Should be the dim of the env
+    return_mask=False,
+):
+    "Split full state matrix into individual inputs, self_idx is an optional array"
+    # Parameters
+    if idx is None: idx = np.arange(state.shape[0]).tolist()
+    if not isinstance(idx, list): idx = [idx]
+    self_idx = idx
+    del idx
+
+    # Get self features for each node
+    self_entity = state[self_idx]
+
+    # Get node features for each state
+    node_mask = torch.eye(state.shape[0], dtype=torch.bool)
+    node_mask = ~node_mask
+
+    # Enforce reproducibility
+    if reproducible_strategy is not None:
+        # Save old random seed
+        seed_old = torch.seed()
+
+    # Hashing method
+    if reproducible_strategy is None:
+        pass
+
+    elif reproducible_strategy == 'hash':
+        # Set new random state
+        torch.manual_seed(hash(state))
+
+    # Set seed (not recommended)
+    # TODO: Is there a better way to do this?
+    elif type(reproducible_strategy) != str:
+        # Set new random state
+        torch.manual_seed(reproducible_strategy)
+
+    else:
+        raise ValueError(f'Reproducible strategy \'{reproducible_strategy}\' not found.')
+
+    # Enforce max nodes
+    num_nodes = state.shape[0] - 1
+    use_mask = max_nodes is not None and max_nodes < num_nodes
+    if use_mask:
+        # Set new num_nodes
+        num_nodes = max_nodes - 1
+
+        # Random sample `num_nodes` to `max_nodes`
+        if sample_strategy == 'random':
+            # Filter nodes to `max_nodes` per idx
+            probs = torch.rand_like(node_mask, dtype=torch.get_default_dtype())
+            probs[~node_mask] = 0
+            selected_idx = probs.argsort(dim=-1)[..., -num_nodes:]  # Take `num_nodes` highest values
+
+            # Create new mask
+            node_mask = torch.zeros((state.shape[0], state.shape[0]), dtype=torch.bool)
+            for i in range(node_mask.shape[0]):
+                node_mask[i, selected_idx[i]] = True
+
+        # Sample closest nodes
+        elif sample_strategy == 'proximity':
+            # Check for dim pass
+            assert sample_dim is not None, (
+                f'`sample_dim` argument must be passed if `sample_strategy` is \'{sample_strategy}\'')
+
+            # Get inter-node distances
+            dist = euclidean_distance(state[..., :sample_dim])
+            dist[~node_mask] = -1  # Set self-dist lowest for case of ties
+
+            # Select `max_nodes` closest
+            selected_idx = dist.argsort(dim=-1)[..., 1:num_nodes+1]
+            
+            # Create new mask
+            node_mask = torch.zeros((state.shape[0], state.shape[0]), dtype=torch.bool)
+            for i in range(node_mask.shape[0]):
+                node_mask[i, selected_idx[i]] = True
+
+        # Randomly sample from a distribution of node distance
+        elif sample_strategy == 'random-proximity':
+            # Check for dim pass
+            assert sample_dim is not None, (
+                f'`sample_dim` argument must be passed if `sample_strategy` is \'{sample_strategy}\'')
+
+            # Get inter-node distances
+            dist = euclidean_distance(state[..., :sample_dim])
+            prob = 1 / (dist+1)
+            prob[~node_mask] = 0  # Remove self
+
+            # Randomly sample
+            node_mask = torch.zeros((state.shape[0], state.shape[0]), dtype=torch.bool)
+            idx = prob.multinomial(num_nodes, replacement=False)
+            node_mask[torch.arange(node_mask.shape[0]).unsqueeze(-1).expand(node_mask.shape[0], num_nodes), idx] = True
+        else:
+            # TODO: Verify works
+            raise ValueError(f'Sample strategy \'{sample_strategy}\' not found.')
+        
+    # Shrink mask to appropriate size
+    # NOTE: Randomization needs to be done on all samples for reproducibility
+    # TODO: Double-check that the reproducibility works
+    node_mask = node_mask[self_idx]
+
+    # Revert random changes
+    if reproducible_strategy is not None:
+        torch.manual_seed(seed_old)
+    
+    # Final formation
+    node_entities = state.unsqueeze(0).expand(len(self_idx), *state.shape)
+    node_entities = node_entities[node_mask].reshape(len(self_idx), num_nodes, state.shape[1])
+
+    # Return
+    ret = (self_entity, node_entities)
+    if return_mask: ret += (node_mask,)
+    return ret
+
+
 class time_logger():
     """Class made for easy logging with toggleable verbosity"""
     def __init__(
@@ -255,129 +375,11 @@ def clean_return(ret, keep_array=False):
     return ret
 
 
-def split_state(
-    state,
-    idx=None,
-    max_nodes=None,
-    sample_strategy='random-proximity',
-    reproducible_strategy='hash',
-    dimension=None,  # Should be the full positional dim (including velocity)
-    return_mask=False,
-):
-    "Split full state matrix into individual inputs, self_idx is an optional array"
-    # Parameters
-    if idx is None: idx = list(range(state.shape[0]))
-    if not isinstance(idx, list): idx = [idx]
-    self_idx = idx
-    del idx
-
-    # Get self features for each node
-    self_entity = state[self_idx]
-
-    # Get node features for each state
-    node_mask = torch.zeros((len(self_idx), state.shape[0]), dtype=torch.bool)
-    for i, j in enumerate(self_idx): node_mask[i, j] = True
-    node_mask = ~node_mask
-
-    # Enforce reproducibility
-    if reproducible_strategy is not None:
-        # Save old random seed
-        seed_old = torch.seed()
-
-    # Hashing method
-    if reproducible_strategy is None:
-        pass
-
-    elif reproducible_strategy == 'hash':
-        # Set new random state
-        torch.manual_seed(hash(state))
-
-    # Set seed (not recommended)
-    # TODO: Is there a better way to do this?
-    elif type(reproducible_strategy) != str:
-        # Set new random state
-        torch.manual_seed(reproducible_strategy)
-
-    else:
-        raise ValueError(f'Reproducible strategy \'{reproducible_strategy}\' not found.')
-
-    # Enforce max nodes
-    num_nodes = state.shape[0] - 1
-    use_mask = max_nodes is not None and max_nodes < num_nodes
-    if use_mask:
-        # Set new num_nodes
-        num_nodes = max_nodes - 1
-
-        # Random sample `num_nodes` to `max_nodes`
-        if sample_strategy == 'random':
-            # Filter nodes to `max_nodes` per idx
-            probs = torch.rand_like(node_mask, dtype=torch.get_default_dtype())
-            probs[~node_mask] = 0
-            selected_idx = probs.argsort(dim=-1)[..., -num_nodes:]  # Take `num_nodes` highest values
-
-            # Create new mask
-            node_mask = torch.zeros((len(self_idx), state.shape[0]), dtype=torch.bool)
-            for i in range(node_mask.shape[0]):
-                node_mask[i, selected_idx[i]] = True
-
-        # Sample closest nodes
-        elif sample_strategy == 'proximity':
-            # Check for dim pass
-            assert dimension is not None, (
-                f'`dimension` argument must be passed if `sample_strategy` is \'{sample_strategy}\'')
-
-            # Get inter-node distances
-            dist = euclidean_distance(state[..., dimension:])
-            dist[~node_mask] = -1  # Set self-dist lowest for case of ties
-
-            # Select `max_nodes` closest
-            selected_idx = dist.argsort(dim=-1)[..., 1:max_nodes]
-            
-            # Create new mask
-            node_mask = torch.zeros((len(self_idx), state.shape[0]), dtype=torch.bool)
-            for i in range(node_mask.shape[0]):
-                node_mask[i, selected_idx[i]] = True
-
-        # Randomly sample from a distribution of node distance
-        elif sample_strategy == 'random-proximity':
-            # Check for dim pass
-            assert dimension is not None, (
-                f'`dimension` argument must be passed if `sample_strategy` is \'{sample_strategy}\'')
-
-            # Get inter-node distances
-            dist = euclidean_distance(state[..., dimension:])
-            prob = 1 / dist+1
-            prob[~node_mask] = 0  # Remove self
-
-            # Randomly sample
-            node_mask = torch.zeros((len(self_idx), state.shape[0]), dtype=torch.bool)
-            for i in range(node_mask.shape[0]):
-                # TODO: Fix syntax
-                idx = prob[self_idx[i]].multinomial(num_nodes, replacement=False)
-                node_mask[i, idx] = True
-
-        else:
-            # TODO: Verify works
-            raise ValueError(f'Sample strategy \'{sample_strategy}\' not found.')
-
-    # Revert random changes
-    if reproducible_strategy is not None:
-        torch.manual_seed(seed_old)
-    
-    # Final formation
-    node_entities = state.unsqueeze(0).expand(len(self_idx), *state.shape)
-    node_entities = node_entities[node_mask].reshape(len(self_idx), num_nodes, state.shape[1])
-
-    # Return
-    ret = (self_entity, node_entities)
-    if return_mask: ret += (node_mask,)
-    return ret
-
-
 def is_list_like(l):
     "Test if `l` has the `__len__` method`"
     try:
         len(l)
+        assert not isinstance(l, str)
         return True
     except:
         return False
@@ -675,7 +677,7 @@ class Preprocessing:
         # Filtering
         top_variant=int(4e4),
         # PCA
-        pca_dim=512,
+        pca_dim=512,  # TODO: Add auto-handling for less PCA than samples
         pca_copy=True,  # Set to false if too much memory being used
         # Subsampling
         num_nodes=None,

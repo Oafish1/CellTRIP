@@ -4,16 +4,10 @@ import torch
 from . import utilities
 
 
-class trajectory:
+class EnvironmentBase:
     """
     A bounded `dim`-dimensional area where agents control velocity changes
     for individual nodes.
-
-    Reward Distance Types
-    ---------------------
-    'target': Nodes are rewarded for approaching a specified target.
-    'euclidean': Nodes are rewarded for matching inter-node euclidean distances
-        across all modalities.
     """
     def __init__(self,
         # Data
@@ -24,6 +18,9 @@ class trajectory:
         pos_rand_bound=1,
         vel_bound=1,
         delta=.1,
+        # Early stopping
+        vel_threshold=1e-3,
+        max_timesteps=1_000,
         # Rewards
         reward_distance=None,
         reward_origin=None,
@@ -38,13 +35,15 @@ class trajectory:
         # Extras
         **kwargs,
     ):
-        # Record modal data
+        # Record parameters
         self.modalities = modalities
         self.dim = dim
         self.pos_bound = pos_bound
         self.pos_rand_bound = pos_rand_bound
         self.vel_bound = vel_bound
         self.delta = delta
+        self.vel_threshold = vel_threshold
+        self.max_timesteps = max_timesteps
         self.modalities_to_return = modalities_to_return
         self.reward_distance_target = reward_distance_target
         self.device = device
@@ -175,6 +174,9 @@ class trajectory:
             + penalty_action
         )
 
+        # Iterate timestep
+        self.timestep += 1
+
         ret = (rwd, self.finished())
         if return_itemized_rewards: ret += {
             'distance': reward_distance,
@@ -189,6 +191,9 @@ class trajectory:
         # Assign random positions and velocities
         self.pos = self.pos_rand_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
         self.vel = self.vel_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
+
+        # Reset timestep
+        self.timestep = 0
 
     ### Input functions
     def add_velocities(self, velocities, node_ids=None):
@@ -241,7 +246,7 @@ class trajectory:
         return running
 
     def finished(self):
-        return False
+        return (self.get_velocities() <= self.vel_threshold).all() or self.timestep >= self.max_timesteps
 
     ### Get-Set functions
     def set_modalities(self, modalities):

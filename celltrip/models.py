@@ -6,6 +6,7 @@ from torch.distributions.multivariate_normal import MultivariateNormal
 import torch.nn as nn
 import torch.nn.functional as F
 
+from . import decorators
 from . import utilities
 
 
@@ -15,17 +16,18 @@ class AdvancedMemoryBuffer:
     def __init__(self, suffix_len, rs_nset=1e5, split_args={}):
         # User parameters
         self.suffix_len = suffix_len
+        self.rs_nset = rs_nset
         self.split_args = split_args
 
         # Storage variables
         self.storage = {
-            'keys': [],             # Lists containing keys in the first dim of states
-            'states': [],           # State tensors of dim `keys x non-suffix features`
-            'actions': [],          # Actions
-            'action_logs': [],      # Action probabilities
-            'state_vals': [],       # Critic evaluation of state
-            'rewards': [],          # Rewards, list of lists
-            'is_terminals': [],     # Booleans indicating if the terminal state has been reached
+            'keys': [],             # Keys in the first dim of states (1D Tuple)
+            'states': [],           # State tensors of dim `keys x non-suffix features` (2D Tensor)
+            'actions': [],          # Actions (2D Tensor)
+            'action_logs': [],      # Action probabilities (2D Tensor)
+            'state_vals': [],       # Critic evaluation of state (1D Tensor)
+            'rewards': [],          # Rewards, list of lists (1D List)
+            'is_terminals': [],     # Booleans indicating if the terminal state has been reached (Bool)
         }
         self.persistent_storage = {
             'suffixes': {},         # Suffixes corresponding to keys
@@ -105,6 +107,64 @@ class AdvancedMemoryBuffer:
                 ret[k] = torch.stack(ret[k], dim=0)
 
         return dict(ret)
+    
+    def fast_sample(self, num_memories, mask=None, clip=True):
+        # Initialization
+        ret = defaultdict(lambda: [])
+        memory_indices = []
+
+        # Get random list order
+        list_order = np.arange(len(self.storage['keys']))
+        np.random.shuffle(list_order)
+
+        # Search for index
+        num_memories_recorded = 0
+        for list_num in list_order:
+            if mask is not None:
+                if not mask[list_num]: continue
+            list_len = len(self.storage['keys'][list_num])
+
+            # Get values
+            for k in self.storage:
+                # Skip certain keys
+                if k in ['keys', 'rewards', 'is_terminals']: continue
+
+                # Special cases
+                if k == 'states':
+                    val = utilities.split_state(
+                        self._append_suffix(self.storage[k][list_num], keys=self.storage['keys'][list_num]),
+                        **self.split_args,
+                    )
+
+                # Main case
+                else: val = self.storage[k][list_num]
+
+                # Record
+                ret[k].append(val)
+
+            # Record memory indices and iterate
+            memory_indices += [(list_num, i) for i in range(list_len)]
+            num_memories_recorded += list_len
+
+            # Break if enough memories retrieved
+            if num_memories_recorded >= num_memories: break
+
+        # Catch if too few
+        else: raise IndexError(f'Memories object only contains {len(self)} memories, {num_memories} requested.')
+
+        # Sort to indexing order and stack
+        for k in ret:
+            if k == 'states':
+                ret[k] = [torch.concat([s[i] for s in ret[k]], dim=0) for i in range(2)]
+                if clip: ret[k] = [t[:num_memories] for t in ret[k]]
+            else:
+                ret[k] = torch.concat(ret[k], dim=0)
+                if clip: ret[k] = ret[k][:num_memories]
+        memory_indices = torch.tensor(self._index_to_flat_index(memory_indices))
+        if clip: memory_indices = memory_indices[:num_memories]
+
+        # TODO: Return indices so rewards can be used
+        return dict(ret), memory_indices
 
     def __len__(self):
         return sum(len(keys) for keys in self.storage['keys'])
@@ -130,20 +190,75 @@ class AdvancedMemoryBuffer:
         # Append to state
         return torch.concat((state, suffix_matrix), dim=1)
 
-    def _flat_index_to_index(self, idx):
-        "Convert int index to grouped format that can be used on keys, state, etc."
+    def _flat_index_to_index(self, idx, inverse=False):
+        """
+        Convert int index to grouped format that can be used on keys, state, etc. or vice-versa
+
+        Former takes int or list of ints as input, latter takes tuple or list of tuples
+        """
         # Basic checks
-        assert not utilities.is_list_like(idx) and idx >= 0, 'Index must be a positive integer'
+        if not inverse and not utilities.is_list_like(idx): idx = [idx]
+        if inverse and not utilities.is_list_like(idx[0]): idx = [idx]
+
+        # Sort idx
+        sort_idx = np.argsort(idx, axis=0)
+        if inverse: sort_idx = sort_idx[:, 0]
+        sort_inverse_idx = np.argsort(sort_idx)
 
         # Search for index
-        running_index = 0
-        for list_num in range(len(self.keys)):
-            list_len = len(self.keys[list_num])
-            if running_index + list_len > idx:
-                return (list_num, idx - running_index)
+        seeking_index = 0; running_index = 0; found_idx = []
+        for list_num in range(len(self.storage['keys'])):
+            list_len = len(self.storage['keys'][list_num])
+            if not inverse:
+                while seeking_index < len(idx) and idx[sort_idx[seeking_index]] < running_index + list_len:
+                    found_idx.append( (list_num, idx[sort_idx[seeking_index]] - running_index) )
+                    seeking_index += 1
+            else:
+                while seeking_index < len(idx) and list_num == idx[sort_idx[seeking_index]][0]:
+                    found_idx.append( running_index + idx[sort_idx[seeking_index]][1] )
+                    seeking_index += 1
+            running_index += list_len
+
+            # Check for exit
+            if seeking_index == len(idx): break
 
         # Throw error if not found
-        raise IndexError('Index out of range')
+        else: raise IndexError('Index out of range')
+
+        # Invert sorting
+        ret = [found_idx[i] for i in sort_inverse_idx]
+        if len(ret) == 1: ret = ret[0]
+        return ret
+    
+    def _index_to_flat_index(self, idx):
+        return self._flat_index_to_index(idx, inverse=True)
+    
+    def get_storage(self):
+        return self.storage, self.persistent_storage
+
+    def append_memory(self, *args):
+        "Args is either a memory object or storage, (optional) persistent storage"
+        # Parse input
+        persistent = True
+        if isinstance(args[0], type(self)):
+            memory_obj = args[0]
+            assert (~np.array(list(memory_obj.recorded.values()))).all(), 'Appending memory object must have no pending records'
+            storage, persistent_storage = memory_obj.get_storage()
+        elif len(args) > 1:
+            storage, persistent_storage = args
+        elif len(args) == 1:
+            storage, = args
+            persistent = False
+
+        # Check that all records are complete
+        assert (~np.array(list(self.recorded.values()))).all(), 'Base memory object must have no pending records'
+
+        # Append storage
+        for k in self.storage: self.storage[k] += storage[k]
+
+        # Append persistent storage
+        if persistent:
+            for k in self.persistent_storage: self.persistent_storage[k].update(persistent_storage[k])
 
     def record(self, **kwargs):
         "Record passed variables"
@@ -176,14 +291,16 @@ class AdvancedMemoryBuffer:
             # Set all variables as unrecorded
             for k in self.recorded: self.recorded[k] = False
 
-    def propagate_rewards(self, gamma=.95, prune=0):
+    def propagate_rewards(self, gamma=.95, prune=None):
         "Propagate rewards with decay"
-        ret, ret_prune = [], []
-        running_rewards = {k: 0 for k in np.unique(sum(self.storage['keys'], ()))}
-        running_prune = {k: 0 for k in np.unique(sum(self.storage['keys'], ()))}
+        ret, ret_prune, ret_list_prune = [], [], []
+        running_rewards = defaultdict(lambda: 0)  # {k: 0 for k in np.unique(sum(self.storage['keys'], ()))}
+        running_prune = defaultdict(lambda: 0)  # {k: 0 for k in np.unique(sum(self.storage['keys'], ()))}
+        running_list_prune = 0
         for keys, rewards, is_terminal in zip(self.storage['keys'][::-1], self.storage['rewards'][::-1], self.storage['is_terminals'][::-1]):
             for key, reward in zip(keys[::-1], rewards[::-1]):
                 if is_terminal:
+                    running_list_prune = 0
                     running_rewards[key] = 0  # Reset at terminal state
                     if prune is not None: running_prune[key] = 0
                 running_rewards[key] = reward + gamma * running_rewards[key]
@@ -191,20 +308,24 @@ class AdvancedMemoryBuffer:
                 if prune is not None:
                     running_prune[key] += 1
                     ret_prune.append(running_prune[key] > prune)
-        ret = ret[::-1]
-        ret = torch.tensor(ret, dtype=torch.float32)
+            if prune is not None:
+                running_list_prune += 1
+                ret_list_prune.append(running_list_prune > prune)
+        ret = torch.tensor(ret[::-1], dtype=torch.float32)
         if prune is not None:
-            ret_prune = ret_prune[::-1]
-            ret_prune = torch.tensor(ret_prune, dtype=torch.bool)
+            ret_prune = torch.tensor(ret_prune[::-1], dtype=torch.bool)
+            ret_list_prune = torch.tensor(ret_list_prune[::-1], dtype=torch.bool)
 
         # Need to normalize AFTER propagation
-        for r, p in zip(ret, ret_prune):
+        # NOTE: Approximate using rs_nset last rewards
+        for i, r in enumerate(ret[-int(self.rs_nset):]):
             # Don't include pruned rewards in update
-            if p: self.running_statistics.update(r)
+            if prune is None or ret_prune[i]: self.running_statistics.update(r)
+        # Float vs tensor error happens here when there are no applicable memories
         ret = (ret - self.running_statistics.mean()) / (torch.sqrt(self.running_statistics.variance() + 1e-8))
 
         if prune is not None:
-            return ret, ret_prune
+            return ret, ret_prune, ret_list_prune
         return ret
 
     def clear(self, clear_persistent=False):
@@ -428,19 +549,26 @@ class PPO(nn.Module):
             actor_lr=3e-4,
             critic_lr=1e-3,
             lr_gamma=1,
+            max_batch=None,
             max_nodes=None,
             sample_strategy='random-proximity',
+            sample_dim=None,
             reproducible_strategy='hash',
             update_maxbatch=None,
             update_batch=int(1e4),
             update_minibatch=int(1e4),
             update_load_level='minibatch',
             update_cast_level='minibatch',
-            rs_nset=1e5,
+            # rs_nset=1e5,
             device='cpu',
             **kwargs,
     ):
         super().__init__()
+
+        # Parameters
+        self.positional_dim = positional_dim
+        self.modal_dims = modal_dims.copy()
+        self.output_dim = output_dim
 
         # Variables
         self.action_std = action_std_init
@@ -452,11 +580,14 @@ class PPO(nn.Module):
         self.memory_prune = memory_prune
 
         # Runtime management
+        self.max_batch = max_batch
+        # NOTE: Assumes output corresponds to positional dims if not explicitly provided
+        if sample_dim is None: sample_dim = output_dim
         self.split_args = {
             'max_nodes': max_nodes,
             'sample_strategy': sample_strategy,
             'reproducible_strategy': reproducible_strategy,
-            'dimension': positional_dim,
+            'sample_dim': sample_dim,
         }
         self.update_maxbatch = update_maxbatch
         self.update_batch = update_batch
@@ -470,8 +601,8 @@ class PPO(nn.Module):
         self.critic = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=1, **kwargs)
 
         # Old policy
-        self.actor_old = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=output_dim, action_std_init=action_std_init, **kwargs)
-        self.critic_old = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=1, **kwargs)
+        # self.actor_old = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=output_dim, action_std_init=action_std_init, **kwargs)
+        # self.critic_old = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=1, **kwargs)
 
         # Optimizer
         self.optimizer = torch.optim.Adam([
@@ -481,10 +612,10 @@ class PPO(nn.Module):
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
 
         # Memory
-        self.memory = AdvancedMemoryBuffer(sum(modal_dims), rs_nset=rs_nset, split_args=self.split_args)
+        # self.memory = AdvancedMemoryBuffer(sum(modal_dims), rs_nset=rs_nset, split_args=self.split_args)
 
         # Copy current weights
-        self.update_old_policy()
+        # self.update_old_policy()
 
         # To device
         self.to(self.device)
@@ -495,14 +626,14 @@ class PPO(nn.Module):
         return super().to(device)
 
     ### Utility functions
-    def update_old_policy(self):
-        self.actor_old.load_state_dict(self.actor.state_dict())
-        self.critic_old.load_state_dict(self.critic.state_dict())
+    # def update_old_policy(self):
+    #     self.actor_old.load_state_dict(self.actor.state_dict())
+    #     self.critic_old.load_state_dict(self.critic.state_dict())
 
     def decay_action_std(self):
         self.action_std = max(self.action_std - self.action_std_decay, self.action_std_min)
         self.actor.set_action_std(self.action_std)
-        self.actor_old.set_action_std(self.action_std)
+        # self.actor_old.set_action_std(self.action_std)
 
     ### Running functions
     def act(self, *state, return_all=False):
@@ -518,13 +649,16 @@ class PPO(nn.Module):
         if return_all: return action, action_log, state_val
         return action
 
-    def act_macro(self, state, *, keys=None, max_batch=None):
+    def act_macro(self, state, *, keys=None, memory=None, max_batch=None):
         # Data Checks
         assert state.shape[0] > 0, 'Empty state matrix passed'
         if keys is not None: assert len(keys) == state.shape[0], (
             f'Length of keys vector must equal state dimension 0 ({state.shape[0]}), '
             f'got {len(keys)} instead.'
         )
+            
+        # Defaults
+        if max_batch is None: max_batch = self.max_batch
 
         # Act
         if max_batch is not None:
@@ -556,8 +690,8 @@ class PPO(nn.Module):
         # Record
         # NOTE: `reward` and `is_terminal` are added outside of the class, calculated
         # after stepping the environment
-        if keys is not None and self.training:
-            self.memory.record(
+        if memory is not None and keys is not None and self.training:
+            memory.record(
                 keys=keys,
                 states=state,  # Will cast to cpu after
                 actions=action.cpu(),
@@ -575,10 +709,10 @@ class PPO(nn.Module):
         return action
 
     ### Backward functions
-    def update(self):
+    def update(self, memory, fast_sample=True):
         # Calculate rewards
-        rewards = self.memory.propagate_rewards(gamma=self.memory_gamma, prune=self.memory_prune)
-        if self.memory_prune is not None: rewards, rewards_mask = rewards
+        rewards = memory.propagate_rewards(gamma=self.memory_gamma, prune=self.memory_prune)
+        if self.memory_prune is not None: rewards, rewards_mask, rewards_list_mask = rewards
         else: rewards_mask = torch.ones(len(rewards), dtype=bool)
         rewards, rewards_mask = rewards.detach(), rewards_mask.detach()
 
@@ -589,7 +723,7 @@ class PPO(nn.Module):
         assert cast_level >= load_level, 'Cannot cast without first loading'
 
         # Determine batch sizes
-        memory_size = sum(rewards_mask)
+        memory_size = rewards_mask.sum()
         maxbatch_size = self.update_maxbatch if self.update_maxbatch is not None else memory_size
         maxbatch_size = int(min(maxbatch_size, memory_size))
         batch_size = self.update_batch if self.update_batch is not None else maxbatch_size
@@ -599,24 +733,36 @@ class PPO(nn.Module):
 
         # Load maxbatch
         maxbatch_idx = np.random.choice(
-            np.arange(len(self.memory))[rewards_mask],  # Only consider states which have rewards with significant future samples
+            np.arange(len(memory))[rewards_mask],  # Only consider states which have rewards with significant future samples
             maxbatch_size,
             replace=False,
         )
+        maxbatch_absolute_idx = maxbatch_idx
         if load_level == 0:
-            maxbatch_data = self.memory[maxbatch_idx]
-            maxbatch_rewards = rewards[maxbatch_idx]
+            if not fast_sample:
+                maxbatch_data = memory[maxbatch_absolute_idx]
+            else:
+                maxbatch_data, maxbatch_absolute_idx = memory.fast_sample(maxbatch_size, rewards_list_mask)
+            maxbatch_rewards = rewards[maxbatch_absolute_idx]
         if cast_level == 0:
             maxbatch_data = utilities.dict_map_recursive_tensor_idx_to(maxbatch_data, None, self.device)
             maxbatch_rewards = maxbatch_rewards.to(self.device)
 
         # Train
-        for _ in range(self.epochs):
+        for epoch_num in range(self.epochs):
+            # Metrics
+            epoch_ppo = 0
+            epoch_critic = 0
+            epoch_entropy = 0
+
             # Load batch
             batch_idx = np.random.choice(maxbatch_size, batch_size, replace=False)
-            batch_absolute_idx = maxbatch_idx[batch_idx]
+            batch_absolute_idx = maxbatch_absolute_idx[batch_idx]
             if load_level == 1:
-                batch_data = self.memory[batch_absolute_idx]
+                if not fast_sample:
+                    batch_data = memory[batch_absolute_idx]
+                else:
+                    batch_data, batch_absolute_idx = memory.fast_sample(batch_size, rewards_list_mask)
                 batch_rewards = rewards[batch_absolute_idx]
             elif load_level < 1:
                 batch_data = utilities.dict_map_recursive_tensor_idx_to(maxbatch_data, batch_idx, None)
@@ -632,7 +778,10 @@ class PPO(nn.Module):
                 minibatch_idx = np.arange(min_idx, max_idx)
                 minibatch_absolute_idx = batch_absolute_idx[minibatch_idx]
                 if load_level == 2:
-                    minibatch_data = self.memory[minibatch_absolute_idx]
+                    if not fast_sample:
+                        minibatch_data = memory[minibatch_absolute_idx]
+                    else:
+                        minibatch_data, minibatch_absolute_idx = memory.fast_sample(minibatch_size, rewards_list_mask)
                     minibatch_rewards = rewards[minibatch_absolute_idx]
                 if load_level < 2:
                     minibatch_data = utilities.dict_map_recursive_tensor_idx_to(batch_data, minibatch_idx, None)
@@ -640,6 +789,10 @@ class PPO(nn.Module):
                 if cast_level == 2:
                     minibatch_data = utilities.dict_map_recursive_tensor_idx_to(minibatch_data, None, self.device)
                     minibatch_rewards = minibatch_rewards.to(self.device)
+
+                # Erase grad (Not needed, but included to be careful)
+                # minibatch_data = utilities.dict_map(minibatch_data, lambda x: utilities.recursive_tensor_func(x, lambda y: y.detach().requires_grad_()), inplace=True)
+                # minibatch_rewards = minibatch_rewards.detach().requires_grad_()
 
                 # Get subset data
                 states_old_sub = minibatch_data['states']
@@ -671,11 +824,6 @@ class PPO(nn.Module):
                 # TODO (Minor): Figure out purpose
                 loss_entropy = -.01 * dist_entropy
 
-                # CLI
-                # print(f'Epoch {epoch+1:02} - Minibatch {minibatch+1:01}')
-                # print(f'PPO: {loss_PPO.mean():.3f}, critic: {loss_critic.mean():.3f}, entropy: {loss_entropy.mean():.3f}')
-                # print()
-
                 # Calculate total loss
                 loss = loss_PPO + loss_critic + loss_entropy
                 loss = loss.mean()
@@ -685,15 +833,31 @@ class PPO(nn.Module):
                 loss = loss * accumulation_frac
                 loss.backward()  # Longest computation
 
+                # Record
+                epoch_ppo += loss_PPO.detach().mean() * accumulation_frac
+                epoch_critic += loss_critic.detach().mean() * accumulation_frac
+                epoch_entropy += loss_entropy.detach().mean() * accumulation_frac
+
             # Step
             self.optimizer.step()
             self.optimizer.zero_grad()
+
+            # CLI
+            if (epoch_num + 1) % 10 == 0 or epoch_num in (0, 4):
+                print(
+                    f'Epoch {epoch_num+1:02}'
+                    f' - PPO {epoch_ppo.item():.3f}'
+                    f', critic {epoch_critic.item():.3f}'
+                    f', entropy {epoch_entropy.item():.3f}')
 
         # Update scheduler
         self.scheduler.step()
 
         # Copy current weights
-        self.update_old_policy()
+        # self.update_old_policy()
 
         # Clear memory
-        self.memory.clear()
+        # self.memory.clear()
+
+        # Return self
+        return self
