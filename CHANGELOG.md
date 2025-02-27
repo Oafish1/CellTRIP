@@ -1,3 +1,6 @@
+### 1.0.0+2025.2.27
+- Update figure 1/2 logo and equations
+
 ### 1.0.0+2025.2.26
 - Add `first` method to `reproducible_strategy`
 - Add `max_samples_per_state` argument for `fast_sample` to provide more varied states
