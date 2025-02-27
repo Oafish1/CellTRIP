@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from . import utilities
+from . import utility as _utility
 
 
 class EnvironmentBase:
@@ -229,11 +229,11 @@ class EnvironmentBase:
             self.dist = []
             for target in targets:
                 m = self.modalities[target]
-                m_dist = utilities.euclidean_distance(m, scaled=True)
+                m_dist = _utility.distance.euclidean_distance(m, scaled=True)
                 self.dist.append(m_dist)
 
         # Calculate distance for position
-        pos_dist = utilities.euclidean_distance(self.pos)
+        pos_dist = _utility.distance.euclidean_distance(self.pos)
 
         # Calculate reward
         running = torch.zeros(self.pos.shape[0], device=self.device)

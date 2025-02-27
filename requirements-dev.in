@@ -1,2 +1,2 @@
 -c requirements.txt
--e file:.[dev,examples]
+-e file:.[compile,dev,examples]

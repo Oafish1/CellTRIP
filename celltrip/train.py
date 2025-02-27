@@ -1,70 +1,12 @@
 from collections import defaultdict
-import time
+import threading
 import warnings
 
-import numpy as np
 import ray
 import torch
-from tqdm import tqdm
-import zerocopy
 
-from . import decorators
-from . import environments
-from . import models
-from . import utilities
-
-
-# FRAMEWORK
-# import threading
-# class DistributedManager:
-#     def __init__(self, policy, env_init, memory_init, num_workers):
-#         # Record
-#         self.policy = policy
-#         self.env_init = env_init
-#         self.memory_init = memory_init
-#         self.num_workers = num_workers
-
-#         # Initialize linalg
-#         torch.inverse(torch.ones((1, 1), device="cuda:0"))
-
-#     def step(self, num_simulations):
-#         # Run forward on each worker to completion until a certain number of steps is reached
-#         pbar = tqdm(total=num_simulations)
-#         threads = {}; recent_thread = 0
-#         while recent_thread < num_simulations:
-#             # Clear empty threads
-#             dead_threads = [thread_num for thread_num, thread in threads.items() if not thread.is_alive()]
-#             for thread_num in dead_threads:
-#                 threads.pop(thread_num)
-#                 pbar.set_description(f'Closed thread {thread_num}')
-#                 pbar.update()
-
-#             # Open new thread
-#             while recent_thread < num_simulations and len(threads) < self.num_workers:
-#                 recent_thread += 1
-#                 threads[recent_thread] = threading.Thread(target=simulate_until_completion, args=(self.policy, self.env_init(), self.memory_init()))
-#                 threads[recent_thread].start()
-#                 pbar.set_description(f'Created thread {recent_thread}')
-
-#             # Wait
-#             time.sleep(1)
-
-#         # Synchronize threads
-#         pbar.update(len([thread.join() for thread_num, thread in threads.items()]))
-
-#     def update(self): pass
-#         # Run distributed backward using DDP
-
-
-# modal_dims = [m.shape[1] for m in modalities]
-# policy = celltrip.models.PPO(positional_dim=32, modal_dims=modal_dims, output_dim=16, device=DEVICE)
-# env_init = lambda: celltrip.environments.EnvironmentBase(*modalities, max_timesteps=1e2, device=DEVICE)
-# memory_init = lambda: celltrip.models.AdvancedMemoryBuffer(sum(modal_dims), rs_nset=1e5, split_args=policy.split_args)
-# dm = celltrip.training.DistributedManager(policy, env_init, memory_init, 2)
-# dm.step(20)
-# # 1 worker:     2m 20.3s
-# # 2 workers:    2m 11.5s
-# # 5 workers:    2m 8.8s
+from . import decorator as _decorators
+from . import utility as _utility
 
 
 def get_policy_state(policy):
@@ -93,44 +35,8 @@ def set_device_recursive(state_dict, device):
                 pass
     return state_dict
 
-import threading
-# class Lock:
-#     def __init__(self):
-#         self.concurrent_accesses = 0
-#         self.locked = False
 
-#     def get_lock(self, exclusive=False, bypass=False):
-#         # Get shared or exclusive lock and return once available
-#         # Skip if bypassed
-#         if bypass: return
-
-#         # Stall if exclusive locked
-#         while self.locked and not bypass: time.sleep(1)
-
-#         # Obtain exclusive lock
-#         if exclusive:
-#             self.locked = True
-#             while self.concurrent_accesses > 0: time.sleep(1)
-
-#         # Obtain shared lock
-#         else: self.concurrent_accesses += 1
-
-#     def __exit__(self):
-#         # Remove from tracking
-#         self.concurrent_accesses -= 1
-
-#     def lock(self):
-#         # Get exclusive lock and return once acquired
-#         self.locked = True
-#         while self.concurrent_accesses > 0: time.sleep(1)
-
-#     def unlock(self):
-#         # Disable lock
-#         self.locked = False
-
-
-@ray.remote
-class PolicyManager:
+class _PolicyManager:
     def __init__(self, modalities, policy_init, memory_init):
         self.policy = policy_init(modalities)
         self.memory = memory_init(self.policy)
@@ -158,7 +64,11 @@ class PolicyManager:
             raise ValueError(f'Lock `{lock_id}` not found.')
 
         if val: self.locks[lock_id].acquire()
-        else: self.locks[lock_id].release()
+        else:
+            if self.locks[lock_id].locked():
+                self.locks[lock_id].release()
+            else:
+                raise RuntimeWarning('Attempting to release unreserved lock')
 
         return val
 
@@ -178,14 +88,14 @@ class PolicyManager:
 
     def append_memory(self, *args):
         self.memory.append_memory(*args)
+PolicyManager = ray.remote(_PolicyManager)
 
 
-@ray.remote(max_calls=1)
-@decorators.metrics
-@decorators.try_catch(show_traceback=True)
-@decorators.call_on_exit
-# @decorators.profile
-def train_func(policy_manager, modalities, policy_init, env_init, memory_init):
+@_decorators.metrics
+@_decorators.try_catch(show_traceback=True)
+@_decorators.call_on_exit
+# @_decorators.profile
+def _train_func(policy_manager, modalities, policy_init, env_init, memory_init, **kwargs):
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
     # CLI
@@ -205,7 +115,7 @@ def train_func(policy_manager, modalities, policy_init, env_init, memory_init):
     memory = memory_init(policy)
     
     # Simulate
-    ep_timestep, ep_reward, ep_itemized_reward = simulate_until_completion(policy, env, memory)
+    ep_timestep, ep_reward, ep_itemized_reward = simulate_until_completion(policy, env, memory, **kwargs)
 
     # Append memories
     ray.get(policy_manager.lock.remote('memory', True))
@@ -214,14 +124,14 @@ def train_func(policy_manager, modalities, policy_init, env_init, memory_init):
 
     # CLI
     print(f'Simulation finished in {ep_timestep} steps with mean reward {ep_reward:.3f}')
+train_func = ray.remote(max_calls=1)(_train_func)
 
 
-@ray.remote(max_calls=1)
-@decorators.metrics
-@decorators.try_catch(show_traceback=True)
-@decorators.call_on_exit
-# @decorators.profile
-def update_func(policy_manager, modalities, policy_init, memory_init):
+@_decorators.metrics
+@_decorators.try_catch(show_traceback=True)
+@_decorators.call_on_exit
+# @_decorators.profile
+def _update_func(policy_manager, modalities, policy_init, memory_init, **kwargs):
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
     # CLI
@@ -241,7 +151,7 @@ def update_func(policy_manager, modalities, policy_init, memory_init):
     # NOTE: Keep locked during update to prevent adding memories and rerun on crash without clearing memories
 
     # Perform backwards and update actor state
-    policy.update(memory)
+    policy.update(memory, **kwargs)
 
     ray.get(policy_manager.lock.remote('state', True))
     ray.get(policy_manager.set_policy_state.remote(
@@ -254,6 +164,7 @@ def update_func(policy_manager, modalities, policy_init, memory_init):
 
     # CLI
     print(f'Done updating policy on {len(memory)} memories')
+update_func = ray.remote(max_calls=1)(_update_func)
 
 
 class DistributedManager:
@@ -306,8 +217,8 @@ class DistributedManager:
         return self.futures
 
     def get_all_futures(self, keys=None):
-        if not utilities.is_list_like(keys): keys = [keys]
-        keys = list(self.futures.keys()) if keys[0] is None else keys
+        if not _utility.general.is_list_like(keys): keys = [keys]
+        keys = list(self.futures.keys()) if len(keys) == 1 and keys[0] is None else keys
         return sum([self.futures[k] for k in keys], [])
     
     def get_memory_len(self):
@@ -318,14 +229,14 @@ class DistributedManager:
         return memory_len
 
     # Futures
-    def rollout(self, num_simulations=1, env_init=None):
+    def rollout(self, num_simulations=1, env_init=None, **kwargs):
         # Defaults
         if env_init is None: env_init = self.env_init
 
         # Run forward on each worker to completion until a certain number of steps is reached
         def exit_hook():
             ray.get(self.policy_manager.release_locks.remote())
-            print('Escaped rollout')
+            print('Escaped running rollout')
         rollouts = [
             train_func
                 .options(**self.resources['rollout']['core'], resources=self.resources['rollout']['custom'])
@@ -335,6 +246,7 @@ class DistributedManager:
                     self.policy_init,
                     env_init,
                     self.memory_init,
+                    **kwargs,
                     return_metrics=self.resources['rollout']['core']['memory']==0,
                     exit_hook=exit_hook)
             for _ in range(num_simulations)]
@@ -346,7 +258,7 @@ class DistributedManager:
         # Run update
         def exit_hook():
             ray.get(self.policy_manager.release_locks.remote())
-            print('Escaped update')
+            print('Escaped running update')
         updates = [
             update_func
                 .options(**self.resources['update']['core'], resources=self.resources['update']['custom'])
@@ -364,8 +276,8 @@ class DistributedManager:
     # Utility
     def cancel(self, keys=None):
         # Cancel futures
-        if not utilities.is_list_like(keys): keys = [keys]
-        keys = list(self.futures.keys()) if keys[0] is None else keys
+        if not _utility.general.is_list_like(keys): keys = [keys]
+        keys = list(self.futures.keys()) if len(keys) == 1 and keys[0] is None else keys
         # NOTE: Current escape behavior is to release all locks, regardless of holding
         [ray.cancel(future) for future in self.get_all_futures(keys)]
     
@@ -382,8 +294,8 @@ class DistributedManager:
                     self.resources[k]['core']['num_gpus'] = max(1e-4, 1./self.max_jobs_per_gpu)
 
     def wait(self, keys=None, **kwargs):
-        if not utilities.is_list_like(keys): keys = [keys]
-        keys = list(self.futures.keys()) if keys[0] is None else keys
+        if not _utility.general.is_list_like(keys): keys = [keys]
+        keys = list(self.futures.keys()) if len(keys) == 1 and keys[0] is None else keys
         return ray.wait(self.get_all_futures(keys), **kwargs)[0]  # Wait for at least one completion, return all completions
 
     # def wait_all(self, verbose=False):
@@ -400,7 +312,7 @@ class DistributedManager:
     
     def clean(self, keys=None):
         # Remove finished futures, will be used in the future for metrics
-        if not utilities.is_list_like(keys): keys = [keys]
+        if not _utility.general.is_list_like(keys): keys = [keys]
         keys = list(self.futures.keys()) if keys[0] is None else keys
         for k in keys:
             complete_futures, self.futures[k] = ray.wait(self.futures[k], num_returns=len(self.futures[k]), timeout=0)

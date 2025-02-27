@@ -1,3 +1,21 @@
+### 1.0.0+2025.2.26
+- Add `first` method to `reproducible_strategy`
+- Add `max_samples_per_state` argument for `fast_sample` to provide more varied states
+- Add handling for attempted release of released locks
+- Comply with pip versioning
+- Cython compilation for all compatible files
+- Fix `idx` input sanitization for `split_state`
+- Fix `hash` method reproducibility
+- Optimize `__getitem__` for `AdvancedMemoryBuffer`
+- Optimize alternate `sample_strategy` options for `split_state`
+- Recompilation scripts for C files and requirements
+- Recompile requirements
+- Refactor of all modules, especially utility
+- Remove old files
+- Sanitize `keys` input to `DistributedManager`
+- Updated Conda development environment
+- Various bugfixes and testing for boundary penalty compliance
+
 ### 1.0.0+2025-02-25
 - Add Cython build file
 - Add decorator `catch_on_exit` to hook Ray cancel
