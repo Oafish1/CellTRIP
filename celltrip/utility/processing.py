@@ -1,4 +1,9 @@
+import functools as ft
+
+import anndata as ad
 import numpy as np
+import pandas as pd
+import scanpy as sc
 import scipy.sparse
 import sklearn.decomposition
 import torch
@@ -16,27 +21,25 @@ class Preprocessing:
         top_variant=int(4e4),
         # PCA
         pca_dim=512,  # TODO: Add auto-handling for less PCA than samples
-        pca_copy=True,  # Set to false if too much memory being used
         # Subsampling
         num_nodes=None,
-        num_features=None,
         # End cast
+        seed=42,
         device=None,
         **kwargs,
     ):
         self.standardize = standardize
         self.top_variant = top_variant
         self.pca_dim = pca_dim
-        self.pca_copy = pca_copy  # Unused if sparse
         self.num_nodes = num_nodes
-        self.num_features = num_features
+        self.seed = seed
         self.device = device
 
         # Data
         self.is_sparse_transform = None
 
     
-    def fit(self, modalities, *args, total_statistics=False, **kwargs):
+    def fit(self, modalities, *, total_statistics=False, **kwargs):
         # Parameters
         self.is_sparse_transform = [scipy.sparse.issparse(m) for m in modalities]
         if isinstance(self.top_variant, int): self.top_variant = len(modalities) * [self.top_variant]
@@ -79,23 +82,26 @@ class Preprocessing:
         # PCA
         if self.pca_dim is not None:
             self.pca_class = [
+                None if dim is None else
                 sklearn.decomposition.PCA(
                     n_components=dim,
-                    svd_solver='auto' if not m_sparse else 'arpack',
-                    copy=self.pca_copy,
-                ).fit(m)
-                # sklearn.decomposition.TruncatedSVD(n_components=dim).fit(m)
-                if dim is not None else None
+                    svd_solver='auto',
+                    random_state=self.seed).fit(m) if not m_sparse else
+                sklearn.decomposition.TruncatedSVD(
+                    n_components=dim,
+                    random_state=self.seed).fit(m)
                 for m, m_sparse, dim in zip(modalities, self.is_sparse_transform, self.pca_dim)]
             
         return self
 
-    def transform(self, modalities, features=None, **kwargs):
+    def transform(self, modalities, adata_vars=None, *args, **kwargs):
         # Filtering
         # NOTE: Determines if filtering is already done by shape checking the main `modalities` input
         if self.top_variant is not None and np.array([m.shape[1] != mask.shape[0] for m, mask in zip(modalities, self.filter_mask) if mask is not None]).any():
             modalities = [m[:, mask] if mask is not None else m for m, mask in zip(modalities, self.filter_mask)]
-            if features is not None: features = [fs[mask] if mask is not None else fs for fs, mask in zip(features, self.filter_mask)]
+            if adata_vars is not None:
+                # NOTE: Creates a view of the object
+                adata_vars = [adata_var.iloc[mask] if mask is not None else adata_var for adata_var, mask in zip(adata_vars, self.filter_mask)]
 
         # Standardize
         # NOTE: Not mean-centered for sparse matrices
@@ -108,16 +114,19 @@ class Preprocessing:
                 for m, m_mean, m_std, m_sparse in zip(modalities, self.standardize_mean, self.standardize_std, self.is_sparse_transform)]
 
         # PCA
+        print('a')
         if self.pca_dim is not None:
             modalities = [p.transform(m) if p is not None else m for m, p in zip(modalities, self.pca_class)]
-
-        ret = (modalities,)
-        if features is not None: ret += (features,)
+        
+        # Return
+        # NOTE: Returns features before PCA transformation, also always dense
+        ret = (np.array(modalities),)
+        if adata_vars is not None: ret += (adata_vars,)
         return _utility.general.clean_return(ret)
 
 
-    def inverse_transform(self, modalities, **kwargs):
-        # NOTE: Does not reverse top variant filtering or feature sampling, also always dense output
+    def inverse_transform(self, modalities, *args, **kwargs):
+        # NOTE: Does not reverse top variant filtering
         # PCA
         if self.pca_dim is not None:
             modalities = [p.inverse_transform(m) for m, p in zip(modalities, self.pca_class)]
@@ -132,64 +141,56 @@ class Preprocessing:
 
         return modalities
 
-    
     def fit_transform(self, *args, **kwargs):
         self.fit(*args, **kwargs)
         return self.transform(*args, **kwargs)
     
-
-    def cast(self, modalities, device=None, copy=False):
-        if copy: modalities = modalities.copy()
-        if device is None:
-            assert self.device is not None, '`device` must be set to call `self.cast`'
-            device = self.device
-
-        # Cast types
-        # NOTE: Always dense
-        modalities = [
-            torch.tensor(m if not scipy.sparse.issparse(m) else m.todense(), dtype=torch.float32, device=device)
-            for m in modalities
-        ]
-
-        return modalities
-    
-
-    def inverse_cast(self, modalities, copy=False):
-        if copy: modalities = modalities.copy()
-
-        # Inverse cast
-        modalities = [m.detach().cpu().numpy() for m in modalities]
-
-        return modalities
-    
-    
-    def subsample(self, modalities, types=None, partition=None, return_idx=False, **kwargs):
-        # Subsample features
-        # NOTE: Incompatible with inverse transform
-        if self.num_features is not None:
-            feature_idx = [np.random.choice(m.shape[1], nf, replace=False) for m, nf in zip(modalities, self.num_features)]
-            modalities = [m[:, idx] for m, idx in zip(modalities, feature_idx)]
-
-        node_idx = np.arange(modalities[0].shape[0])
+    def subsample(self, modalities=None, adata_obs=None, partition_cols=None, matching=True, **kwargs):
+        # Defaults
+        assert not np.array([v is None for v in (modalities, adata_obs)]).all(), (
+            'At least of `modalities` or `adata_obs` must be provided')
+        if adata_obs is None:
+            assert np.array([m.shape[0] == modalities[0].shape[0] for m in modalities]).all(), (
+                'No `adata_obs` provided but datasets are not aligned')
+            
+        # Align datasets
+        if adata_obs is not None:
+            # Get idx for alignment
+            obs_names = [adata_ob.index.to_list() for adata_ob in adata_obs]
+            all_names = np.unique(sum(obs_names, []))
+            intersecting_names = ft.reduce(lambda l, r: np.intersect1d(l, r), obs_names)
+            non_intersecting_names = np.array(list(set(all_names) - set(intersecting_names[:-2])))
+            obs_order = np.concatenate([intersecting_names, non_intersecting_names])
+            # There has to be a better way, right?
+            series = [pd.Series(np.arange(adata_ob.shape[0]), adata_ob.index) for adata_ob in adata_obs]
+            series = [s[[idx for idx in obs_order if idx in s.index]].to_numpy() for s in series]
+            # Apply
+            if modalities is not None:
+                modalities = [m[s] for m, s in zip(modalities, series)]
+            adata_obs = [adata_ob.iloc[s] for adata_ob, s in zip(adata_obs, series)]
+        
         # Partition
-        if partition is not None:
-            partition_choice = np.random.choice(np.unique(partition), 1)[0]
-            node_idx = node_idx[partition==partition_choice]
+        if adata_obs is not None and partition_cols is not None:
+            partitions = [
+                adata_ob[partition_cols]
+                .apply(lambda r: r.to_list(), axis=1).to_list()
+                for adata_ob in adata_obs]
+            partitions_unique = np.unique(np.array(sum(partitions, [])), axis=1)
+            partition_choice = partitions_unique[np.random.choice(len(partitions_unique), 1)]
+            masks = [(partition_choice == partition).all(axis=1) for partition in partitions]
+            if modalities is not None:
+                modalities = [m[mask] for m, mask in zip(modalities, masks)]
+            adata_obs = [adata_ob.loc[mask] for adata_ob, mask in zip(adata_obs, masks)]
         
         # Subsample nodes
-        if self.num_nodes is not None:
-            assert np.array([m.shape[0] for m in modalities]).var() == 0, 'Nodes in all modalities must be equal to use node subsampling'
-            if len(node_idx) > self.num_nodes: node_idx = np.random.choice(node_idx, self.num_nodes, replace=False)
-            else: print(f'Skipping subsampling, only {len(node_idx)} nodes present.')
-            
-        # Apply subsampling
-        modalities = [m[node_idx] for m in modalities]
-        if types is not None: types = [t[node_idx] for t in types]
+        if self.num_nodes is not None and np.array([m.shape[0] > self.num_nodes for m in modalities]).all():
+            node_idxs = [np.random.choice(m.shape[0], self.num_nodes, replace=False) for m in modalities]
+            modalities = [m[node_idxs] for m in modalities]
+            adata_obs = [adata_ob[node_idxs] for adata_ob in adata_obs]
 
-        ret = (modalities,)
-        if types is not None: ret += (types,)
-        if return_idx: ret += (node_idx,)
-        # if self.num_features is not None: ret += (feature_idx,)
+        ret = ()
+        if modalities is not None: ret += (modalities,)
+        if adata_obs is not None: ret += (adata_obs,)
         return _utility.general.clean_return(ret)
 
 
@@ -204,6 +205,110 @@ class LazyComputation:
         if self.func is None:
             self.func = self.init_func(*self.args, **self.kwargs)
         return self.func(x)
+    
+
+def read_adatas(*fnames, partition_cols=None, on_disk=False):
+    backed = 'r' if on_disk else 'r+'
+    adatas = [sc.read_h5ad(fname, backed=backed) for fname in fnames]
+    def red_func(l, r):
+        # Join on sample and partition columns
+        index_name = '_index' if l.index.name is None else l.index.name
+        req_cols = [index_name]
+        if partition_cols is not None: req_cols += partition_cols
+        df = l.reset_index(names=index_name)[req_cols].merge(r.reset_index(names=index_name)[req_cols], how='outer', on=req_cols, suffixes=(None, None))
+        assert df.groupby(index_name).count().max().max() < 2, 'Duplicate samples with non-equivalent partition metadata found'
+        return df.set_index(index_name)
+    merged_obs = ft.reduce(red_func, [adata.obs for adata in adatas])  # Test for conflicting metadata
+
+    return adatas
+
+
+class PreprocessFromAnnData:
+    def __init__(
+        self,
+        *adatas,
+        memory_efficient='auto',  # Also works on on-disk datasets
+        partition_cols=None,
+        fit_sample='auto',
+        **kwargs
+    ):
+        self.adatas = adatas
+        self.preprocessing = Preprocessing(kwargs)
+
+        # Parameters
+        self.partition_cols = partition_cols
+        if memory_efficient == 'auto':
+            # Only activate if on disk
+            self.memory_efficient = np.array([isinstance(adata.X, ad.abc.CSRDataset) for adata in adatas]).any()
+        if fit_sample == 'auto':
+            fit_sample = int(1e4) if memory_efficient else None
+        self.fit_sample = fit_sample
+
+        # Functions
+        if memory_efficient:
+            self.fit = self._fit_disk
+            self.transform = self._transform_disk
+        else:
+            self.fit = self._fit_memory
+            self.transform = self._transform_memory
+        self.sample = self.transform
+        self.fit()
+
+    def _fit_memory(self):
+        if self.fit_sample:
+            modalities = [
+                adata.X[np.random.choice(adata.X.shape[0], self.fit_sample)]
+                if adata.X.shape[0] > self.fit_sample else
+                adata.X
+                for adata in self.adatas]
+        else: modalities = [adata.X for adata in self.adatas]
+        adata_vars = [adata.var for adata in self.adatas]
+        adata_obs = [adata.obs for adata in self.adatas]
+
+        # Perform preprocessing
+        self.preprocessing.fit([adata.X for adata in self.adatas])
+        self.processed_adata_obs = adata_obs
+        self.processed_modalities, self.processed_adata_vars = self.preprocessing.fit_transform(
+            modalities,
+            adata_vars=adata_vars)
+        
+    def _transform_memory(self):
+        # Perform sampling
+        sampled_adata_vars = self.processed_adata_vars
+        sampled_modalities, sampled_adata_obs = self.preprocessing.subsample(
+            self.processed_modalities,
+            adata_obs=self.processed_adata_obs,
+            partition_cols=self.partition_cols)
+        
+        return sampled_modalities, sampled_adata_obs, sampled_adata_vars
+        
+    def _fit_disk(self):
+        if self.fit_sample:
+            modalities = [
+                adata.X[np.random.choice(adata.X.shape[0], self.fit_sample)]
+                if adata.X.shape[0] > self.fit_sample else
+                adata.X[:]
+                for adata in self.adatas]
+        else: modalities = [adata.X[:] for adata in self.adatas]
+
+        # Fit preprocessing
+        self.preprocessing.fit(modalities)
+
+    def _transform_disk(self):
+        adata_vars = [adata.var for adata in self.adatas]
+        adata_obs = [adata.obs for adata in self.adatas]
+
+        # Perform sampling
+        sampled_adata_obs = self.preprocessing.subsample(
+            adata_obs=adata_obs,
+            partition_cols=self.partition_cols)
+        sampled_modalities = [adata[adata_ob.index].X for adata, adata_ob in zip(self.adatas, sampled_adata_obs)]
+        processed_adata_obs = sampled_adata_obs
+        processed_modalities, processed_adata_vars = self.preprocessing.transform(sampled_modalities, adata_vars)
+
+        return processed_modalities, processed_adata_obs, processed_adata_vars
+
+
 
 
 def split_state(

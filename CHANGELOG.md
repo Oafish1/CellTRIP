@@ -1,3 +1,10 @@
+### 1.0.0+2025.2.28
+- Add data loading and processing functions
+- Dataloader and pipeline for h5ad file loading
+- In-memory h5ad conversion for MERFISH data
+- Revise `Preprocessing` to be more compatible with AnnData
+- Separate recompilation into two functions
+
 ### 1.0.0+2025.2.27
 - Update figure 1/2 logo and equations
 

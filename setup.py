@@ -90,6 +90,7 @@ setup(
             'snakeviz'],
         'examples': [
             'adjustText',
+            'anndata',
             'h5py',
             'ipympl',
             'matplotlib',
