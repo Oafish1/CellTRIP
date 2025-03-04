@@ -18,6 +18,24 @@ def is_list_like(l):
         return False
 
 
+def rolled_index(arrays, idx):
+    """
+    Recursive function to return result of indexing into multiple lists as if they were
+    sub-arrays
+
+    Example:
+    for i in range(3 * 2 * 4):
+    print(rolled_index([[1, 2, 3], [4, 5], [6, 7, 8, 9]], i))
+
+    > [1, 4, 6]
+    > [1, 4, 7]
+    > ...
+    > [3, 5, 9]
+    """
+    if len(arrays) == 0: return []
+    return rolled_index(arrays[:-1], idx//len(arrays[-1])) + [arrays[-1][idx%len(arrays[-1])]]
+
+
 def h5_tree(val, pre=''):
     "Show the structure of an h5 file as a tree"
     # https://stackoverflow.com/a/73686304

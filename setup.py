@@ -94,6 +94,7 @@ setup(
             'h5py',
             'ipympl',
             'matplotlib',
+            'nbconvert',
             'pandas',
             'rds2py',
             'scanpy',
