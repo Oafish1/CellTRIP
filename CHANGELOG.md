@@ -1,4 +1,4 @@
-### 1.0.0+2025.3.3
+### 1.0.0+2025.3.3 (1-2)
 - Add `get_transformables` utility function to `PreprocessFromAnnData` for external analyses
 - Add `rolled_index` utility function
 - Add `subset_features` argument to isolate a feature in `Preprocessing.transform`
@@ -6,13 +6,16 @@
 - Amend `num_nodes` argument behavior in `Preprocessing.sample()`
 - Argument robustness for `test_adatas`
 - Capability for gene knockdown in processed data
+- Clean up tests for knockdown in `data.ipynb`
 - Compatibility with parted h5ad files concatenated by reference using `anndata.experimental.AnnCollection`
 - Fix incorrect loading parameter `backed` assignment in `read_adatas`
+- Fix standardization timing in `Preprocessing.fit` to be before PCA computation
 - Greatly optimize partition filtering for `Preprocessing` class
 - Light file reorganization
 - Loader for Tahoe 100M dataset working on machine with 16Gb memory
 - Migrate `Preprocessing` completely to `TruncatedSVD` from `PCA`
 - Parameter `force_filter` added to `Preprocessing.transform` to avoid not shuffling data according to `filter_mask`
+- Readd PCA with centering correction in `Preprocessing.transform(..., subset_features=...)`
 - Recompile requirements
 - Seed random fit for `PreprocessFromAnnData`
 - Separate `read_adatas` into `read_adatas` and `test_adatas` for merging compatibility

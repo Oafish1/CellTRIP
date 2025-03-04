@@ -82,6 +82,14 @@ class Preprocessing:
                 self.standardize_mean = [st[:, mask] if mask is not None else st for m, st, mask in zip(modalities, self.standardize_mean, self.filter_mask)]
                 self.standardize_std = [st[:, mask] if mask is not None else st for m, st, mask in zip(modalities, self.standardize_std, self.filter_mask)]
 
+        # Apply standardization
+        if self.standardize:
+            modalities = [
+                (m - m_mean) / np.where(m_std == 0, 1, m_std) if not m_sparse else
+                (m / np.where(m_std == 0, 1, m_std)).tocsr() if scipy.sparse.issparse(m) else
+                (m / np.where(m_std == 0, 1, m_std))
+                for m, m_mean, m_std, m_sparse in zip(modalities, self.standardize_mean, self.standardize_std, self.is_sparse_transform)]
+
         # PCA
         if self.pca_dim is not None:
             for i in range(len(modalities)):
@@ -92,10 +100,10 @@ class Preprocessing:
                     self.pca_dim[i] = None
             self.pca_class = [
                 None if dim is None else
-                # sklearn.decomposition.PCA(
-                #     n_components=dim,
-                #     svd_solver='auto',
-                #     random_state=self.seed).fit(m) if not m_sparse else
+                sklearn.decomposition.PCA(
+                    n_components=dim,
+                    svd_solver='auto',
+                    random_state=self.seed).fit(m) if not m_sparse else
                 sklearn.decomposition.TruncatedSVD(
                     n_components=dim,
                     random_state=self.seed).fit(m)
@@ -151,12 +159,12 @@ class Preprocessing:
             else: idx_loc = subset_features
             # Set all features but requested to zero/center
             all_but_needed = np.setxor1d(np.arange(modalities[0].shape[1]), np.array(idx_loc))
-            # PCA compatibility, doesn't currently work
-            # if not self.is_sparse_transform[sm][0]:
-            #     center = self.pca_class[sm][0].mean_
-            #     center = center[all_but_needed]
-            # else: center = 0
-            modalities[0][:, all_but_needed] = 0
+            # PCA compatibility
+            if not self.is_sparse_transform[sm][0]:
+                center = self.pca_class[sm][0].mean_
+                center = center[all_but_needed]
+            else: center = 0
+            modalities[0][:, all_but_needed] = center
             
         # PCA
         if self.pca_dim is not None:
