@@ -365,11 +365,10 @@ class PPO(nn.Module):
         if memory is not None and keys is not None and self.training:
             memory.record(
                 keys=keys,
-                states=state,  # Will cast to cpu after
-                actions=action.cpu(),
-                action_logs=action_log.cpu(),
-                state_vals=state_val.cpu(),
-            )
+                states=state,
+                actions=action,
+                action_logs=action_log,
+                state_vals=state_val)
 
         return action
 

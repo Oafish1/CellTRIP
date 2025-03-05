@@ -245,6 +245,7 @@ class Preprocessing:
         #     adata_obs = [adata_ob.iloc[s] for adata_ob, s in zip(adata_obs, series)]
         
         # Partition
+        selected_partition = None
         if partition_cols is not None:
             if adata_obs is None: raise AttributeError('Cannot compute partitions without `adata_obs`.')
             unique_partition_vals = [np.unique([adata_ob[col].unique() for adata_ob in adata_obs]) for col in partition_cols]
@@ -356,7 +357,7 @@ class PreprocessFromAnnData:
         if memory_efficient == 'auto':
             # Only activate if on disk
             self.memory_efficient = np.array([
-                isinstance(adata, ad.experimental.AnnCollection) or isinstance(adata.X, ad.experimental.CSRDataset)
+                isinstance(adata, ad.experimental.AnnCollection) or isinstance(adata.X, ad.abc.CSRDataset)
                 for adata in adatas]).any()
         if fit_sample == 'auto':
             fit_sample = int(1e4) if memory_efficient else None

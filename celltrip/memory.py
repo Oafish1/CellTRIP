@@ -1,4 +1,5 @@
 from collections import defaultdict
+import warnings
 
 import numpy as np
 import torch
@@ -8,11 +9,12 @@ from . import utility as _utility
 
 class AdvancedMemoryBuffer:
     "Memory-efficient implementation of memory"
-    def __init__(self, suffix_len, rs_nset=1e5, split_args={}):
+    def __init__(self, suffix_len, rs_nset=1e5, split_args={}, device='cpu'):
         # User parameters
         self.suffix_len = suffix_len
         self.rs_nset = rs_nset
         self.split_args = split_args
+        self.device = device
 
         # Storage variables
         self.storage = {
@@ -35,6 +37,7 @@ class AdvancedMemoryBuffer:
         # Moving statistics
         self.running_statistics = _utility.train.RunningStatistics(n_set=rs_nset)
 
+    # Sampling
     def __getitem__(self, idx):
         # Parameters
         if not _utility.general.is_list_like(idx): idx = [idx]
@@ -166,7 +169,126 @@ class AdvancedMemoryBuffer:
 
         # TODO: Return indices so rewards can be used
         return dict(ret), memory_indices
+
+    # General
+    def __len__(self):
+        return sum(len(keys) for keys in self.storage['keys'])
     
+    def get_storage(self):
+        return self.storage, self.persistent_storage
+
+    def append_memory(self, *args):
+        "Args is either a memory object or storage, (optional) persistent storage"
+        # Parse input
+        persistent = True
+        if isinstance(args[0], type(self)):
+            memory_obj = args[0]
+            assert (~np.array(list(memory_obj.recorded.values()))).all(), 'Appending memory object must have no pending records'
+            storage, persistent_storage = memory_obj.get_storage()
+        elif len(args) > 1:
+            storage, persistent_storage = args
+        elif len(args) == 1:
+            storage, persistent_storage = args, None
+
+        # Check that all records are complete
+        assert (~np.array(list(self.recorded.values()))).all(), 'Base memory object must have no pending records'
+
+        # Append storage
+        for k in self.storage:
+            self.storage[k] += storage[k]
+
+        # Append persistent storage
+        if persistent_storage is not None:
+            for k in self.persistent_storage:
+                self.persistent_storage[k].update(persistent_storage[k])
+
+    def record(self, **kwargs):
+        "Record passed variables"
+        # Check that passed variables haven't been stored yet for this record
+        for k in kwargs:
+            assert k in self.storage, f'`{k}` not found in memory object'
+            assert not self.recorded[k], f'`{k}` has already been recorded for this record'
+
+        # Store new variables
+        for k, v in kwargs.items():
+            # Special cases
+            if k == 'keys': v = tuple(_utility.general.gen_tolist(v))
+            # Cast to device
+            else:
+                try: v = _utility.processing.recursive_tensor_func(v, lambda x: x.detach().to(self.device))
+                except: pass
+            # Record
+            self.storage[k].append(v)
+            self.recorded[k] = True
+
+        # Reset if all variables have been recorded
+        if np.array([v for _, v in self.recorded.items()]).all():
+            # Gleam suffixes
+            keys = self.storage['keys'][-1]
+            for j, k in enumerate(keys):
+                if k not in self.persistent_storage['suffixes']:
+                    self.persistent_storage['suffixes'][k] = self.storage['states'][-1][j][-self.suffix_len:].clone()
+                # Check that keys accurately map to suffixes
+                # NOTE: Slows down memory appending a small amount
+                else:
+                    sto_dev = self.storage['states'][-1][j][-self.suffix_len:].device
+                    if str(sto_dev) != 'cpu': print(sto_dev)
+                    assert (self.storage['states'][-1][j][-self.suffix_len:] == self.persistent_storage['suffixes'][k]).all(), (
+                    f'Key `{k}` does not obey 1-to-1 mapping with suffixes')
+
+            # Cut suffixes
+            # Note: MUST BE CLONED otherwise stores whole unsliced tensor
+            self.storage['states'][-1] = self.storage['states'][-1][..., :-self.suffix_len].clone()
+
+            # Set all variables as unrecorded
+            for k in self.recorded: self.recorded[k] = False
+
+    def propagate_rewards(self, gamma=.95, prune=None):
+        "Propagate rewards with decay"
+        ret, ret_prune, ret_list_prune = [], [], []
+        running_rewards = defaultdict(lambda: 0)  # {k: 0 for k in np.unique(sum(self.storage['keys'], ()))}
+        running_prune = defaultdict(lambda: 0)  # {k: 0 for k in np.unique(sum(self.storage['keys'], ()))}
+        running_list_prune = 0
+        for keys, rewards, is_terminal in zip(self.storage['keys'][::-1], self.storage['rewards'][::-1], self.storage['is_terminals'][::-1]):
+            # Maybe use as numpy?
+            rewards = _utility.general.gen_tolist(rewards)
+            for key, reward in zip(keys[::-1], rewards[::-1]):
+                if is_terminal:
+                    running_list_prune = 0
+                    running_rewards[key] = 0  # Reset at terminal state
+                    if prune is not None: running_prune[key] = 0
+                running_rewards[key] = reward + gamma * running_rewards[key]
+                ret.append(running_rewards[key])
+                if prune is not None:
+                    running_prune[key] += 1
+                    ret_prune.append(running_prune[key] > prune)
+            if prune is not None:
+                running_list_prune += 1
+                ret_list_prune.append(running_list_prune > prune)
+        ret = torch.tensor(ret[::-1], dtype=torch.float32)
+        if prune is not None:
+            ret_prune = torch.tensor(ret_prune[::-1], dtype=torch.bool)
+            ret_list_prune = torch.tensor(ret_list_prune[::-1], dtype=torch.bool)
+
+        # Need to normalize AFTER propagation
+        # NOTE: Approximate using rs_nset last rewards
+        for i, r in enumerate(ret[-int(self.rs_nset):]):
+            # Don't include pruned rewards in update
+            if prune is None or ret_prune[i]: self.running_statistics.update(r)
+        # Float vs tensor error happens here when there are no applicable memories
+        ret = (ret - self.running_statistics.mean()) / (torch.sqrt(self.running_statistics.variance() + 1e-8))
+
+        if prune is not None:
+            return ret, ret_prune, ret_list_prune
+        return ret
+
+    def clear(self, clear_persistent=False):
+        "Clear memory"
+        for k in self.storage: self.storage[k].clear()
+        if clear_persistent:
+            for k in self.persistent_storage: self.persistent_storage[k].clear()
+    
+    # Utility
     def _concat_states(self, states):
         # Pad with duplicate nodes when not sufficient
         # NOTE: Inefficient, nested tensor doesn't have enough
@@ -182,9 +304,6 @@ class AdvancedMemoryBuffer:
             dim=0) for i in range(2)]
         return states
 
-    def __len__(self):
-        return sum(len(keys) for keys in self.storage['keys'])
-
     def _append_suffix(self, state, *, keys, cache=True):
         "Append suffixes to state vector with optional cache for common key layouts"
         # Read from cache
@@ -194,6 +313,7 @@ class AdvancedMemoryBuffer:
 
         else:
             # Aggregate suffixes
+            # print('New aggregate')  # TODO: Add max number of suffixes
             suffix_matrix = None
             for k in keys:
                 val = self.persistent_storage['suffixes'][k].unsqueeze(0)
@@ -201,7 +321,13 @@ class AdvancedMemoryBuffer:
                 else: suffix_matrix = torch.concat((suffix_matrix, val), dim=0)
 
             # Add to cache
-            if cache: self.persistent_storage['suffix_matrices'][keys] = suffix_matrix
+            if cache:
+                self.persistent_storage['suffix_matrices'][keys] = suffix_matrix
+                if len(self.persistent_storage['suffix_matrices']) == 101:
+                    warnings.warn(
+                        'Persistent storage cache has exceeded 100 entries,'
+                        'please verify that there are over 100 unique environment '
+                        'states in your data.', RuntimeWarning)
 
         # Append to state
         return torch.concat((state, suffix_matrix), dim=1)
@@ -248,104 +374,3 @@ class AdvancedMemoryBuffer:
     
     def _index_to_flat_index(self, idx):
         return self._flat_index_to_index(idx, inverse=True)
-    
-    def get_storage(self):
-        return self.storage, self.persistent_storage
-
-    def append_memory(self, *args):
-        "Args is either a memory object or storage, (optional) persistent storage"
-        # Parse input
-        persistent = True
-        if isinstance(args[0], type(self)):
-            memory_obj = args[0]
-            assert (~np.array(list(memory_obj.recorded.values()))).all(), 'Appending memory object must have no pending records'
-            storage, persistent_storage = memory_obj.get_storage()
-        elif len(args) > 1:
-            storage, persistent_storage = args
-        elif len(args) == 1:
-            storage, = args
-            persistent = False
-
-        # Check that all records are complete
-        assert (~np.array(list(self.recorded.values()))).all(), 'Base memory object must have no pending records'
-
-        # Append storage
-        for k in self.storage: self.storage[k] += storage[k]
-
-        # Append persistent storage
-        if persistent:
-            for k in self.persistent_storage: self.persistent_storage[k].update(persistent_storage[k])
-
-    def record(self, **kwargs):
-        "Record passed variables"
-        # Check that passed variables haven't been stored yet for this record
-        for k in kwargs:
-            assert k in self.storage, f'`{k}` not found in memory object'
-            assert not self.recorded[k], f'`{k}` has already been recorded for this record'
-
-        # Store new variables
-        for k, v in kwargs.items():
-            # Special cases
-            # NOTE: For some god-forsaken reason, traeating this as an np array or non-sequential list brings unimaginable problems (2x backwards time)
-            if k == 'keys': v = tuple(v)
-
-            # Record
-            self.storage[k].append(v)
-            self.recorded[k] = True
-
-        # Reset if all variables have been recorded
-        if np.array([v for _, v in self.recorded.items()]).all():
-            # Gleam suffixes
-            for j, k in enumerate(self.storage['keys'][-1]):
-                if k not in self.persistent_storage['suffixes']:
-                    self.persistent_storage['suffixes'][k] = self.storage['states'][-1][j][-self.suffix_len:].clone().cpu()
-
-            # Cut suffixes
-            # Note: MUST BE CLONED otherwise stores whole unsliced tensor
-            self.storage['states'][-1] = self.storage['states'][-1][..., :-self.suffix_len].clone().cpu()
-
-            # Set all variables as unrecorded
-            for k in self.recorded: self.recorded[k] = False
-
-    def propagate_rewards(self, gamma=.95, prune=None):
-        "Propagate rewards with decay"
-        ret, ret_prune, ret_list_prune = [], [], []
-        running_rewards = defaultdict(lambda: 0)  # {k: 0 for k in np.unique(sum(self.storage['keys'], ()))}
-        running_prune = defaultdict(lambda: 0)  # {k: 0 for k in np.unique(sum(self.storage['keys'], ()))}
-        running_list_prune = 0
-        for keys, rewards, is_terminal in zip(self.storage['keys'][::-1], self.storage['rewards'][::-1], self.storage['is_terminals'][::-1]):
-            for key, reward in zip(keys[::-1], rewards[::-1]):
-                if is_terminal:
-                    running_list_prune = 0
-                    running_rewards[key] = 0  # Reset at terminal state
-                    if prune is not None: running_prune[key] = 0
-                running_rewards[key] = reward + gamma * running_rewards[key]
-                ret.append(running_rewards[key])
-                if prune is not None:
-                    running_prune[key] += 1
-                    ret_prune.append(running_prune[key] > prune)
-            if prune is not None:
-                running_list_prune += 1
-                ret_list_prune.append(running_list_prune > prune)
-        ret = torch.tensor(ret[::-1], dtype=torch.float32)
-        if prune is not None:
-            ret_prune = torch.tensor(ret_prune[::-1], dtype=torch.bool)
-            ret_list_prune = torch.tensor(ret_list_prune[::-1], dtype=torch.bool)
-
-        # Need to normalize AFTER propagation
-        # NOTE: Approximate using rs_nset last rewards
-        for i, r in enumerate(ret[-int(self.rs_nset):]):
-            # Don't include pruned rewards in update
-            if prune is None or ret_prune[i]: self.running_statistics.update(r)
-        # Float vs tensor error happens here when there are no applicable memories
-        ret = (ret - self.running_statistics.mean()) / (torch.sqrt(self.running_statistics.variance() + 1e-8))
-
-        if prune is not None:
-            return ret, ret_prune, ret_list_prune
-        return ret
-
-    def clear(self, clear_persistent=False):
-        "Clear memory"
-        for k in self.storage: self.storage[k].clear()
-        if clear_persistent:
-            for k in self.persistent_storage: self.persistent_storage[k].clear()

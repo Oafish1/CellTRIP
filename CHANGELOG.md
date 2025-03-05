@@ -1,3 +1,14 @@
+### 1.0.0+2025.3.5
+- Add `keys` input to rollouts
+- Add resource checking for distributed loop and remove cancellations
+- CUDA tensor storage bugfix through memory sanitization
+- Device choice for `AdvancedMemoryBuffer` class
+- Finally fix tuple requirement for keys through smarter persistent storage
+- JSON formatting for rollout and update metric returns
+- Reupdate AnnData
+- Various bugfixes for distributed
+- Warning for excessive persistent storage usage
+
 ### 1.0.0+2025.3.4
 - Add partitioning to distributed loop
 - Add repeat padding for `AdvancedMemoryBuffer` when memories do not have equivalent dimensions

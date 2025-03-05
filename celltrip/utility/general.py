@@ -28,6 +28,17 @@ def list_crawl(l, f):
         except: return []
 
 
+def gen_tolist(ar):
+    "Convert tensor or numpy array to list"
+    try: ar = ar.detach().cpu().tolist()
+    except:
+        try:
+            ar = ar.tolist()
+        except: pass
+        
+    return ar
+
+
 def dict_entry(base, add):
     """
     Add `add` entries to `base`, not tolerant of duplicates

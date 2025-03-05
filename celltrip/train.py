@@ -1,4 +1,6 @@
 from collections import defaultdict
+import functools as ft
+import json
 import threading
 import warnings
 
@@ -141,7 +143,7 @@ def _train_func(
             'Episode reward': ep_reward,
             'Episode itemized reward': ep_itemized_reward}}
     ret = _utility.general.dict_entry(ret, meta)
-    print(ret)
+    print(json.dumps(ret, indent=2, sort_keys=False))
     return ret
 train_func = ray.remote(max_calls=1)(_train_func)
 
@@ -179,8 +181,8 @@ def _update_func(
     policy.update(memory, **kwargs)
 
     ray.get(policy_manager.lock.remote('state', True))
-    ray.get(policy_manager.set_policy_state.remote(
-        set_device_recursive(get_policy_state(policy), 'cpu')))
+    policy_state = set_device_recursive(get_policy_state(policy), 'cpu')
+    ray.get(policy_manager.set_policy_state.remote(policy_state))
     ray.get(policy_manager.lock.remote('state', False))
 
     # Clear remote memory
@@ -193,9 +195,9 @@ def _update_func(
     # Format return
     ret = {
         'Event Type': 'Update',
-        'Event Details': {'# Memories': len(memory)}}
+        'Event Details': {'Memories': len(memory)}}
     ret = _utility.general.dict_entry(ret, meta)
-    print(ret)
+    print(json.dumps(ret, indent=2, sort_keys=False))
     return ret
 
     
@@ -248,6 +250,13 @@ class DistributedManager:
                     'num_gpus': 1*(max_jobs_per_gpu>0)},
                 'custom': {
                     'VRAM': 0}}}
+        
+    def get_requirements(self, key):
+        requirements = ft.reduce(lambda l,r: dict(**l, **r), self.resources[key].values(), {})
+        requirements['CPU'] = requirements.pop('num_cpus')
+        requirements['GPU'] = requirements.pop('num_gpus')
+
+        return requirements
 
     def get_futures(self):
         return self.futures
@@ -265,9 +274,10 @@ class DistributedManager:
         return memory_len
 
     # Futures
-    def rollout(self, num_simulations=1, modalities=None, env_init=None, **kwargs):
+    def rollout(self, num_simulations=1, modalities=None, keys=None, env_init=None, **kwargs):
         # Defaults
         if modalities is None: modalities = self.modalities
+        if keys is None: keys = torch.arange(modalities[0].shape[0]).tolist()
         if env_init is None: env_init = self.env_init
 
         # Run forward on each worker to completion until a certain number of steps is reached
@@ -283,6 +293,7 @@ class DistributedManager:
                     self.policy_init,
                     env_init,
                     self.memory_init,
+                    keys=keys,
                     **kwargs,
                     return_metrics=self.resources['rollout']['core']['memory']==0,
                     exit_hook=exit_hook)
@@ -355,8 +366,8 @@ class DistributedManager:
             complete_futures, self.futures[k] = ray.wait(self.futures[k], num_returns=len(self.futures[k]), timeout=0)
 
 
-
-def simulate_until_completion(policy, env, memory=None, dummy=False):
+def simulate_until_completion(policy, env, memory=None, keys=None, dummy=False):
+    # Simulation
     ep_timestep = 0; ep_reward = 0; ep_itemized_reward = defaultdict(lambda: 0); finished = False
     while not finished:
         with torch.inference_mode():
@@ -364,7 +375,6 @@ def simulate_until_completion(policy, env, memory=None, dummy=False):
             state = env.get_state(include_modalities=True)
 
             # Get actions from policy
-            keys = list(range(state.shape[0]))  # TODO: Add as argument or from env
             actions = policy.act_macro(
                 state,
                 keys=keys,
@@ -375,7 +385,7 @@ def simulate_until_completion(policy, env, memory=None, dummy=False):
             rewards, finished, itemized_rewards = env.step(actions, return_itemized_rewards=True)
 
             # Record rewards
-            memory.record(rewards=rewards.cpu().tolist(), is_terminals=finished)
+            memory.record(rewards=rewards, is_terminals=finished)
 
             # Tracking
             ts_reward = rewards.cpu().mean()
@@ -392,7 +402,7 @@ def simulate_until_completion(policy, env, memory=None, dummy=False):
                 break
         
         # CLI
-        if ep_timestep % 100 == 0: print(f'Timestep {ep_timestep:03} - Reward {ts_reward:.3f}')
+        # if ep_timestep % 200 == 0: print(f'Timestep {ep_timestep:03} - Reward {ts_reward:.3f}')
 
     # Summarize and return
     ep_reward = (ep_reward / ep_timestep).item()

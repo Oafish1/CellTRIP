@@ -1,4 +1,5 @@
 import os
+import functools as ft
 import time
 
 # Set env vars
@@ -29,6 +30,7 @@ MODEL_FOLDER = os.path.join(BASE_FOLDER, 'models/')
 
 # %% [markdown]
 # - High priority
+#   - Add metric returns for updates
 #   - Optimize cancels to only cancel non-running
 #   - Implement stages
 #   - Add partitioning
@@ -45,21 +47,35 @@ MODEL_FOLDER = os.path.join(BASE_FOLDER, 'models/')
 #   - Better split_state reproducibility
 
 # %%
-modalities, types, features = data.load_data('MMD-MA', DATA_FOLDER)
-ppc = celltrip.utility.processing.Preprocessing(pca_dim=128, device=DEVICE)
-processed_modalities, features = ppc.fit_transform(modalities, features)
-# modalities = ppc.cast(processed_modalities)
-modalities = [m.astype(np.float32) for m in processed_modalities]
-# modalities = [np.concatenate([m for _ in range(10000)], axis=0) for m in modalities]
-# modalities = [m[:100] for m in modalities]
+# Read
+fnames = ['../data/MERFISH/expression.h5ad', '../data/MERFISH/spatial.h5ad']
+partition_cols = 'layer'
+adatas = celltrip.utility.processing.read_adatas(*fnames, on_disk=False)
+celltrip.utility.processing.test_adatas(*adatas, partition_cols=partition_cols)
+
+# Dataloader
+dataloader = celltrip.utility.processing.PreprocessFromAnnData(
+    *adatas, partition_cols=partition_cols, pca_dim=128)
+modalities, adata_obs, adata_vars = dataloader.sample()
+
+
+# %%
+# modalities, types, features = data.load_data('MMD-MA', DATA_FOLDER)
+# ppc = celltrip.utility.processing.Preprocessing(pca_dim=128, device=DEVICE)
+# processed_modalities, features = ppc.fit_transform(modalities, features)
+# # modalities = ppc.cast(processed_modalities)
+# modalities = [m.astype(np.float32) for m in processed_modalities]
+# # modalities = [np.concatenate([m for _ in range(10000)], axis=0) for m in modalities]
+# # modalities = [m[:100] for m in modalities]
 
 
 # %%
 # Behavioral functions
 dim = 3
-policy_init = lambda modalities: celltrip.policy.PPO(
+modal_dims = [m.shape[1] for m in modalities]
+policy_init = lambda: celltrip.policy.PPO(
     positional_dim=2*dim,
-    modal_dims=[m.shape[1] for m in modalities],
+    modal_dims=modal_dims,
     output_dim=dim,
     # BACKWARDS
     # epochs=5,
@@ -94,7 +110,8 @@ dm = celltrip.train.DistributedManager(
     modalities,
     policy_init=policy_init,
     env_init=env_init,
-    memory_init=memory_init)
+    memory_init=memory_init,
+    max_jobs_per_gpu=2)
 
 
 # %%
@@ -104,12 +121,21 @@ print(datetime.now())
 
 # %%
 # Train loop iter
-max_rollout_futures = 20
-num_updates = 0; calibrated = False
+max_rollout_futures = 1; num_updates = 0; calibrated = False
 while True:
     # Retrieve active futures
     futures = dm.get_futures()
     num_futures = len(dm.get_all_futures())
+
+    # Compute feasibility of futures
+    available_resources = ray.available_resources()
+    rollout_feasible = np.array([
+        v <= available_resources[k]
+        if k in available_resources else False
+        for k, v in dm.get_requirements('rollout').items()]).all()
+    # update_feasible = np.array([
+    #     v <= available_resources[k]
+    #     for k, v in dm.get_requirements('update').items()]).all()
 
     # CLI
     # print('; '.join([f'{k} ({len(v)})' for k, v in futures.items()]))
@@ -119,15 +145,22 @@ while True:
     # Check memory and apply update if needed 
     if len(futures['update']) == 0 and dm.get_memory_len() >= int(1e6):
         # assert False
-        print(f'Queueing policy update {num_updates+1}')
-        dm.cancel()  # Cancel all non-running (TODO)
-        dm.update()
+        # print(f'Queueing policy update {num_updates+1}')
+        # dm.cancel()  # Cancel all non-running (TODO)
+        dm.update(meta={'Policy Iteration': num_updates+1})
 
     # Add rollouts if no update future and below max queued futures
-    elif len(futures['update']) == 0 and num_futures < max_rollout_futures:
-        num_new_rollouts = max_rollout_futures - num_futures
-        print(f'Queueing {num_new_rollouts} rollouts')
-        dm.rollout(num_new_rollouts, dummy=False)
+    elif rollout_feasible and len(futures['update']) == 0 and num_futures < max_rollout_futures:
+        # print(f'Queueing {num_new_rollouts} rollouts')
+        # dm.rollout(num_new_rollouts, dummy=False)
+        modalities, adata_obs, adata_vars, partition = dataloader.sample(return_partition=True)
+        dm.rollout(
+            modalities=modalities,
+            keys=adata_obs[0].index.to_numpy(),
+            meta={
+                'Policy Iteration': num_updates,
+                'Partition': partition},
+            dummy=False)
 
     ## Check for completed futures
     # Completed rollouts
@@ -136,12 +169,13 @@ while True:
         all_variants_run = True  # TODO: Set to true if all partitions have been run
         if dm.resources['rollout']['core']['memory'] == 0 and all_variants_run:
             dm.calibrate()
-            print(
-                f'Calibrated rollout'
-                f' memory ({dm.resources["rollout"]["core"]["memory"] / 2**30:.2f} GiB)'
-                f' and VRAM ({dm.resources["rollout"]["custom"]["VRAM"] / 2**30:.2f} GiB)')
-            dm.cancel(); time.sleep(1)  # Cancel all non-running (TODO)
-            dm.policy_manager.release_locks.remote()
+            max_rollout_futures = 20
+            # print(
+            #     f'Calibrated rollout'
+            #     f' memory ({dm.resources["rollout"]["core"]["memory"] / 2**30:.2f} GiB)'
+            #     f' and VRAM ({dm.resources["rollout"]["custom"]["VRAM"] / 2**30:.2f} GiB)')
+            # dm.cancel(); time.sleep(1)  # Cancel all non-running (TODO)
+            # dm.policy_manager.release_locks.remote()
         # Clean if calibrated
         if dm.resources['rollout']['core']['memory'] != 0: dm.clean('rollout')
 
@@ -151,17 +185,19 @@ while True:
         # Calibrate if needed
         if dm.resources['update']['core']['memory'] == 0:
             dm.calibrate()
-            print(
-                f'Calibrated update'
-                f' memory ({dm.resources["update"]["core"]["memory"] / 2**30:.3f} GiB)'
-                f' and VRAM ({dm.resources["update"]["custom"]["VRAM"] / 2**30:.3f} GiB)')
+            # print(
+            #     f'Calibrated update'
+            #     f' memory ({dm.resources["update"]["core"]["memory"] / 2**30:.3f} GiB)'
+            #     f' and VRAM ({dm.resources["update"]["custom"]["VRAM"] / 2**30:.3f} GiB)')
         dm.clean('update')
 
-    # Wait for a new completion
-    num_futures = len(dm.get_all_futures())
-    if num_futures > 0:
-        num_completed_futures = len(dm.wait(num_returns=num_futures, timeout=0))
-        if num_completed_futures != num_futures: dm.wait(num_returns=num_completed_futures+1)
+    # Wait to scan again
+    # num_futures = len(dm.get_all_futures())
+    # if num_futures > 0:
+    #     num_completed_futures = len(dm.wait(num_returns=num_futures, timeout=0))
+    #     if num_completed_futures != num_futures: dm.wait(num_returns=num_completed_futures+1)
+    # else: time.sleep(1)
+    time.sleep(1)
 
     # Escape
     if num_updates >= 50: break
@@ -184,13 +220,17 @@ print(datetime.now())
 
 # # Get policy
 # device = DEVICE
-# policy = policy_init(modalities).to(device)
-# celltrip.training.set_policy_state(policy, ray.get(dm.policy_manager.get_policy_state.remote()))
+# policy = policy_init().to(device)
+# celltrip.train.set_policy_state(policy, ray.get(dm.policy_manager.get_policy_state.remote()))
 
 # # Get memory
 # memory = memory_init(policy)
 # memory.append_memory(
 #     *ray.get(dm.policy_manager.get_memory_storage.remote()))
+
+
+# %%
+# policy.update(memory)
 
 
 # %%
