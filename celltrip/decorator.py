@@ -1,8 +1,11 @@
 import cProfile
+import sys
 import traceback
 import tracemalloc
 
 import torch
+
+from . import utility as _utility
 
 
 def try_catch(_func=None, show_traceback=False):
@@ -48,8 +51,17 @@ def metrics(func):
         ret = func(*args, **kwargs)
 
         if return_metrics:
+            # Get extra memory from args
+            # NOTE: Assumes all on CPU
+            arg_sizes = [sys.getsizeof(obj) for obj in args+tuple(kwargs.values())]
+            np_arg_sizes = _utility.general.list_crawl(
+                args+tuple(kwargs.values()),
+                lambda x: x.nbytes)
+            
+            arg_mem = sum(arg_sizes+np_arg_sizes)
+
             metrics = []
-            metrics += [tracemalloc.get_traced_memory()[1] - base_memory]  # Memory usage
+            metrics += [tracemalloc.get_traced_memory()[1] - base_memory + arg_mem]  # Memory usage
             if torch.cuda.is_available():
                 metrics += [torch.cuda.max_memory_allocated() - base_vram]  # VRAM usage
             else: metrics += [0]

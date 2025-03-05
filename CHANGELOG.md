@@ -1,3 +1,11 @@
+### 1.0.0+2025.3.4
+- Add partitioning to distributed loop
+- Add repeat padding for `AdvancedMemoryBuffer` when memories do not have equivalent dimensions
+- Add reporting to rollout and update functions
+- AnnData CSRDataset `0.10.x` compatibility
+- Enhanced memory profiling for `decorator.metrics`
+- Proper typecasting for `Preprocessing.transform`
+
 ### 1.0.0+2025.3.3 (1-2)
 - Add `get_transformables` utility function to `PreprocessFromAnnData` for external analyses
 - Add `rolled_index` utility function

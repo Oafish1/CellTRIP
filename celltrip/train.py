@@ -37,8 +37,8 @@ def set_device_recursive(state_dict, device):
 
 
 class _PolicyManager:
-    def __init__(self, modalities, policy_init, memory_init):
-        self.policy = policy_init(modalities)
+    def __init__(self, policy_init, memory_init):
+        self.policy = policy_init()
         self.memory = memory_init(self.policy)
         self.locks = {
             'memory': threading.Lock(),
@@ -95,14 +95,22 @@ PolicyManager = ray.remote(_PolicyManager)
 @_decorators.try_catch(show_traceback=True)
 @_decorators.call_on_exit
 # @_decorators.profile
-def _train_func(policy_manager, modalities, policy_init, env_init, memory_init, **kwargs):
+def _train_func(
+    policy_manager,
+    modalities,
+    policy_init,
+    env_init,
+    memory_init,
+    meta=None,
+    **kwargs,
+):
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
     # CLI
     # print('Beginning simulation')
 
     # Load policy
-    policy = policy_init(modalities).to(device)
+    policy = policy_init().to(device)
     ray.get(policy_manager.lock.remote('state', True))
     set_policy_state(policy, ray.get(policy_manager.get_policy_state.remote()))
     ray.get(policy_manager.lock.remote('state', False))
@@ -123,7 +131,18 @@ def _train_func(policy_manager, modalities, policy_init, env_init, memory_init, 
     ray.get(policy_manager.lock.remote('memory', False))
 
     # CLI
-    print(f'Simulation finished in {ep_timestep} steps with mean reward {ep_reward:.3f}')
+    # print(f'Simulation finished in {ep_timestep} steps with mean reward {ep_reward:.3f}')
+
+    # Aggregate performance
+    ret = {
+        'Event Type': 'Rollout',
+        'Event Details': {
+            'Episode timesteps': ep_timestep,
+            'Episode reward': ep_reward,
+            'Episode itemized reward': ep_itemized_reward}}
+    ret = _utility.general.dict_entry(ret, meta)
+    print(ret)
+    return ret
 train_func = ray.remote(max_calls=1)(_train_func)
 
 
@@ -131,14 +150,20 @@ train_func = ray.remote(max_calls=1)(_train_func)
 @_decorators.try_catch(show_traceback=True)
 @_decorators.call_on_exit
 # @_decorators.profile
-def _update_func(policy_manager, modalities, policy_init, memory_init, **kwargs):
+def _update_func(
+    policy_manager,
+    policy_init,
+    memory_init,
+    meta=None,
+    **kwargs,
+):
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
     # CLI
     # print('Beginning policy update')
 
     # Load policy
-    policy = policy_init(modalities).to(device)
+    policy = policy_init().to(device)
     ray.get(policy_manager.lock.remote('state', True))
     set_policy_state(policy, ray.get(policy_manager.get_policy_state.remote()))
     ray.get(policy_manager.lock.remote('state', False))
@@ -163,20 +188,31 @@ def _update_func(policy_manager, modalities, policy_init, memory_init, **kwargs)
     ray.get(policy_manager.lock.remote('memory', False))
 
     # CLI
-    print(f'Done updating policy on {len(memory)} memories')
+    # print(f'Done updating policy on {len(memory)} memories')
+
+    # Format return
+    ret = {
+        'Event Type': 'Update',
+        'Event Details': {'# Memories': len(memory)}}
+    ret = _utility.general.dict_entry(ret, meta)
+    print(ret)
+    return ret
+
+    
 update_func = ray.remote(max_calls=1)(_update_func)
 
 
 class DistributedManager:
     def __init__(
         self,
-        modalities,
+        modalities=None,
         policy_init=None,
         env_init=None,
         memory_init=None,
         max_jobs_per_gpu=4,
     ):
         # Record
+        self.modalities = modalities
         self.policy_init = policy_init
         self.env_init = env_init
         self.memory_init = memory_init
@@ -190,8 +226,8 @@ class DistributedManager:
 
         # Put policy and modalities in object store
         # self.policy_ref = ray.put(zerocopy.extract_tensors(self.policy))
-        self.modalities_ref = ray.put(modalities)  # Zero copy
-        self.policy_manager = PolicyManager.options(max_concurrency=int(1e3), num_cpus=1).remote(self.modalities_ref, policy_init, memory_init)
+        if modalities is not None: self.modalities = ray.put(modalities)  # Zero copy
+        self.policy_manager = PolicyManager.options(max_concurrency=int(1e3), num_cpus=1).remote(policy_init, memory_init)
 
         # Initialize futures list
         self.futures = defaultdict(lambda: [])
@@ -229,8 +265,9 @@ class DistributedManager:
         return memory_len
 
     # Futures
-    def rollout(self, num_simulations=1, env_init=None, **kwargs):
+    def rollout(self, num_simulations=1, modalities=None, env_init=None, **kwargs):
         # Defaults
+        if modalities is None: modalities = self.modalities
         if env_init is None: env_init = self.env_init
 
         # Run forward on each worker to completion until a certain number of steps is reached
@@ -242,7 +279,7 @@ class DistributedManager:
                 .options(**self.resources['rollout']['core'], resources=self.resources['rollout']['custom'])
                 .remote(
                     self.policy_manager,
-                    self.modalities_ref,
+                    modalities,
                     self.policy_init,
                     env_init,
                     self.memory_init,
@@ -254,7 +291,7 @@ class DistributedManager:
 
         return rollouts
         
-    def update(self):
+    def update(self, **kwargs):
         # Run update
         def exit_hook():
             ray.get(self.policy_manager.release_locks.remote())
@@ -264,9 +301,9 @@ class DistributedManager:
                 .options(**self.resources['update']['core'], resources=self.resources['update']['custom'])
                 .remote(
                     self.policy_manager,
-                    self.modalities_ref,
                     self.policy_init,
                     self.memory_init,
+                    **kwargs,
                     return_metrics=self.resources['update']['core']['memory']==0,
                     exit_hook=exit_hook)]
         self.futures['update'] += updates

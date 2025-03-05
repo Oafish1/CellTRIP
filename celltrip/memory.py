@@ -155,7 +155,8 @@ class AdvancedMemoryBuffer:
         # Sort to indexing order and stack
         for k in ret:
             if k == 'states':
-                ret[k] = [torch.concat([s[i] for s in ret[k]], dim=0) for i in range(2)]
+                # ret[k] = [torch.concat([s[i] for s in ret[k]], dim=0) for i in range(2)]
+                ret[k] = self._concat_states(ret[k])
                 if clip: ret[k] = [t[:num_memories] for t in ret[k]]
             else:
                 ret[k] = torch.concat(ret[k], dim=0)
@@ -165,6 +166,21 @@ class AdvancedMemoryBuffer:
 
         # TODO: Return indices so rewards can be used
         return dict(ret), memory_indices
+    
+    def _concat_states(self, states):
+        # Pad with duplicate nodes when not sufficient
+        # NOTE: Inefficient, nested tensor doesn't have enough
+        # functionality yet
+        shapes = [s[1].shape[1] for s in states]
+        max_nodes = max(shapes)
+        states = [
+            torch.concat([
+                s[i] if i == 0 else
+                s[i].repeat(
+                    1, int(np.ceil(max_nodes/s[i].shape[1])), 1)[:, :max_nodes]
+                for s in states],
+            dim=0) for i in range(2)]
+        return states
 
     def __len__(self):
         return sum(len(keys) for keys in self.storage['keys'])

@@ -18,6 +18,30 @@ def is_list_like(l):
         return False
 
 
+def list_crawl(l, f):
+    "Crawl through the *potential* list l, applying f"
+    try:
+        return [f(l)]
+    except:
+        try:
+            return sum([list_crawl(le, f) for le in l], [])
+        except: return []
+
+
+def dict_entry(base, add):
+    """
+    Add `add` entries to `base`, not tolerant of duplicates
+    """
+    for k, v in add.items():
+        if k not in base:
+            base[k] = v
+        else:
+            # Assumes any overlaps are also dicts
+            dict_entry(base[k], v)
+    
+    return base
+
+
 def rolled_index(arrays, idx):
     """
     Recursive function to return result of indexing into multiple lists as if they were

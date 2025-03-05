@@ -172,7 +172,9 @@ class Preprocessing:
         
         # Return
         # NOTE: Returns features before PCA transformation, also always dense
-        ret = ([m if not scipy.sparse.issparse(m) else m.toarray() for m, m_sparse in zip(modalities, self.is_sparse_transform[sm])],)
+        modalities = [m if not scipy.sparse.issparse(m) else m.toarray() for m in modalities]
+        modalities = list(map(lambda m: m.astype(np.float32), modalities))
+        ret = (modalities,)
         if adata_vars is not None: ret += (adata_vars,)
         return _utility.general.clean_return(ret)
 
@@ -206,7 +208,15 @@ class Preprocessing:
         self.fit(*args, **kwargs)
         return self.transform(*args, **kwargs)
     
-    def subsample(self, modalities=None, adata_obs=None, partition_cols=None, seed=None, **kwargs):
+    def subsample(
+        self,
+        modalities=None,
+        adata_obs=None,
+        partition_cols=None,
+        seed=None,
+        return_partition=False,
+        **kwargs
+    ):
         # Defaults
         assert not np.array([v is None for v in (modalities, adata_obs)]).all(), (
             'At least of `modalities` or `adata_obs` must be provided')
@@ -283,6 +293,7 @@ class Preprocessing:
         ret = ()
         if modalities is not None: ret += (modalities,)
         if adata_obs is not None: ret += (adata_obs,)
+        if return_partition: ret += (selected_partition,)
         return _utility.general.clean_return(ret)
 
 
@@ -345,7 +356,7 @@ class PreprocessFromAnnData:
         if memory_efficient == 'auto':
             # Only activate if on disk
             self.memory_efficient = np.array([
-                isinstance(adata, ad.experimental.AnnCollection) or isinstance(adata.X, ad.abc.CSRDataset)
+                isinstance(adata, ad.experimental.AnnCollection) or isinstance(adata.X, ad.experimental.CSRDataset)
                 for adata in adatas]).any()
         if fit_sample == 'auto':
             fit_sample = int(1e4) if memory_efficient else None
@@ -385,15 +396,19 @@ class PreprocessFromAnnData:
         self.processed_modalities, self.processed_adata_vars = self.preprocessing.fit_transform(
             modalities, adata_vars=adata_vars, force_filter=True)
         
-    def _transform_memory(self):
+    def _transform_memory(self, return_partition=False):
         # Perform sampling
         sampled_adata_vars = self.processed_adata_vars
         sampled_modalities, sampled_adata_obs = self.preprocessing.subsample(
             self.processed_modalities,
             adata_obs=self.processed_adata_obs,
-            partition_cols=self.partition_cols)
+            partition_cols=self.partition_cols,
+            return_partition=return_partition)
+        if return_partition: sampled_adata_obs, partition = sampled_adata_obs
         
-        return sampled_modalities, sampled_adata_obs, sampled_adata_vars
+        ret = (sampled_modalities, sampled_adata_obs, sampled_adata_vars)
+        if return_partition: ret += (partition,)
+        return ret
         
     def _fit_disk(self):
         if self.fit_sample:
@@ -407,20 +422,24 @@ class PreprocessFromAnnData:
         # Fit preprocessing
         self.preprocessing.fit(modalities)
 
-    def _transform_disk(self):
+    def _transform_disk(self, return_partition=False):
         adata_obs = [adata.obs for adata in self.adatas]
         adata_vars = [adata.var for adata in self.adatas]
 
         # Perform sampling
         sampled_adata_obs = self.preprocessing.subsample(
             adata_obs=adata_obs,
-            partition_cols=self.partition_cols)
+            partition_cols=self.partition_cols,
+            return_partition=return_partition)
+        if return_partition: sampled_adata_obs, partition = sampled_adata_obs
         sampled_modalities = [adata[adata_ob.index].X for adata, adata_ob in zip(self.adatas, sampled_adata_obs)]
         processed_adata_obs = sampled_adata_obs
         processed_modalities, processed_adata_vars = self.preprocessing.transform(
             sampled_modalities, adata_vars, force_filter=True)
 
-        return processed_modalities, processed_adata_obs, processed_adata_vars
+        ret = (processed_modalities, processed_adata_obs, processed_adata_vars)
+        if return_partition: ret += (partition,)
+        return ret
 
 
 
