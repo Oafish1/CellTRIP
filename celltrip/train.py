@@ -535,4 +535,4 @@ def train_policy(distributed_manager, dataloader):
         time.sleep(1)
 
         # Escape
-        # if num_updates >= 50: break
+        if num_updates >= 50: break

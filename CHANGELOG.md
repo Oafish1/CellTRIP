@@ -1,3 +1,6 @@
+### 1.0.0+2025.3.6
+- Figure revisions
+
 ### 1.0.0+2025.3.5.1
 - Additional metric returns
 - Change `policy.PPO` defaults
