@@ -1,3 +1,10 @@
+### 1.0.0+2025.3.5.1
+- Additional metric returns
+- Change `policy.PPO` defaults
+- Map training revisions
+- Move training loop to `train` module
+- Rearrange functions
+
 ### 1.0.0+2025.3.5
 - Add `keys` input to rollouts
 - Add resource checking for distributed loop and remove cancellations

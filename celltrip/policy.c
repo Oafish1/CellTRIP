@@ -1506,6 +1506,8 @@ struct __pyx_defaults1 {
 };
 struct __pyx_defaults2 {
   PyObject *__pyx_arg_model;
+  PyObject *__pyx_arg_max_batch;
+  PyObject *__pyx_arg_max_nodes;
   PyObject *__pyx_arg_update_batch;
   PyObject *__pyx_arg_update_minibatch;
 };
@@ -3043,7 +3045,9 @@ typedef struct {
   PyObject *__pyx_float__05;
   PyObject *__pyx_float__15;
   PyObject *__pyx_float__95;
+  PyObject *__pyx_float_1e2;
   PyObject *__pyx_float_1e4;
+  PyObject *__pyx_float_5e2;
   PyObject *__pyx_float_1eneg_3;
   PyObject *__pyx_float_3eneg_4;
   PyObject *__pyx_float_neg__01;
@@ -3441,7 +3445,9 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_float__05);
   Py_CLEAR(clear_module_state->__pyx_float__15);
   Py_CLEAR(clear_module_state->__pyx_float__95);
+  Py_CLEAR(clear_module_state->__pyx_float_1e2);
   Py_CLEAR(clear_module_state->__pyx_float_1e4);
+  Py_CLEAR(clear_module_state->__pyx_float_5e2);
   Py_CLEAR(clear_module_state->__pyx_float_1eneg_3);
   Py_CLEAR(clear_module_state->__pyx_float_3eneg_4);
   Py_CLEAR(clear_module_state->__pyx_float_neg__01);
@@ -3817,7 +3823,9 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_float__05);
   Py_VISIT(traverse_module_state->__pyx_float__15);
   Py_VISIT(traverse_module_state->__pyx_float__95);
+  Py_VISIT(traverse_module_state->__pyx_float_1e2);
   Py_VISIT(traverse_module_state->__pyx_float_1e4);
+  Py_VISIT(traverse_module_state->__pyx_float_5e2);
   Py_VISIT(traverse_module_state->__pyx_float_1eneg_3);
   Py_VISIT(traverse_module_state->__pyx_float_3eneg_4);
   Py_VISIT(traverse_module_state->__pyx_float_neg__01);
@@ -4203,7 +4211,9 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_float__05 __pyx_mstate_global->__pyx_float__05
 #define __pyx_float__15 __pyx_mstate_global->__pyx_float__15
 #define __pyx_float__95 __pyx_mstate_global->__pyx_float__95
+#define __pyx_float_1e2 __pyx_mstate_global->__pyx_float_1e2
 #define __pyx_float_1e4 __pyx_mstate_global->__pyx_float_1e4
+#define __pyx_float_5e2 __pyx_mstate_global->__pyx_float_5e2
 #define __pyx_float_1eneg_3 __pyx_mstate_global->__pyx_float_1eneg_3
 #define __pyx_float_3eneg_4 __pyx_mstate_global->__pyx_float_3eneg_4
 #define __pyx_float_neg__01 __pyx_mstate_global->__pyx_float_neg__01
@@ -9154,12 +9164,12 @@ static PyObject *__pyx_pf_8celltrip_6policy_4__defaults__(CYTHON_UNUSED PyObject
   __Pyx_INCREF(((PyObject *)__pyx_int_1));
   __Pyx_GIVEREF(((PyObject *)__pyx_int_1));
   if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 10, ((PyObject *)__pyx_int_1))) __PYX_ERR(0, 208, __pyx_L1_error);
-  __Pyx_INCREF(Py_None);
-  __Pyx_GIVEREF(Py_None);
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 11, Py_None)) __PYX_ERR(0, 208, __pyx_L1_error);
-  __Pyx_INCREF(Py_None);
-  __Pyx_GIVEREF(Py_None);
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 12, Py_None)) __PYX_ERR(0, 208, __pyx_L1_error);
+  __Pyx_INCREF(__Pyx_CyFunction_Defaults(__pyx_defaults2, __pyx_self)->__pyx_arg_max_batch);
+  __Pyx_GIVEREF(__Pyx_CyFunction_Defaults(__pyx_defaults2, __pyx_self)->__pyx_arg_max_batch);
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 11, __Pyx_CyFunction_Defaults(__pyx_defaults2, __pyx_self)->__pyx_arg_max_batch)) __PYX_ERR(0, 208, __pyx_L1_error);
+  __Pyx_INCREF(__Pyx_CyFunction_Defaults(__pyx_defaults2, __pyx_self)->__pyx_arg_max_nodes);
+  __Pyx_GIVEREF(__Pyx_CyFunction_Defaults(__pyx_defaults2, __pyx_self)->__pyx_arg_max_nodes);
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 12, __Pyx_CyFunction_Defaults(__pyx_defaults2, __pyx_self)->__pyx_arg_max_nodes)) __PYX_ERR(0, 208, __pyx_L1_error);
   __Pyx_INCREF(((PyObject*)__pyx_kp_u_random_proximity));
   __Pyx_GIVEREF(((PyObject*)__pyx_kp_u_random_proximity));
   if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 13, ((PyObject*)__pyx_kp_u_random_proximity))) __PYX_ERR(0, 208, __pyx_L1_error);
@@ -9178,9 +9188,9 @@ static PyObject *__pyx_pf_8celltrip_6policy_4__defaults__(CYTHON_UNUSED PyObject
   __Pyx_INCREF(__Pyx_CyFunction_Defaults(__pyx_defaults2, __pyx_self)->__pyx_arg_update_minibatch);
   __Pyx_GIVEREF(__Pyx_CyFunction_Defaults(__pyx_defaults2, __pyx_self)->__pyx_arg_update_minibatch);
   if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 18, __Pyx_CyFunction_Defaults(__pyx_defaults2, __pyx_self)->__pyx_arg_update_minibatch)) __PYX_ERR(0, 208, __pyx_L1_error);
-  __Pyx_INCREF(((PyObject*)__pyx_n_u_minibatch));
-  __Pyx_GIVEREF(((PyObject*)__pyx_n_u_minibatch));
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 19, ((PyObject*)__pyx_n_u_minibatch))) __PYX_ERR(0, 208, __pyx_L1_error);
+  __Pyx_INCREF(((PyObject*)__pyx_n_u_batch));
+  __Pyx_GIVEREF(((PyObject*)__pyx_n_u_batch));
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 19, ((PyObject*)__pyx_n_u_batch))) __PYX_ERR(0, 208, __pyx_L1_error);
   __Pyx_INCREF(((PyObject*)__pyx_n_u_minibatch));
   __Pyx_GIVEREF(((PyObject*)__pyx_n_u_minibatch));
   if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 20, ((PyObject*)__pyx_n_u_minibatch))) __PYX_ERR(0, 208, __pyx_L1_error);
@@ -9297,28 +9307,12 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
     values[12] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_float_3eneg_4)));
     values[13] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_float_1eneg_3)));
     values[14] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)__pyx_int_1)));
-
-    /* "celltrip/policy.py":224
- *             critic_lr=1e-3,
- *             lr_gamma=1,
- *             max_batch=None,             # <<<<<<<<<<<<<<
- *             max_nodes=None,
- *             sample_strategy='random-proximity',
- */
-    values[15] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)Py_None));
-
-    /* "celltrip/policy.py":225
- *             lr_gamma=1,
- *             max_batch=None,
- *             max_nodes=None,             # <<<<<<<<<<<<<<
- *             sample_strategy='random-proximity',
- *             sample_dim=None,
- */
-    values[16] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)Py_None));
+    values[15] = __Pyx_Arg_NewRef_FASTCALL(__pyx_dynamic_args->__pyx_arg_max_batch);
+    values[16] = __Pyx_Arg_NewRef_FASTCALL(__pyx_dynamic_args->__pyx_arg_max_nodes);
     values[17] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_kp_u_random_proximity)));
 
     /* "celltrip/policy.py":227
- *             max_nodes=None,
+ *             max_nodes=int(1e2),
  *             sample_strategy='random-proximity',
  *             sample_dim=None,             # <<<<<<<<<<<<<<
  *             reproducible_strategy='mean',
@@ -9337,7 +9331,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
     values[20] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)Py_None));
     values[21] = __Pyx_Arg_NewRef_FASTCALL(__pyx_dynamic_args->__pyx_arg_update_batch);
     values[22] = __Pyx_Arg_NewRef_FASTCALL(__pyx_dynamic_args->__pyx_arg_update_minibatch);
-    values[23] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_n_u_minibatch)));
+    values[23] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_n_u_batch)));
     values[24] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_n_u_minibatch)));
     values[25] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_n_u_cpu)));
     if (__pyx_kwds) {
@@ -16266,7 +16260,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitConstants(void) {
   __pyx_float__05 = PyFloat_FromDouble(.05); if (unlikely(!__pyx_float__05)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_float__15 = PyFloat_FromDouble(.15); if (unlikely(!__pyx_float__15)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_float__95 = PyFloat_FromDouble(.95); if (unlikely(!__pyx_float__95)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_float_1e2 = PyFloat_FromDouble(1e2); if (unlikely(!__pyx_float_1e2)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_float_1e4 = PyFloat_FromDouble(1e4); if (unlikely(!__pyx_float_1e4)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_float_5e2 = PyFloat_FromDouble(5e2); if (unlikely(!__pyx_float_5e2)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_float_1eneg_3 = PyFloat_FromDouble(1e-3); if (unlikely(!__pyx_float_1eneg_3)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_float_3eneg_4 = PyFloat_FromDouble(3e-4); if (unlikely(!__pyx_float_3eneg_4)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_float_neg__01 = PyFloat_FromDouble(-.01); if (unlikely(!__pyx_float_neg__01)) __PYX_ERR(0, 1, __pyx_L1_error)
@@ -17026,7 +17022,7 @@ if (!__Pyx_RefNanny) {
   __Pyx_INCREF(__pyx_t_3);
   PyList_Append(__pyx_t_4, __pyx_t_3);
   __Pyx_GIVEREF(__pyx_t_3);
-  if (!__Pyx_CyFunction_InitDefaults(__pyx_t_3, sizeof(__pyx_defaults2), 3)) __PYX_ERR(0, 208, __pyx_L1_error)
+  if (!__Pyx_CyFunction_InitDefaults(__pyx_t_3, sizeof(__pyx_defaults2), 5)) __PYX_ERR(0, 208, __pyx_L1_error)
 
   /* "celltrip/policy.py":213
  *             modal_dims,
@@ -17041,12 +17037,38 @@ if (!__Pyx_RefNanny) {
   __Pyx_GIVEREF(__pyx_t_2);
   __pyx_t_2 = 0;
 
+  /* "celltrip/policy.py":224
+ *             critic_lr=1e-3,
+ *             lr_gamma=1,
+ *             max_batch=int(5e2),             # <<<<<<<<<<<<<<
+ *             max_nodes=int(1e2),
+ *             sample_strategy='random-proximity',
+ */
+  __pyx_t_2 = __Pyx_PyNumber_Int(__pyx_float_5e2); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 224, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __Pyx_CyFunction_Defaults(__pyx_defaults2, __pyx_t_3)->__pyx_arg_max_batch = __pyx_t_2;
+  __Pyx_GIVEREF(__pyx_t_2);
+  __pyx_t_2 = 0;
+
+  /* "celltrip/policy.py":225
+ *             lr_gamma=1,
+ *             max_batch=int(5e2),
+ *             max_nodes=int(1e2),             # <<<<<<<<<<<<<<
+ *             sample_strategy='random-proximity',
+ *             sample_dim=None,
+ */
+  __pyx_t_2 = __Pyx_PyNumber_Int(__pyx_float_1e2); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 225, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __Pyx_CyFunction_Defaults(__pyx_defaults2, __pyx_t_3)->__pyx_arg_max_nodes = __pyx_t_2;
+  __Pyx_GIVEREF(__pyx_t_2);
+  __pyx_t_2 = 0;
+
   /* "celltrip/policy.py":230
  *             reproducible_strategy='mean',
  *             update_maxbatch=None,
  *             update_batch=int(1e4),             # <<<<<<<<<<<<<<
  *             update_minibatch=int(1e4),
- *             update_load_level='minibatch',
+ *             update_load_level='batch',
  */
   __pyx_t_2 = __Pyx_PyNumber_Int(__pyx_float_1e4); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 230, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
@@ -17058,7 +17080,7 @@ if (!__Pyx_RefNanny) {
  *             update_maxbatch=None,
  *             update_batch=int(1e4),
  *             update_minibatch=int(1e4),             # <<<<<<<<<<<<<<
- *             update_load_level='minibatch',
+ *             update_load_level='batch',
  *             update_cast_level='minibatch',
  */
   __pyx_t_2 = __Pyx_PyNumber_Int(__pyx_float_1e4); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 231, __pyx_L1_error)

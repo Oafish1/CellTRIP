@@ -2,12 +2,17 @@ from collections import defaultdict
 import functools as ft
 import json
 import threading
+import time
 import warnings
 
+import numpy as np
 import ray
 import torch
 
 from . import decorator as _decorators
+from . import environment as _environment
+from . import memory as _memory
+from . import policy as _policy
 from . import utility as _utility
 
 
@@ -141,11 +146,57 @@ def _train_func(
         'Event Details': {
             'Episode timesteps': ep_timestep,
             'Episode reward': ep_reward,
-            'Episode itemized reward': ep_itemized_reward}}
+            'Episode itemized reward': ep_itemized_reward},
+            'Memories': len(memory)}
     ret = _utility.general.dict_entry(ret, meta)
-    print(json.dumps(ret, indent=2, sort_keys=False))
+    print(ret)  # print(json.dumps(ret, indent=2, sort_keys=False))
     return ret
 train_func = ray.remote(max_calls=1)(_train_func)
+
+
+def simulate_until_completion(policy, env, memory=None, keys=None, dummy=False):
+    # Simulation
+    ep_timestep = 0; ep_reward = 0; ep_itemized_reward = defaultdict(lambda: 0); finished = False
+    while not finished:
+        with torch.inference_mode():
+            # Get current state
+            state = env.get_state(include_modalities=True)
+
+            # Get actions from policy
+            actions = policy.act_macro(
+                state,
+                keys=keys,
+                memory=memory,
+            )
+
+            # Step environment and get reward
+            rewards, finished, itemized_rewards = env.step(actions, return_itemized_rewards=True)
+
+            # Record rewards
+            memory.record(rewards=rewards, is_terminals=finished)
+
+            # Tracking
+            ts_reward = rewards.cpu().mean()
+            ep_reward = ep_reward + ts_reward
+            for k, v in itemized_rewards.items():
+                ep_itemized_reward[k] += v.cpu().mean()
+            ep_timestep += 1
+
+            # Dummy return for testing
+            if dummy:
+                if memory:
+                    # 1024 dummy memories
+                    for _ in range(10): memory.append_memory(memory)
+                break
+        
+        # CLI
+        if (ep_timestep % 200 == 0) or ep_timestep in (100,):
+            print(f'Timestep {ep_timestep:>4} - Reward {ts_reward:.3f}')
+
+    # Summarize and return
+    ep_reward = (ep_reward / ep_timestep).item()
+    ep_itemized_reward = {k: (v / ep_timestep).item() for k, v in ep_itemized_reward.items()}
+    return ep_timestep, ep_reward, ep_itemized_reward
 
 
 @_decorators.metrics
@@ -197,7 +248,7 @@ def _update_func(
         'Event Type': 'Update',
         'Event Details': {'Memories': len(memory)}}
     ret = _utility.general.dict_entry(ret, meta)
-    print(json.dumps(ret, indent=2, sort_keys=False))
+    print(ret)  # print(json.dumps(ret, indent=2, sort_keys=False))
     return ret
 
     
@@ -208,15 +259,15 @@ class DistributedManager:
     def __init__(
         self,
         modalities=None,
-        policy_init=None,
         env_init=None,
+        policy_init=None,
         memory_init=None,
-        max_jobs_per_gpu=4,
+        max_jobs_per_gpu=2,
     ):
         # Record
         self.modalities = modalities
-        self.policy_init = policy_init
         self.env_init = env_init
+        self.policy_init = policy_init
         self.memory_init = memory_init
         self.max_jobs_per_gpu = max_jobs_per_gpu
 
@@ -279,6 +330,7 @@ class DistributedManager:
         if modalities is None: modalities = self.modalities
         if keys is None: keys = torch.arange(modalities[0].shape[0]).tolist()
         if env_init is None: env_init = self.env_init
+        assert modalities is not None; assert env_init is not None
 
         # Run forward on each worker to completion until a certain number of steps is reached
         def exit_hook():
@@ -329,7 +381,8 @@ class DistributedManager:
         # NOTE: Current escape behavior is to release all locks, regardless of holding
         [ray.cancel(future) for future in self.get_all_futures(keys)]
     
-    def calibrate(self, memory_overhead=300*2**20, vram_overhead=300*2**20):
+    def calibrate(self, memory_overhead=500*2**20, vram_overhead=500*2**20):
+        # Need to add overhead to account for PolicyManager and data on main thread
         for k in ('rollout', 'update'):
             completed_rollouts, _ = ray.wait(self.futures[k], num_returns=len(self.futures[k]), timeout=0)
             if len(completed_rollouts) > 0:
@@ -366,45 +419,120 @@ class DistributedManager:
             complete_futures, self.futures[k] = ray.wait(self.futures[k], num_returns=len(self.futures[k]), timeout=0)
 
 
-def simulate_until_completion(policy, env, memory=None, keys=None, dummy=False):
-    # Simulation
-    ep_timestep = 0; ep_reward = 0; ep_itemized_reward = defaultdict(lambda: 0); finished = False
-    while not finished:
-        with torch.inference_mode():
-            # Get current state
-            state = env.get_state(include_modalities=True)
+def get_train_initializers(env_dim, modal_dims, policy_kwargs={}, memory_kwargs={}):
+    # Policy function
+    policy_init = lambda: _policy.PPO(
+        positional_dim=2*env_dim,
+        modal_dims=modal_dims,
+        output_dim=env_dim,
+        update_minibatch=3e3,
+        device='cpu',
+        # epochs=5, memory_prune=0,  # Testing
+        **policy_kwargs)
+    # policy = policy_init(modalities)
+    # policy_init = lambda _: policy
 
-            # Get actions from policy
-            actions = policy.act_macro(
-                state,
-                keys=keys,
-                memory=memory,
-            )
+    # Memory function
+    memory_init = lambda policy: _memory.AdvancedMemoryBuffer(
+        sum(policy.modal_dims),
+        split_args=policy.split_args,
+        **memory_kwargs)
+    
+    return policy_init, memory_init
 
-            # Step environment and get reward
-            rewards, finished, itemized_rewards = env.step(actions, return_itemized_rewards=True)
 
-            # Record rewards
-            memory.record(rewards=rewards, is_terminals=finished)
+def train_policy(distributed_manager, dataloader):
+    # Parameters
+    dm = distributed_manager
 
-            # Tracking
-            ts_reward = rewards.cpu().mean()
-            ep_reward = ep_reward + ts_reward
-            for k, v in itemized_rewards.items():
-                ep_itemized_reward[k] += v.cpu().mean()
-            ep_timestep += 1
+    # Make env init function
+    env_init = lambda policy, modalities: _environment.EnvironmentBase(
+        *modalities,
+        dim=policy.output_dim,
+        # max_timesteps=1e2,
+        penalty_bound=1,
+        device=policy.device)
 
-            # Dummy return for testing
-            if dummy:
-                if memory:
-                    # 1024 dummy memories
-                    for _ in range(10): memory.append_memory(memory)
-                break
-        
+    # Train loop iter
+    max_rollout_futures = 20; num_updates = 0
+    while True:
+        # Retrieve active futures
+        futures = dm.get_futures()
+        num_futures = len(dm.get_all_futures())
+
+        # Compute feasibility of futures
+        available_resources = ray.available_resources()
+        rollout_feasible = np.array([
+            v <= available_resources[k]
+            if k in available_resources else False
+            for k, v in dm.get_requirements('rollout').items()]).all()
+        # update_feasible = np.array([
+        #     v <= available_resources[k]
+        #     for k, v in dm.get_requirements('update').items()]).all()
+
         # CLI
-        # if ep_timestep % 200 == 0: print(f'Timestep {ep_timestep:03} - Reward {ts_reward:.3f}')
+        # print('; '.join([f'{k} ({len(v)})' for k, v in futures.items()]))
+        # print(ray.available_resources())
 
-    # Summarize and return
-    ep_reward = (ep_reward / ep_timestep).item()
-    ep_itemized_reward = {k: (v / ep_timestep).item() for k, v in ep_itemized_reward.items()}
-    return ep_timestep, ep_reward, ep_itemized_reward
+        ## Check for futures to add
+        # Check memory and apply update if needed 
+        if len(futures['update']) == 0 and dm.get_memory_len() >= int(1e6):
+            # assert False
+            # print(f'Queueing policy update {num_updates+1}')
+            # dm.cancel()  # Cancel all non-running (TODO)
+            dm.update(meta={'Policy Iteration': num_updates+1})
+
+        # Add rollouts if no update future and below max queued futures
+        elif rollout_feasible and len(futures['update']) == 0 and num_futures < max_rollout_futures:
+            # print(f'Queueing {num_new_rollouts} rollouts')
+            # dm.rollout(num_new_rollouts, dummy=False)
+            modalities, adata_obs, adata_vars, partition = dataloader.sample(return_partition=True)
+            dm.rollout(
+                modalities=modalities,
+                keys=adata_obs[0].index.to_numpy(),
+                env_init=env_init,
+                meta={
+                    'Policy Iteration': num_updates,
+                    'Partition': partition},
+                dummy=False)
+
+        ## Check for completed futures
+        # Completed rollouts
+        if len(ray.wait(futures['rollout'], timeout=0)[0]) > 0:
+            # Calibrate if needed
+            all_variants_run = True  # TODO: Set to true if all partitions have been run
+            if dm.resources['rollout']['core']['memory'] == 0 and all_variants_run:
+                dm.calibrate()
+                max_rollout_futures = 20
+                print(
+                    f'Calibrated rollout'
+                    f' memory ({dm.get_requirements("rollout")["memory"] / 2**30:.2f} GiB)'
+                    f' and VRAM ({dm.get_requirements("rollout")["VRAM"] / 2**30:.2f} GiB)')
+                # dm.cancel(); time.sleep(1)  # Cancel all non-running (TODO)
+                # dm.policy_manager.release_locks.remote()
+            # Clean if calibrated
+            if dm.get_requirements('rollout')['memory'] != 0: dm.clean('rollout')
+
+        # Completed updates
+        # TODO: Add case where update or rollout doesn't have enough resources to run
+        if len(ray.wait(futures['update'], timeout=0)[0]) > 0:
+            num_updates += 1
+            # Calibrate if needed
+            if dm.get_requirements('update')['memory'] == 0:
+                dm.calibrate()
+                print(
+                    f'Calibrated update'
+                    f' memory ({dm.get_requirements("update")["memory"] / 2**30:.2f} GiB)'
+                    f' and VRAM ({dm.get_requirements("update")["VRAM"] / 2**30:.2f} GiB)')
+            dm.clean('update')
+
+        # Wait to scan again
+        # num_futures = len(dm.get_all_futures())
+        # if num_futures > 0:
+        #     num_completed_futures = len(dm.wait(num_returns=num_futures, timeout=0))
+        #     if num_completed_futures != num_futures: dm.wait(num_returns=num_completed_futures+1)
+        # else: time.sleep(1)
+        time.sleep(1)
+
+        # Escape
+        # if num_updates >= 50: break
