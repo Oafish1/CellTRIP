@@ -443,8 +443,6 @@ class PreprocessFromAnnData:
         return ret
 
 
-
-
 def split_state(
     state,
     idx=None,

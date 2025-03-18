@@ -1,0 +1,24 @@
+cupy-cuda12x  # Dependency of anndata, for compatibility with base docker image
+Cython
+adjustText
+anndata
+h5py
+ipympl
+matplotlib
+memory-profiler
+memray
+nbconvert
+numpy
+pandas
+pip-tools
+ray[client,default]
+rds2py
+scanpy
+scikit-learn>=1.4.2
+scipy>=1.13.0
+seaborn
+snakeviz
+torch
+tqdm
+umap-learn
+wandb[importers]

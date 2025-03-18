@@ -243,5 +243,6 @@ this script will generate...
 
 
 <!-- DEV NOTES -->
-<!-- Compiling requirements: python -m piptools compile  # Also, pip freeze will always be one git commit behind -->
+<!-- Compiling requirements: python -m pip freeze -r requirements.in | sed '/freeze/,$ d' > requirements.txt -->
+<!-- Compiling requirements: python -m pip freeze -r requirements.in | sed '/@/d' > requirements.txt -->
 <!-- Find https://raw.githubusercontent.com/Oafish1/CellTRIP/refs/heads/main/plots, Replace ./plots to test images -->

@@ -1,3 +1,10 @@
+### 1.0.0+2025.3.17
+- Add Docker compatibility, running scripts, and image
+- Revise package versioning strategy
+
+### 1.0.0+2025.3.7
+- Read full Tahoe-100M dataset in `data.ipynb`
+
 ### 1.0.0+2025.3.6
 - Figure revisions
 

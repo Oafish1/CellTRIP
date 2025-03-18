@@ -67,10 +67,11 @@ dataloader = celltrip.utility.processing.PreprocessFromAnnData(
 modalities, adata_obs, adata_vars = dataloader.sample()
 
 # Initialize Ray
-ray.shutdown()
-ray.init(
-    resources={'VRAM': torch.cuda.get_device_properties(0).total_memory},
-    dashboard_host='0.0.0.0')
+# ray.shutdown()
+# ray.init(
+#     resources={'VRAM': torch.cuda.get_device_properties(0).total_memory},
+#     dashboard_host='0.0.0.0')
+ray.init()
 
 # Initialize distributed manager
 policy_init, memory_init = celltrip.train.get_train_initializers(

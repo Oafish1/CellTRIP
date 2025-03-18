@@ -74,7 +74,7 @@ setup(
     install_requires=[
         # Python >=3.11 if Cython is used with Ray, otherwise 3.10 works
         'numpy',
-        'ray[default]',
+        'ray[client,default]',
         'scipy>=1.13.0',  # For sparse, ~1.13.0
         'torch',
     ],
