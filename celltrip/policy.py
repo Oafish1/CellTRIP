@@ -380,7 +380,7 @@ class PPO(nn.Module):
         return action
 
     ### Backward functions
-    def update(self, memory, fast_sample=True):
+    def update(self, memory, fast_sample=True, verbose=False):
         # Calculate rewards
         rewards = memory.propagate_rewards(gamma=self.memory_gamma, prune=self.memory_prune)
         if self.memory_prune is not None: rewards, rewards_mask, rewards_list_mask = rewards
@@ -514,7 +514,7 @@ class PPO(nn.Module):
             self.optimizer.zero_grad()
 
             # CLI
-            if (epoch_num + 1) % 10 == 0 or epoch_num in (0, 4):
+            if verbose and ((epoch_num + 1) % 10 == 0 or epoch_num in (0, 4)):
                 print(
                     f'Epoch {epoch_num+1:02}'
                     f' - PPO {epoch_ppo.item():.3f}'

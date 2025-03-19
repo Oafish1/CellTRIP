@@ -38,13 +38,25 @@ COPY docker/host_test.py .
 #     celltrip \
 #     /bin/bash -c "python run_node.py && python -u train.py"
 
+# Run host with no timeout
+# NOTE: -u unbuffered output enables realtime printing
+# --mount type=bind,source=$PWD/output,target=/output \
+# sudo docker run \
+#     --mount type=bind,source=$PWD/data,target=/data,readonly \
+#     --gpus all \
+#     --shm-size 5Gb \
+#     --net host \
+#     celltrip \
+#     /bin/bash -c "python run_node.py --timeout -1"
+
 # Run worker with no timeout
+# --timeout 5
 # sudo docker run \
 #     --gpus all \
 #     --shm-size 5Gb \
 #     --net host \
 #     celltrip \
-#     /bin/bash -c "python run_node.py --address 127.0.0.1:6379"  # --timeout 5
+#     /bin/bash -c "python run_node.py --address 127.0.0.1:6379"
 
 # Show all docker containers
 # sudo docker ps

@@ -174,6 +174,9 @@ class AdvancedMemoryBuffer:
     def __len__(self):
         return sum(len(keys) for keys in self.storage['keys'])
     
+    def get_steps(self):
+        return len(self.storage['keys'])
+    
     def get_storage(self):
         return self.storage, self.persistent_storage
 

@@ -1,3 +1,13 @@
+### 1.0.0+2025.3.18
+- Add command to run attachable remote cluster with no script
+- Add step number to `AdvancedMemoryBuffer` class
+- Add time logging to `decorator.metrics`
+- Clean training loop
+- Iterate model by step number in `train_policy`
+- Output printing decorator
+- Test worker node behavior after disconnection (10 minutes)
+- Track policy updates in `policy_manager`
+
 ### 1.0.0+2025.3.17
 - Add Docker compatibility, running scripts, and image
 - Revise package versioning strategy

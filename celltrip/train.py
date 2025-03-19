@@ -47,12 +47,16 @@ class _PolicyManager:
     def __init__(self, policy_init, memory_init):
         self.policy = policy_init()
         self.memory = memory_init(self.policy)
+        self.policy_iteration = 0
         self.locks = {
             'memory': threading.Lock(),
             'state': threading.Lock()}
 
     def get_policy_state(self):
         return get_policy_state(self.policy)
+    
+    def get_policy_iteration(self):
+        return self.policy_iteration
     
     def get_memory_storage(self, persistent=True):
         storage = self.memory.get_storage()
@@ -61,9 +65,18 @@ class _PolicyManager:
     
     def get_memory_len(self):
         return len(self.memory)
+    
+    def get_memory_steps(self):
+        return self.memory.get_steps()
 
     def set_policy_state(self, state_dicts):
         set_policy_state(self.policy, state_dicts)
+
+    def get_lock(self, lock_id):
+        if lock_id not in self.locks:
+            raise ValueError(f'Lock `{lock_id}` not found.')
+
+        return self.locks[lock_id].locked()
 
     def lock(self, lock_id, val):
         # NOTE: These locks are not failure-resilient
@@ -79,16 +92,13 @@ class _PolicyManager:
 
         return val
 
-    def get_lock(self, lock_id):
-        if lock_id not in self.locks:
-            raise ValueError(f'Lock `{lock_id}` not found.')
-
-        return self.locks[lock_id].locked()
-
     def release_locks(self):
         for lock_id in self.locks:
             if self.locks[lock_id].locked():
                 self.locks[lock_id].release()
+
+    def increment_policy(self):
+        self.policy_iteration += 1
 
     def clear_memory(self):
         self.memory.clear()
@@ -98,11 +108,12 @@ class _PolicyManager:
 PolicyManager = ray.remote(_PolicyManager)
 
 
-@_decorators.metrics
+@_decorators.print_ret
+@_decorators.metrics(append_to_dict=True)
 @_decorators.try_catch(show_traceback=True)
 @_decorators.call_on_exit
 # @_decorators.profile
-def _train_func(
+def _forward_func(
     policy_manager,
     modalities,
     policy_init,
@@ -113,13 +124,14 @@ def _train_func(
 ):
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
-    # CLI
-    # print('Beginning simulation')
+    # Bookkeeping
+    start_time = time.perf_counter()
 
     # Load policy
     policy = policy_init().to(device)
     ray.get(policy_manager.lock.remote('state', True))
     set_policy_state(policy, ray.get(policy_manager.get_policy_state.remote()))
+    policy_iteration = ray.get(policy_manager.get_policy_iteration.remote())
     ray.get(policy_manager.lock.remote('state', False))
 
     # Initialize env/memory
@@ -137,24 +149,20 @@ def _train_func(
     ray.get(policy_manager.append_memory.remote(*memory.get_storage()))
     ray.get(policy_manager.lock.remote('memory', False))
 
-    # CLI
-    # print(f'Simulation finished in {ep_timestep} steps with mean reward {ep_reward:.3f}')
-
     # Aggregate performance
     ret = {
         'Event Type': 'Rollout',
-        'Event Details': {
-            'Episode timesteps': ep_timestep,
-            'Episode reward': ep_reward,
-            'Episode itemized reward': ep_itemized_reward},
-            'Memories': len(memory)}
-    ret = _utility.general.dict_entry(ret, meta)
-    print(ret)  # print(json.dumps(ret, indent=2, sort_keys=False))
+        'Policy Iteration': policy_iteration,
+        'Episode timesteps': ep_timestep,
+        'Episode reward': ep_reward,
+        'Episode itemized reward': ep_itemized_reward,
+        'Memories': len(memory)}
+    if meta is not None: ret = _utility.general.dict_entry(ret, meta)
     return ret
-train_func = ray.remote(max_calls=1)(_train_func)
+forward_func = ray.remote(max_calls=1)(_forward_func)
 
 
-def simulate_until_completion(policy, env, memory=None, keys=None, dummy=False):
+def simulate_until_completion(policy, env, memory=None, keys=None, dummy=False, verbose=False):
     # Simulation
     ep_timestep = 0; ep_reward = 0; ep_itemized_reward = defaultdict(lambda: 0); finished = False
     while not finished:
@@ -190,7 +198,7 @@ def simulate_until_completion(policy, env, memory=None, keys=None, dummy=False):
                 break
         
         # CLI
-        if (ep_timestep % 200 == 0) or ep_timestep in (100,):
+        if verbose and ((ep_timestep % 200 == 0) or ep_timestep in (100,)):
             print(f'Timestep {ep_timestep:>4} - Reward {ts_reward:.3f}')
 
     # Summarize and return
@@ -199,7 +207,8 @@ def simulate_until_completion(policy, env, memory=None, keys=None, dummy=False):
     return ep_timestep, ep_reward, ep_itemized_reward
 
 
-@_decorators.metrics
+@_decorators.print_ret
+@_decorators.metrics(append_to_dict=True)
 @_decorators.try_catch(show_traceback=True)
 @_decorators.call_on_exit
 # @_decorators.profile
@@ -219,6 +228,7 @@ def _update_func(
     policy = policy_init().to(device)
     ray.get(policy_manager.lock.remote('state', True))
     set_policy_state(policy, ray.get(policy_manager.get_policy_state.remote()))
+    policy_iteration = ray.get(policy_manager.get_policy_iteration.remote())
     ray.get(policy_manager.lock.remote('state', False))
 
     # Load memory
@@ -234,6 +244,7 @@ def _update_func(
     ray.get(policy_manager.lock.remote('state', True))
     policy_state = set_device_recursive(get_policy_state(policy), 'cpu')
     ray.get(policy_manager.set_policy_state.remote(policy_state))
+    ray.get(policy_manager.increment_policy.remote())
     ray.get(policy_manager.lock.remote('state', False))
 
     # Clear remote memory
@@ -246,9 +257,9 @@ def _update_func(
     # Format return
     ret = {
         'Event Type': 'Update',
-        'Event Details': {'Memories': len(memory)}}
-    ret = _utility.general.dict_entry(ret, meta)
-    print(ret)  # print(json.dumps(ret, indent=2, sort_keys=False))
+        'Policy Iteration': policy_iteration+1,
+        'Memories': len(memory)}
+    if meta is not None: ret = _utility.general.dict_entry(ret, meta)
     return ret
 
     
@@ -323,6 +334,13 @@ class DistributedManager:
         ray.get(self.policy_manager.lock.remote('memory', False))
 
         return memory_len
+    
+    def get_memory_steps(self):
+        ray.get(self.policy_manager.lock.remote('memory', True))
+        memory_len = ray.get(self.policy_manager.get_memory_steps.remote())
+        ray.get(self.policy_manager.lock.remote('memory', False))
+
+        return memory_len
 
     # Futures
     def rollout(self, num_simulations=1, modalities=None, keys=None, env_init=None, **kwargs):
@@ -337,7 +355,7 @@ class DistributedManager:
             ray.get(self.policy_manager.release_locks.remote())
             print('Escaped running rollout')
         rollouts = [
-            train_func
+            forward_func
                 .options(**self.resources['rollout']['core'], resources=self.resources['rollout']['custom'])
                 .remote(
                     self.policy_manager,
@@ -381,14 +399,18 @@ class DistributedManager:
         # NOTE: Current escape behavior is to release all locks, regardless of holding
         [ray.cancel(future) for future in self.get_all_futures(keys)]
     
-    def calibrate(self, memory_overhead=500*2**20, vram_overhead=500*2**20):
+    def calibrate(self, keys=None, memory_overhead=500*2**20, vram_overhead=500*2**20):
         # Need to add overhead to account for PolicyManager and data on main thread
-        for k in ('rollout', 'update'):
+        # Parameters
+        if not _utility.general.is_list_like(keys): keys = [keys]
+        keys = list(self.futures.keys()) if len(keys) == 1 and keys[0] is None else keys
+        # Calibrate
+        for k in keys:
             completed_rollouts, _ = ray.wait(self.futures[k], num_returns=len(self.futures[k]), timeout=0)
             if len(completed_rollouts) > 0:
-                metrics = [m for _, m in ray.get(completed_rollouts) if m is not None]
-                assert len(metrics) > 0, f'`{k}` future was run without `return_metrics=True`'
-                self.resources[k]['core']['memory'], self.resources[k]['custom']['VRAM'] = max([m[0] for m in metrics]), max([m[1] for m in metrics])
+                metrics = [m for m in ray.get(completed_rollouts) if 'memory' in m]
+                assert len(metrics) > 0, f'`{k}` future(s) were run without `return_metrics=True`'
+                self.resources[k]['core']['memory'], self.resources[k]['custom']['VRAM'] = max([m['memory'] for m in metrics]), max([m['VRAM'] for m in metrics])
                 self.resources[k]['core']['memory'] += memory_overhead
                 if self.resources[k]['custom']['VRAM'] != 0:
                     self.resources[k]['custom']['VRAM'] += vram_overhead
@@ -441,8 +463,13 @@ def get_train_initializers(env_dim, modal_dims, policy_kwargs={}, memory_kwargs=
     return policy_init, memory_init
 
 
-def train_policy(distributed_manager, dataloader):
+def train_policy(
+    distributed_manager,
+    dataloader,
+    update_trigger='steps',
+    update_threshold=int(5e3)):
     # Parameters
+    assert update_trigger in ('memories', 'steps'), f'Update trigger "{update_trigger}" not found.'
     dm = distributed_manager
 
     # Make env init function
@@ -470,17 +497,13 @@ def train_policy(distributed_manager, dataloader):
         #     v <= available_resources[k]
         #     for k, v in dm.get_requirements('update').items()]).all()
 
-        # CLI
-        # print('; '.join([f'{k} ({len(v)})' for k, v in futures.items()]))
-        # print(ray.available_resources())
-
-        ## Check for futures to add
-        # Check memory and apply update if needed 
-        if len(futures['update']) == 0 and dm.get_memory_len() >= int(1e6):
-            # assert False
+        ## ADD FUTURES
+        # Update if possible
+        if update_trigger == 'memories': condition = dm.get_memory_len() >= update_threshold
+        elif update_trigger == 'steps': condition = dm.get_memory_steps() >= update_threshold
+        if len(futures['update']) == 0 and condition:
             # print(f'Queueing policy update {num_updates+1}')
-            # dm.cancel()  # Cancel all non-running (TODO)
-            dm.update(meta={'Policy Iteration': num_updates+1})
+            dm.update()
 
         # Add rollouts if no update future and below max queued futures
         elif rollout_feasible and len(futures['update']) == 0 and num_futures < max_rollout_futures:
@@ -491,47 +514,38 @@ def train_policy(distributed_manager, dataloader):
                 modalities=modalities,
                 keys=adata_obs[0].index.to_numpy(),
                 env_init=env_init,
-                meta={
-                    'Policy Iteration': num_updates,
-                    'Partition': partition},
+                meta={'Partition': partition},
                 dummy=False)
 
-        ## Check for completed futures
-        # Completed rollouts
+        ## CHECK COMPLETED FUTURES
+        # Calibrate rollouts
         if len(ray.wait(futures['rollout'], timeout=0)[0]) > 0:
             # Calibrate if needed
             all_variants_run = True  # TODO: Set to true if all partitions have been run
             if dm.resources['rollout']['core']['memory'] == 0 and all_variants_run:
-                dm.calibrate()
+                dm.calibrate('rollout')
                 max_rollout_futures = 20
                 print(
                     f'Calibrated rollout'
                     f' memory ({dm.get_requirements("rollout")["memory"] / 2**30:.2f} GiB)'
                     f' and VRAM ({dm.get_requirements("rollout")["VRAM"] / 2**30:.2f} GiB)')
-                # dm.cancel(); time.sleep(1)  # Cancel all non-running (TODO)
-                # dm.policy_manager.release_locks.remote()
-            # Clean if calibrated
+            # Clean if calibrated (TODO: Record somewhere)
             if dm.get_requirements('rollout')['memory'] != 0: dm.clean('rollout')
 
-        # Completed updates
+        # Calibrate updates
         # TODO: Add case where update or rollout doesn't have enough resources to run
         if len(ray.wait(futures['update'], timeout=0)[0]) > 0:
             num_updates += 1
             # Calibrate if needed
             if dm.get_requirements('update')['memory'] == 0:
-                dm.calibrate()
+                dm.calibrate('update')
                 print(
                     f'Calibrated update'
                     f' memory ({dm.get_requirements("update")["memory"] / 2**30:.2f} GiB)'
                     f' and VRAM ({dm.get_requirements("update")["VRAM"] / 2**30:.2f} GiB)')
-            dm.clean('update')
+            if dm.get_requirements('update')['memory'] != 0: dm.clean('update')
 
         # Wait to scan again
-        # num_futures = len(dm.get_all_futures())
-        # if num_futures > 0:
-        #     num_completed_futures = len(dm.wait(num_returns=num_futures, timeout=0))
-        #     if num_completed_futures != num_futures: dm.wait(num_returns=num_completed_futures+1)
-        # else: time.sleep(1)
         time.sleep(1)
 
         # Escape

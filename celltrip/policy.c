@@ -2513,6 +2513,7 @@ static const char __pyx_k_replace[] = "replace";
 static const char __pyx_k_rewards[] = "rewards";
 static const char __pyx_k_squeeze[] = "squeeze";
 static const char __pyx_k_utility[] = "_utility";
+static const char __pyx_k_verbose[] = "verbose";
 static const char __pyx_k_actor_lr[] = "actor_lr";
 static const char __pyx_k_backward[] = "backward";
 static const char __pyx_k_cholesky[] = "cholesky";
@@ -2710,7 +2711,7 @@ static PyObject *__pyx_pf_8celltrip_6policy_3PPO_4decay_action_std(CYTHON_UNUSED
 static PyObject *__pyx_pf_8celltrip_6policy_3PPO_6act(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_return_all, PyObject *__pyx_v_state); /* proto */
 static PyObject *__pyx_pf_8celltrip_6policy_3PPO_8act_macro(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_state, PyObject *__pyx_v_keys, PyObject *__pyx_v_memory, PyObject *__pyx_v_max_batch); /* proto */
 static PyObject *__pyx_pf_8celltrip_6policy_3PPO_10forward(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_state); /* proto */
-static PyObject *__pyx_pf_8celltrip_6policy_3PPO_12update(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_memory, PyObject *__pyx_v_fast_sample); /* proto */
+static PyObject *__pyx_pf_8celltrip_6policy_3PPO_12update(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_memory, PyObject *__pyx_v_fast_sample, PyObject *__pyx_v_verbose); /* proto */
 /* #### Code section: late_includes ### */
 /* #### Code section: module_state ### */
 typedef struct {
@@ -3034,6 +3035,7 @@ typedef struct {
   PyObject *__pyx_n_s_utility_2;
   PyObject *__pyx_n_s_val;
   PyObject *__pyx_n_s_validate_args;
+  PyObject *__pyx_n_s_verbose;
   PyObject *__pyx_n_s_x;
   PyObject *__pyx_n_s_zero_grad;
   PyObject *__pyx_n_s_zeros;
@@ -3434,6 +3436,7 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_n_s_utility_2);
   Py_CLEAR(clear_module_state->__pyx_n_s_val);
   Py_CLEAR(clear_module_state->__pyx_n_s_validate_args);
+  Py_CLEAR(clear_module_state->__pyx_n_s_verbose);
   Py_CLEAR(clear_module_state->__pyx_n_s_x);
   Py_CLEAR(clear_module_state->__pyx_n_s_zero_grad);
   Py_CLEAR(clear_module_state->__pyx_n_s_zeros);
@@ -3812,6 +3815,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_n_s_utility_2);
   Py_VISIT(traverse_module_state->__pyx_n_s_val);
   Py_VISIT(traverse_module_state->__pyx_n_s_validate_args);
+  Py_VISIT(traverse_module_state->__pyx_n_s_verbose);
   Py_VISIT(traverse_module_state->__pyx_n_s_x);
   Py_VISIT(traverse_module_state->__pyx_n_s_zero_grad);
   Py_VISIT(traverse_module_state->__pyx_n_s_zeros);
@@ -4200,6 +4204,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_n_s_utility_2 __pyx_mstate_global->__pyx_n_s_utility_2
 #define __pyx_n_s_val __pyx_mstate_global->__pyx_n_s_val
 #define __pyx_n_s_validate_args __pyx_mstate_global->__pyx_n_s_validate_args
+#define __pyx_n_s_verbose __pyx_mstate_global->__pyx_n_s_verbose
 #define __pyx_n_s_x __pyx_mstate_global->__pyx_n_s_x
 #define __pyx_n_s_zero_grad __pyx_mstate_global->__pyx_n_s_zero_grad
 #define __pyx_n_s_zeros __pyx_mstate_global->__pyx_n_s_zeros
@@ -12582,7 +12587,7 @@ static PyObject *__pyx_pf_8celltrip_6policy_3PPO_10forward(CYTHON_UNUSED PyObjec
 /* "celltrip/policy.py":383
  * 
  *     ### Backward functions
- *     def update(self, memory, fast_sample=True):             # <<<<<<<<<<<<<<
+ *     def update(self, memory, fast_sample=True, verbose=False):             # <<<<<<<<<<<<<<
  *         # Calculate rewards
  *         rewards = memory.propagate_rewards(gamma=self.memory_gamma, prune=self.memory_prune)
  */
@@ -12606,11 +12611,12 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   PyObject *__pyx_v_self = 0;
   PyObject *__pyx_v_memory = 0;
   PyObject *__pyx_v_fast_sample = 0;
+  PyObject *__pyx_v_verbose = 0;
   #if !CYTHON_METH_FASTCALL
   CYTHON_UNUSED Py_ssize_t __pyx_nargs;
   #endif
   CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
-  PyObject* values[3] = {0,0,0};
+  PyObject* values[4] = {0,0,0,0};
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
@@ -12626,11 +12632,14 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   #endif
   __pyx_kwvalues = __Pyx_KwValues_FASTCALL(__pyx_args, __pyx_nargs);
   {
-    PyObject **__pyx_pyargnames[] = {&__pyx_n_s_self,&__pyx_n_s_memory,&__pyx_n_s_fast_sample,0};
+    PyObject **__pyx_pyargnames[] = {&__pyx_n_s_self,&__pyx_n_s_memory,&__pyx_n_s_fast_sample,&__pyx_n_s_verbose,0};
     values[2] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)Py_True)));
+    values[3] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)Py_False)));
     if (__pyx_kwds) {
       Py_ssize_t kw_args;
       switch (__pyx_nargs) {
+        case  4: values[3] = __Pyx_Arg_FASTCALL(__pyx_args, 3);
+        CYTHON_FALLTHROUGH;
         case  3: values[2] = __Pyx_Arg_FASTCALL(__pyx_args, 2);
         CYTHON_FALLTHROUGH;
         case  2: values[1] = __Pyx_Arg_FASTCALL(__pyx_args, 1);
@@ -12657,13 +12666,20 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
         }
         else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 383, __pyx_L3_error)
         else {
-          __Pyx_RaiseArgtupleInvalid("update", 0, 2, 3, 1); __PYX_ERR(0, 383, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("update", 0, 2, 4, 1); __PYX_ERR(0, 383, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  2:
         if (kw_args > 0) {
           PyObject* value = __Pyx_GetKwValue_FASTCALL(__pyx_kwds, __pyx_kwvalues, __pyx_n_s_fast_sample);
           if (value) { values[2] = __Pyx_Arg_NewRef_FASTCALL(value); kw_args--; }
+          else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 383, __pyx_L3_error)
+        }
+        CYTHON_FALLTHROUGH;
+        case  3:
+        if (kw_args > 0) {
+          PyObject* value = __Pyx_GetKwValue_FASTCALL(__pyx_kwds, __pyx_kwvalues, __pyx_n_s_verbose);
+          if (value) { values[3] = __Pyx_Arg_NewRef_FASTCALL(value); kw_args--; }
           else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 383, __pyx_L3_error)
         }
       }
@@ -12673,6 +12689,8 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       }
     } else {
       switch (__pyx_nargs) {
+        case  4: values[3] = __Pyx_Arg_FASTCALL(__pyx_args, 3);
+        CYTHON_FALLTHROUGH;
         case  3: values[2] = __Pyx_Arg_FASTCALL(__pyx_args, 2);
         CYTHON_FALLTHROUGH;
         case  2: values[1] = __Pyx_Arg_FASTCALL(__pyx_args, 1);
@@ -12684,10 +12702,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
     __pyx_v_self = values[0];
     __pyx_v_memory = values[1];
     __pyx_v_fast_sample = values[2];
+    __pyx_v_verbose = values[3];
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("update", 0, 2, 3, __pyx_nargs); __PYX_ERR(0, 383, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("update", 0, 2, 4, __pyx_nargs); __PYX_ERR(0, 383, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -12701,7 +12720,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_6policy_3PPO_12update(__pyx_self, __pyx_v_self, __pyx_v_memory, __pyx_v_fast_sample);
+  __pyx_r = __pyx_pf_8celltrip_6policy_3PPO_12update(__pyx_self, __pyx_v_self, __pyx_v_memory, __pyx_v_fast_sample, __pyx_v_verbose);
 
   /* function exit code */
   {
@@ -12714,7 +12733,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_6policy_3PPO_12update(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_memory, PyObject *__pyx_v_fast_sample) {
+static PyObject *__pyx_pf_8celltrip_6policy_3PPO_12update(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_memory, PyObject *__pyx_v_fast_sample, PyObject *__pyx_v_verbose) {
   PyObject *__pyx_v_rewards = NULL;
   PyObject *__pyx_v_rewards_mask = NULL;
   PyObject *__pyx_v_rewards_list_mask = NULL;
@@ -12786,7 +12805,7 @@ static PyObject *__pyx_pf_8celltrip_6policy_3PPO_12update(CYTHON_UNUSED PyObject
   __Pyx_RefNannySetupContext("update", 1);
 
   /* "celltrip/policy.py":385
- *     def update(self, memory, fast_sample=True):
+ *     def update(self, memory, fast_sample=True, verbose=False):
  *         # Calculate rewards
  *         rewards = memory.propagate_rewards(gamma=self.memory_gamma, prune=self.memory_prune)             # <<<<<<<<<<<<<<
  *         if self.memory_prune is not None: rewards, rewards_mask, rewards_list_mask = rewards
@@ -15330,10 +15349,16 @@ static PyObject *__pyx_pf_8celltrip_6policy_3PPO_12update(CYTHON_UNUSED PyObject
     /* "celltrip/policy.py":517
  * 
  *             # CLI
- *             if (epoch_num + 1) % 10 == 0 or epoch_num in (0, 4):             # <<<<<<<<<<<<<<
+ *             if verbose and ((epoch_num + 1) % 10 == 0 or epoch_num in (0, 4)):             # <<<<<<<<<<<<<<
  *                 print(
  *                     f'Epoch {epoch_num+1:02}'
  */
+    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_v_verbose); if (unlikely((__pyx_t_4 < 0))) __PYX_ERR(0, 517, __pyx_L1_error)
+    if (__pyx_t_4) {
+    } else {
+      __pyx_t_10 = __pyx_t_4;
+      goto __pyx_L30_bool_binop_done;
+    }
     __pyx_t_9 = __Pyx_PyInt_AddObjC(__pyx_v_epoch_num, __pyx_int_1, 1, 0, 0); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 517, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_9);
     __pyx_t_2 = __Pyx_PyInt_RemainderObjC(__pyx_t_9, __pyx_int_10, 10, 0, 0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 517, __pyx_L1_error)
@@ -15352,11 +15377,11 @@ static PyObject *__pyx_pf_8celltrip_6policy_3PPO_12update(CYTHON_UNUSED PyObject
     if (!__pyx_t_17) {
     } else {
       __pyx_t_4 = __pyx_t_17;
-      goto __pyx_L32_bool_binop_done;
+      goto __pyx_L33_bool_binop_done;
     }
     __pyx_t_17 = (__Pyx_PyInt_BoolEqObjC(__pyx_t_2, __pyx_int_4, 4, 0)); if (unlikely((__pyx_t_17 < 0))) __PYX_ERR(0, 517, __pyx_L1_error)
     __pyx_t_4 = __pyx_t_17;
-    __pyx_L32_bool_binop_done:;
+    __pyx_L33_bool_binop_done:;
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_t_17 = __pyx_t_4;
     __pyx_t_10 = __pyx_t_17;
@@ -15364,7 +15389,7 @@ static PyObject *__pyx_pf_8celltrip_6policy_3PPO_12update(CYTHON_UNUSED PyObject
     if (__pyx_t_10) {
 
       /* "celltrip/policy.py":519
- *             if (epoch_num + 1) % 10 == 0 or epoch_num in (0, 4):
+ *             if verbose and ((epoch_num + 1) % 10 == 0 or epoch_num in (0, 4)):
  *                 print(
  *                     f'Epoch {epoch_num+1:02}'             # <<<<<<<<<<<<<<
  *                     f' - PPO {epoch_ppo.item():.3f}'
@@ -15522,7 +15547,7 @@ static PyObject *__pyx_pf_8celltrip_6policy_3PPO_12update(CYTHON_UNUSED PyObject
       __pyx_t_9 = 0;
 
       /* "celltrip/policy.py":519
- *             if (epoch_num + 1) % 10 == 0 or epoch_num in (0, 4):
+ *             if verbose and ((epoch_num + 1) % 10 == 0 or epoch_num in (0, 4)):
  *                 print(
  *                     f'Epoch {epoch_num+1:02}'             # <<<<<<<<<<<<<<
  *                     f' - PPO {epoch_ppo.item():.3f}'
@@ -15534,7 +15559,7 @@ static PyObject *__pyx_pf_8celltrip_6policy_3PPO_12update(CYTHON_UNUSED PyObject
 
       /* "celltrip/policy.py":518
  *             # CLI
- *             if (epoch_num + 1) % 10 == 0 or epoch_num in (0, 4):
+ *             if verbose and ((epoch_num + 1) % 10 == 0 or epoch_num in (0, 4)):
  *                 print(             # <<<<<<<<<<<<<<
  *                     f'Epoch {epoch_num+1:02}'
  *                     f' - PPO {epoch_ppo.item():.3f}'
@@ -15547,7 +15572,7 @@ static PyObject *__pyx_pf_8celltrip_6policy_3PPO_12update(CYTHON_UNUSED PyObject
       /* "celltrip/policy.py":517
  * 
  *             # CLI
- *             if (epoch_num + 1) % 10 == 0 or epoch_num in (0, 4):             # <<<<<<<<<<<<<<
+ *             if verbose and ((epoch_num + 1) % 10 == 0 or epoch_num in (0, 4)):             # <<<<<<<<<<<<<<
  *                 print(
  *                     f'Epoch {epoch_num+1:02}'
  */
@@ -15612,7 +15637,7 @@ static PyObject *__pyx_pf_8celltrip_6policy_3PPO_12update(CYTHON_UNUSED PyObject
   /* "celltrip/policy.py":383
  * 
  *     ### Backward functions
- *     def update(self, memory, fast_sample=True):             # <<<<<<<<<<<<<<
+ *     def update(self, memory, fast_sample=True, verbose=False):             # <<<<<<<<<<<<<<
  *         # Calculate rewards
  *         rewards = memory.propagate_rewards(gamma=self.memory_gamma, prune=self.memory_prune)
  */
@@ -15990,6 +16015,7 @@ static int __Pyx_CreateStringTabAndInitStrings(void) {
     {&__pyx_n_s_utility_2, __pyx_k_utility_2, sizeof(__pyx_k_utility_2), 0, 0, 1, 1},
     {&__pyx_n_s_val, __pyx_k_val, sizeof(__pyx_k_val), 0, 0, 1, 1},
     {&__pyx_n_s_validate_args, __pyx_k_validate_args, sizeof(__pyx_k_validate_args), 0, 0, 1, 1},
+    {&__pyx_n_s_verbose, __pyx_k_verbose, sizeof(__pyx_k_verbose), 0, 0, 1, 1},
     {&__pyx_n_s_x, __pyx_k_x, sizeof(__pyx_k_x), 0, 0, 1, 1},
     {&__pyx_n_s_zero_grad, __pyx_k_zero_grad, sizeof(__pyx_k_zero_grad), 0, 0, 1, 1},
     {&__pyx_n_s_zeros, __pyx_k_zeros, sizeof(__pyx_k_zeros), 0, 0, 1, 1},
@@ -16232,15 +16258,15 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   /* "celltrip/policy.py":383
  * 
  *     ### Backward functions
- *     def update(self, memory, fast_sample=True):             # <<<<<<<<<<<<<<
+ *     def update(self, memory, fast_sample=True, verbose=False):             # <<<<<<<<<<<<<<
  *         # Calculate rewards
  *         rewards = memory.propagate_rewards(gamma=self.memory_gamma, prune=self.memory_prune)
  */
-  __pyx_tuple__38 = PyTuple_Pack(48, __pyx_n_s_self, __pyx_n_s_memory, __pyx_n_s_fast_sample, __pyx_n_s_rewards, __pyx_n_s_rewards_mask, __pyx_n_s_rewards_list_mask, __pyx_n_s_level_dict, __pyx_n_s_load_level, __pyx_n_s_cast_level, __pyx_n_s_memory_size, __pyx_n_s_maxbatch_size, __pyx_n_s_batch_size, __pyx_n_s_minibatch_size, __pyx_n_s_maxbatch_idx, __pyx_n_s_maxbatch_absolute_idx, __pyx_n_s_maxbatch_data, __pyx_n_s_maxbatch_rewards, __pyx_n_s_epoch_num, __pyx_n_s_epoch_ppo, __pyx_n_s_epoch_critic, __pyx_n_s_epoch_entropy, __pyx_n_s_batch_idx, __pyx_n_s_batch_absolute_idx, __pyx_n_s_batch_data, __pyx_n_s_batch_rewards, __pyx_n_s__7, __pyx_n_s_min_idx, __pyx_n_s_max_idx, __pyx_n_s_minibatch_idx, __pyx_n_s_minibatch_absolute_idx, __pyx_n_s_minibatch_data, __pyx_n_s_minibatch_rewards, __pyx_n_s_states_old_sub, __pyx_n_s_actions_old_sub, __pyx_n_s_action_logs_old_sub, __pyx_n_s_state_vals_old_sub, __pyx_n_s_advantages_sub, __pyx_n_s_action_logs, __pyx_n_s_dist_entropy, __pyx_n_s_state_vals, __pyx_n_s_ratios, __pyx_n_s_unclipped, __pyx_n_s_clipped, __pyx_n_s_loss_PPO, __pyx_n_s_loss_critic, __pyx_n_s_loss_entropy, __pyx_n_s_loss, __pyx_n_s_accumulation_frac); if (unlikely(!__pyx_tuple__38)) __PYX_ERR(0, 383, __pyx_L1_error)
+  __pyx_tuple__38 = PyTuple_Pack(49, __pyx_n_s_self, __pyx_n_s_memory, __pyx_n_s_fast_sample, __pyx_n_s_verbose, __pyx_n_s_rewards, __pyx_n_s_rewards_mask, __pyx_n_s_rewards_list_mask, __pyx_n_s_level_dict, __pyx_n_s_load_level, __pyx_n_s_cast_level, __pyx_n_s_memory_size, __pyx_n_s_maxbatch_size, __pyx_n_s_batch_size, __pyx_n_s_minibatch_size, __pyx_n_s_maxbatch_idx, __pyx_n_s_maxbatch_absolute_idx, __pyx_n_s_maxbatch_data, __pyx_n_s_maxbatch_rewards, __pyx_n_s_epoch_num, __pyx_n_s_epoch_ppo, __pyx_n_s_epoch_critic, __pyx_n_s_epoch_entropy, __pyx_n_s_batch_idx, __pyx_n_s_batch_absolute_idx, __pyx_n_s_batch_data, __pyx_n_s_batch_rewards, __pyx_n_s__7, __pyx_n_s_min_idx, __pyx_n_s_max_idx, __pyx_n_s_minibatch_idx, __pyx_n_s_minibatch_absolute_idx, __pyx_n_s_minibatch_data, __pyx_n_s_minibatch_rewards, __pyx_n_s_states_old_sub, __pyx_n_s_actions_old_sub, __pyx_n_s_action_logs_old_sub, __pyx_n_s_state_vals_old_sub, __pyx_n_s_advantages_sub, __pyx_n_s_action_logs, __pyx_n_s_dist_entropy, __pyx_n_s_state_vals, __pyx_n_s_ratios, __pyx_n_s_unclipped, __pyx_n_s_clipped, __pyx_n_s_loss_PPO, __pyx_n_s_loss_critic, __pyx_n_s_loss_entropy, __pyx_n_s_loss, __pyx_n_s_accumulation_frac); if (unlikely(!__pyx_tuple__38)) __PYX_ERR(0, 383, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__38);
   __Pyx_GIVEREF(__pyx_tuple__38);
-  __pyx_codeobj__39 = (PyObject*)__Pyx_PyCode_New(3, 0, 0, 48, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__38, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_policy_py, __pyx_n_s_update, 383, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__39)) __PYX_ERR(0, 383, __pyx_L1_error)
-  __pyx_tuple__40 = PyTuple_Pack(1, ((PyObject *)Py_True)); if (unlikely(!__pyx_tuple__40)) __PYX_ERR(0, 383, __pyx_L1_error)
+  __pyx_codeobj__39 = (PyObject*)__Pyx_PyCode_New(4, 0, 0, 49, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__38, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_policy_py, __pyx_n_s_update, 383, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__39)) __PYX_ERR(0, 383, __pyx_L1_error)
+  __pyx_tuple__40 = PyTuple_Pack(2, ((PyObject *)Py_True), ((PyObject *)Py_False)); if (unlikely(!__pyx_tuple__40)) __PYX_ERR(0, 383, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__40);
   __Pyx_GIVEREF(__pyx_tuple__40);
   __Pyx_RefNannyFinishContext();
@@ -17170,7 +17196,7 @@ if (!__Pyx_RefNanny) {
   /* "celltrip/policy.py":383
  * 
  *     ### Backward functions
- *     def update(self, memory, fast_sample=True):             # <<<<<<<<<<<<<<
+ *     def update(self, memory, fast_sample=True, verbose=False):             # <<<<<<<<<<<<<<
  *         # Calculate rewards
  *         rewards = memory.propagate_rewards(gamma=self.memory_gamma, prune=self.memory_prune)
  */
