@@ -243,6 +243,10 @@ this script will generate...
 
 
 <!-- DEV NOTES -->
-<!-- Compiling requirements: python -m pip freeze -r requirements.in | sed '/freeze/,$ d' > requirements.txt -->
 <!-- Compiling requirements: python -m pip freeze -r requirements.in | sed '/@/d' > requirements.txt -->
+<!-- Local: 100.64.246.20 -->
+<!-- Sync with remote: rsync -v ~/repos/inept/!(*.tar) nck@100.85.187.118:~/repos/INEPT && \
+rsync -v ~/repos/inept/celltrip/* nck@100.85.187.118:~/repos/INEPT/celltrip && \
+rsync -v ~/repos/inept/celltrip/utility/* nck@100.85.187.118:~/repos/INEPT/celltrip/utility && \
+rsync -v ~/repos/inept/scripts/!(*.gzip) nck@100.85.187.118:~/repos/INEPT/scripts -->
 <!-- Find https://raw.githubusercontent.com/Oafish1/CellTRIP/refs/heads/main/plots, Replace ./plots to test images -->

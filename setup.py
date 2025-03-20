@@ -3,10 +3,9 @@ import os.path
 from setuptools import find_packages, setup
 from distutils.extension import Extension
 
+# TODO: Fix this and don't autorun on install
 USE_CYTHON = True
 CYTHON_COMPILED = os.path.exists('celltrip/environment.c')
-
-# TOOD: Maybe argument and pyproject.toml
 
 
 # Get metadata
@@ -80,7 +79,11 @@ setup(
     ],
     extras_require={
         # NOTE: Currently requires all to run
-        # Additional CLI requirements: ffmpeg, poppler-utils
+        # Additional requirements:
+        #   `cupy` for parallel update
+        #   `docker` for containers
+        #   `ffmpeg` for video
+        #   `poppler-utils`
         'compile': [
             'Cython'],
         'dev': [

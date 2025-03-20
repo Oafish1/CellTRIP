@@ -1,4 +1,5 @@
 import numpy as np
+import ray.util.collective as col  # Maybe conditional import?
 import torch
 from torch.distributions.multivariate_normal import MultivariateNormal
 import torch.nn as nn
@@ -380,7 +381,21 @@ class PPO(nn.Module):
         return action
 
     ### Backward functions
-    def update(self, memory, fast_sample=True, verbose=False):
+    def update(
+        self,
+        memory,
+        fast_sample=True,
+        verbose=False,
+        # Collective args
+        world_size=1,
+        rank=0,
+        sync_epochs=5):
+        # Collective operations
+        use_collective = world_size > 1
+        if use_collective:
+            col_backend = 'nccl' if self.device != 'cpu' else 'gloo'
+            col.init_collective_group(world_size, rank, col_backend, 'update')
+
         # Calculate rewards
         rewards = memory.propagate_rewards(gamma=self.memory_gamma, prune=self.memory_prune)
         if self.memory_prune is not None: rewards, rewards_mask, rewards_list_mask = rewards
@@ -420,7 +435,7 @@ class PPO(nn.Module):
             maxbatch_rewards = maxbatch_rewards.to(self.device)
 
         # Train
-        for epoch_num in range(self.epochs):
+        for epoch_num in range(0, np.ceil(self.epochs/world_size).astype(int)):
             # Metrics
             epoch_ppo = 0
             epoch_critic = 0
@@ -520,6 +535,17 @@ class PPO(nn.Module):
                     f' - PPO {epoch_ppo.item():.3f}'
                     f', critic {epoch_critic.item():.3f}'
                     f', entropy {epoch_entropy.item():.3f}')
+                
+            # Synchronize collective
+            if use_collective and (epoch_num+1) % sync_epochs == 0:
+                # if rank == 0: print(self.state_dict())
+                # Sync individually
+                for k, w in self.state_dict().items():
+                    # print(f'Reducing {k}')
+                    col.allreduce(w, 'update')
+                    w = w / world_size
+                # Sync multiple
+                # if rank == 0: print(self.state_dict())
 
         # Update scheduler
         self.scheduler.step()
@@ -529,6 +555,10 @@ class PPO(nn.Module):
 
         # Clear memory
         # self.memory.clear()
+
+        # Destroy group
+        if use_collective:
+            col.destroy_collective_group('update')
 
         # Return self
         return self

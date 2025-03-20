@@ -13,6 +13,9 @@ build/
 *.prof
 *_profile.*
 
+# Docker images and archives
+*.tar
+
 # Data
 *.pickle
 *.pkl

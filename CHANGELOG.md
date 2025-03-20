@@ -1,3 +1,19 @@
+### 1.0.0+2025.3.19
+- Additional Docker commands
+- Additional update timing logic for `train.train_policy` function
+- Amend `start_node` behavior to work with multi-GPU nodes
+- Decorator function name tagging, for ease of debugging
+- Downgrade to python 3.10 for Docker CUDA compatibility
+- Figure updates
+- File reorganization and cleanup
+- Fix extra unnecessary calibration rollout
+- Parallelization of update using NCCL
+- Replace inline `ray.remote` definitions with decorators
+- Script updates
+- Upgrade `decorator.metrics` return handling
+- Use Rsync for remote repo sync
+- Various bugfixes and QOL
+
 ### 1.0.0+2025.3.18
 - Add command to run attachable remote cluster with no script
 - Add step number to `AdvancedMemoryBuffer` class
