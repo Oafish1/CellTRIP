@@ -458,16 +458,17 @@ def split_state(
     if not _utility.general.is_list_like(idx): idx = [idx]
     self_idx = idx
     del idx
+    device = state.device
 
     # Get self features for each node
     self_entity = state[self_idx]
 
     # Get node features for each state
-    node_mask = torch.eye(state.shape[0], dtype=torch.bool)
+    node_mask = torch.eye(state.shape[0], dtype=torch.bool, device=device)
     node_mask = ~node_mask
 
     # Enforce reproducibility
-    if reproducible_strategy is not None: generator = torch.Generator(device=state.device)
+    if reproducible_strategy is not None: generator = torch.Generator(device=device)
     else: generator = None
 
     # Hashing method
@@ -504,7 +505,7 @@ def split_state(
             selected_idx = probs.argsort(dim=-1)[..., -num_nodes:]  # Take `num_nodes` highest values
 
             # Create new mask
-            node_mask = torch.zeros((state.shape[0], state.shape[0]), dtype=torch.bool)
+            node_mask = torch.zeros((state.shape[0], state.shape[0]), dtype=torch.bool, device=device)
             node_mask[torch.arange(node_mask.shape[0]).unsqueeze(-1).expand(node_mask.shape[0], num_nodes), selected_idx] = True
 
         # Sample closest nodes
@@ -521,7 +522,7 @@ def split_state(
             selected_idx = dist.argsort(dim=-1)[..., 1:num_nodes+1]
             
             # Create new mask
-            node_mask = torch.zeros((state.shape[0], state.shape[0]), dtype=torch.bool)
+            node_mask = torch.zeros((state.shape[0], state.shape[0]), dtype=torch.bool, device=device)
             node_mask[torch.arange(node_mask.shape[0]).unsqueeze(-1).expand(node_mask.shape[0], num_nodes), selected_idx] = True
 
         # Randomly sample from a distribution of node distance
@@ -536,9 +537,13 @@ def split_state(
             prob[~node_mask] = 0  # Remove self
 
             # Randomly sample
-            node_mask = torch.zeros((state.shape[0], state.shape[0]), dtype=torch.bool)
+            # NOTE: If you get an error `_assert_async_cuda_kernel`, weights probably exploded making `actions = [nan]`
+            node_mask = torch.zeros((state.shape[0], state.shape[0]), dtype=torch.bool, device=device)
             idx = prob.multinomial(num_nodes, replacement=False, generator=generator)
-            node_mask[torch.arange(node_mask.shape[0]).unsqueeze(-1).expand(node_mask.shape[0], num_nodes), idx] = True
+
+            # Apply sampling
+            mat = torch.arange(node_mask.shape[0], device=device).unsqueeze(-1).expand(node_mask.shape[0], num_nodes)
+            node_mask[mat, idx] = True
         else:
             # TODO: Verify works
             raise ValueError(f'Sample strategy \'{sample_strategy}\' not found.')

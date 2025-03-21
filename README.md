@@ -10,6 +10,8 @@ CellTRIP confers several unique advantages over comparable methods:
 - Interactive latent space,
 - Great generalizability.
 
+<!-- Process-wise, CellTRIP is also node-failure resistant -->
+
 | Application | Preview | Description | Performance |
 | --- | --- | --- | --- |
 | Multimodal integration | <img src="https://raw.githubusercontent.com/Oafish1/CellTRIP/refs/heads/main/plots/rypltvk5_MMD-MA_convergence.gif" width="300"> | Policy trained on 300 simulated single-cells with multimodal input applied to an integration environment | <img src="https://raw.githubusercontent.com/Oafish1/CellTRIP/refs/heads/main/plots/rypltvk5_MMD-MA_comparison_integration.png" width="200"> |
@@ -242,11 +244,26 @@ python analysis.py ...
 this script will generate...
 
 
-<!-- DEV NOTES -->
-<!-- Compiling requirements: python -m pip freeze -r requirements.in | sed '/@/d' > requirements.txt -->
-<!-- Local: 100.64.246.20 -->
-<!-- Sync with remote: rsync -v ~/repos/inept/!(*.tar) nck@100.85.187.118:~/repos/INEPT && \
-rsync -v ~/repos/inept/celltrip/* nck@100.85.187.118:~/repos/INEPT/celltrip && \
-rsync -v ~/repos/inept/celltrip/utility/* nck@100.85.187.118:~/repos/INEPT/celltrip/utility && \
-rsync -v ~/repos/inept/scripts/!(*.gzip) nck@100.85.187.118:~/repos/INEPT/scripts -->
-<!-- Find https://raw.githubusercontent.com/Oafish1/CellTRIP/refs/heads/main/plots, Replace ./plots to test images -->
+<!--
+DEV NOTES
+Compiling requirements
+python -m pip freeze -r requirements.in | sed '/@/d' > requirements.txt
+
+Run local
+python scripts/start_node.py --node-ip-address 100.64.246.20 --timeout -1
+
+Run remote
+python scripts/start_node.py --address 100.64.246.20:6379 --node-ip-address 100.85.187.118 --gpus 1
+
+Run train script
+python -u train.py &> train_log.txt
+
+Sync with remote
+rsync -v ~/repos/inept/!(*.tar) precision:~/repos/INEPT && \
+rsync -v ~/repos/inept/celltrip/* precision:~/repos/INEPT/celltrip && \
+rsync -v ~/repos/inept/celltrip/utility/* precision:~/repos/INEPT/celltrip/utility && \
+rsync -v ~/repos/inept/scripts/!(*.gzip) precision:~/repos/INEPT/scripts
+
+TODO
+Find https://raw.githubusercontent.com/Oafish1/CellTRIP/refs/heads/main/plots, Replace ./plots to test images
+-->

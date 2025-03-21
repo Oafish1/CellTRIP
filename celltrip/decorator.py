@@ -10,13 +10,14 @@ import torch
 from . import utility as _utility
 
 
-def try_catch(_func=None, show_traceback=False):
+def try_catch(_func=None, show_traceback=False, fallback_ret=None):
     def try_catch_decorator(func):
         def try_catch_wrapper(*args, **kwargs):
             try: return func(*args, **kwargs)
             except Exception as err:
                 if show_traceback: print(traceback.format_exc(), end='')
                 else: print(err)
+                return fallback_ret
         return try_catch_wrapper
     
     if _func is None: return try_catch_decorator

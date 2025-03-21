@@ -145,7 +145,8 @@ class EntitySelfAttention(nn.Module):
         node_entities = self.embed_features(node_entities)
 
         # Self embedding
-        self_embed = self.self_embed(self_entity).unsqueeze(-2)
+        # print(self.self_embed.state_dict())
+        self_embed = self.self_embed(self_entity).unsqueeze(-2)  # This has blown up with multi-gpu backward
         self_embed = self.layer_norm['self embedding'](self_embed)
         self_embed = self.activation(self_embed)
 
@@ -359,7 +360,7 @@ class PPO(nn.Module):
         else:
             # Compute all at once
             action, action_log, state_val = self.act(*_utility.processing.split_state(state, **self.split_args), return_all=True)
-
+        
         # Record
         # NOTE: `reward` and `is_terminal` are added outside of the class, calculated
         # after stepping the environment
@@ -389,7 +390,9 @@ class PPO(nn.Module):
         # Collective args
         world_size=1,
         rank=0,
-        sync_epochs=5):
+        sync_epochs=5,
+    ):
+        # NOTE: The number of epochs is spread across `world_size` workers
         # Collective operations
         use_collective = world_size > 1
         if use_collective:
@@ -435,7 +438,8 @@ class PPO(nn.Module):
             maxbatch_rewards = maxbatch_rewards.to(self.device)
 
         # Train
-        for epoch_num in range(0, np.ceil(self.epochs/world_size).astype(int)):
+        epochs = np.ceil(self.epochs/world_size).astype(int)
+        for epoch_num in range(epochs):
             # Metrics
             epoch_ppo = 0
             epoch_critic = 0
@@ -537,15 +541,13 @@ class PPO(nn.Module):
                     f', entropy {epoch_entropy.item():.3f}')
                 
             # Synchronize collective
-            if use_collective and (epoch_num+1) % sync_epochs == 0:
-                # if rank == 0: print(self.state_dict())
-                # Sync individually
+            sync_loop = (epoch_num+1) % sync_epochs == 0
+            last_epoch = epoch_num+1 == epochs
+            if use_collective and (sync_loop or last_epoch):
                 for k, w in self.state_dict().items():
-                    # print(f'Reducing {k}')
                     col.allreduce(w, 'update')
-                    w = w / world_size
-                # Sync multiple
-                # if rank == 0: print(self.state_dict())
+                    w /= world_size
+            # if epoch_num == 9: print(self.state_dict())  # Check that weights are the same across nodes
 
         # Update scheduler
         self.scheduler.step()

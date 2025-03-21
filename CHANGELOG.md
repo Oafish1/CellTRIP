@@ -1,3 +1,18 @@
+### 1.0.0+2025.3.20
+- Add debugging notes in relevant code locations
+- Add fallback return values to `try_catch` decorator
+- Change calibration print order to more accurately reflect causality by adding message queue
+- Change terminal printing behavior
+- Cluster resource update record added
+- Fix stall detection in `train_policy`
+- Ignore logs
+- Inplace division for `allreduce`, fixing gradient explosion with `world_size > 1`
+- Match device in `split_state`
+- Move caching to init arg for `AdvancedMemoryBuffer` and default to `False`
+- Testing runs
+- QOL for update event records
+- Revise dev notes
+
 ### 1.0.0+2025.3.19
 - Additional Docker commands
 - Additional update timing logic for `train.train_policy` function

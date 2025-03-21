@@ -111,10 +111,12 @@ class PolicyManager:
 @ray.remote(max_calls=1)
 # @_decorators.print_ret
 @_decorators.metrics(append_to_dict=True)
-@_decorators.try_catch(show_traceback=True)
+@_decorators.try_catch(
+    show_traceback=True,
+    fallback_ret={'Event Type': 'Rollout Failed'})
 @_decorators.call_on_exit
 # @_decorators.profile
-def forward_func(
+def rollout_func(
     policy_manager,
     modalities,
     policy_init,
@@ -210,7 +212,9 @@ def simulate_until_completion(policy, env, memory=None, keys=None, dummy=False, 
 @ray.remote(max_calls=1)
 # @_decorators.print_ret
 # @_decorators.metrics(append_to_dict=True)
-@_decorators.try_catch(show_traceback=True)
+@_decorators.try_catch(
+    show_traceback=True,
+    fallback_ret={'Event Type': 'Update Failed'})
 @_decorators.call_on_exit
 # @_decorators.profile
 def update_func(
@@ -222,14 +226,8 @@ def update_func(
     return_metrics=False,
     **kwargs,
 ):
-    # Get policy iteration
-    ray.get(policy_manager.lock.remote('state', True))
-    policy_iteration = ray.get(policy_manager.get_policy_iteration.remote())
-    ray.get(policy_manager.lock.remote('state', False))
-
     # Lock memory
     ray.get(policy_manager.lock.remote('memory', True))
-    memory_len = ray.get(policy_manager.get_memory_len.remote())
 
     # Call collection
     futures = []
@@ -240,12 +238,12 @@ def update_func(
             policy_manager, policy_init, memory_init,
             world_size=num_workers, rank=i, **kwargs,
             return_metrics=return_metrics))
-    try: metrics_list = ray.get(futures)  # Block until completion
+    try: ret_list = ray.get(futures)  # Block until completion
     except: raise RuntimeError('One or more nodes in the collection failed.')
-    metrics = metrics_list[0]
+    ret = ret_list[0]
     if num_workers > 1:
-        for m in metrics_list[1:]:
-            for k in metrics: metrics[k] = max(metrics[k], m[k])
+        for m in ret_list[1:]:
+            for k in ret: ret[k] = max(ret[k], m[k])
 
     # Clear and unlock memory
     # NOTE: Keep locked during update to prevent adding memories and rerun on crash without clearing memories
@@ -253,12 +251,7 @@ def update_func(
     ray.get(policy_manager.lock.remote('memory', False))
 
     # Format return
-    ret = {
-        'Event Type': 'Update',
-        'Policy Iteration': policy_iteration+1,
-        'Memories': memory_len}
     if meta is not None: ret = _utility.general.dict_entry(ret, meta)
-    ret.update(metrics)
     return ret
 
 
@@ -271,12 +264,14 @@ def update_helper(policy_manager, policy_init, memory_init, world_size=1, rank=0
     policy = policy_init().to(device)
     ray.get(policy_manager.lock.remote('state', True))
     set_policy_state(policy, ray.get(policy_manager.get_policy_state.remote()))
+    policy_iteration = ray.get(policy_manager.get_policy_iteration.remote())
     ray.get(policy_manager.lock.remote('state', False))
 
     # Load memory
     memory = memory_init(policy)
     memory.append_memory(
         *ray.get(policy_manager.get_memory_storage.remote()))
+    memory_len = ray.get(policy_manager.get_memory_len.remote())
     
     # Perform backwards and update actor state
     policy.update(memory, world_size=world_size, rank=rank, **kwargs)
@@ -288,6 +283,13 @@ def update_helper(policy_manager, policy_init, memory_init, world_size=1, rank=0
         ray.get(policy_manager.set_policy_state.remote(policy_state))
         ray.get(policy_manager.increment_policy.remote())
         ray.get(policy_manager.lock.remote('state', False))
+
+    # Format return
+    ret = {
+        'Event Type': 'Update',
+        'Policy Iteration': policy_iteration+1,
+        'Memories': memory_len}
+    return ret
 
 
 class DistributedManager:
@@ -382,7 +384,7 @@ class DistributedManager:
             ray.get(self.policy_manager.release_locks.remote())
             print('Escaped running rollout')
         rollouts = [
-            forward_func
+            rollout_func
                 .options(**self.resources['rollout']['core'], resources=self.resources['rollout']['custom'])
                 .remote(
                     self.policy_manager,
@@ -462,7 +464,12 @@ class DistributedManager:
         return completed_futures
 
 
-def get_train_initializers(env_dim, modal_dims, policy_kwargs={}, memory_kwargs={}):
+def get_train_initializers(
+    env_dim, 
+    modal_dims, 
+    policy_kwargs={}, 
+    memory_kwargs={},
+):
     # Policy function
     policy_init = lambda: _policy.PPO(
         positional_dim=2*env_dim,
@@ -488,7 +495,13 @@ def train_policy(
     distributed_manager,
     dataloader,
     update_trigger='steps',
-    update_threshold=int(5e3)):
+    update_threshold=int(5e3),
+    refresh_interval=2,
+    # Kwargs
+    # environment_kwargs={},
+    rollout_kwargs={},
+    update_kwargs={},
+):
     # Parameters
     assert update_trigger in ('memories', 'steps'), f'Update trigger "{update_trigger}" not found.'
     dm = distributed_manager
@@ -503,12 +516,27 @@ def train_policy(
 
     # Train loop iter
     max_rollout_futures = 16
-    records = []
+    records = []; cluster_resources = {}
     while True:
+        # Initialize messages
+        messages = []
+
         # Retrieve active futures
         futures = dm.get_futures()
         num_futures = len(dm.get_all_futures())
         num_records = len(records)
+
+        # Scan for differences in cluster configuration
+        new_cluster_resources = ray.cluster_resources()
+        resources = [cluster_resources, new_cluster_resources]
+        for k in (sum(map(list, resources), [])):
+            condition = np.array([k in res for res in resources]).all()
+            if condition: condition = cluster_resources[k] == new_cluster_resources[k]
+            if not condition:
+                records.append(
+                    {'Event Type': 'Cluster', 'Configuration': new_cluster_resources})
+                break
+        cluster_resources = new_cluster_resources
 
         ## CHECK COMPLETED FUTURES
         # Calibrate updates
@@ -517,7 +545,7 @@ def train_policy(
             # Calibrate if needed
             if dm.get_requirements('update')['memory'] == 0:
                 dm.calibrate('update')
-                print(
+                messages.append(
                     f'Calibrated update'
                     f' memory ({dm.get_requirements("update")["memory"] / 2**30:.2f} GiB)'
                     f' and VRAM ({dm.get_requirements("update")["VRAM"] / 2**30:.2f} GiB)')
@@ -530,7 +558,7 @@ def train_policy(
             all_variants_run = True  # TODO: Set to true if all partitions have been run
             if dm.resources['rollout']['core']['memory'] == 0 and all_variants_run:
                 dm.calibrate('rollout')
-                print(
+                messages.append(
                     f'Calibrated rollout'
                     f' memory ({dm.get_requirements("rollout")["memory"] / 2**30:.2f} GiB)'
                     f' and VRAM ({dm.get_requirements("rollout")["VRAM"] / 2**30:.2f} GiB)')
@@ -565,7 +593,7 @@ def train_policy(
 
         # Run update or rollout
         # NOTE: Will roll out far too many and throw unexpected errors if IPs are set wrong
-        if run_update: dm.update()
+        if run_update: dm.update(**update_kwargs)
         elif run_rollout:
             modalities, adata_obs, adata_vars, partition = dataloader.sample(return_partition=True)
             dm.rollout(
@@ -573,20 +601,23 @@ def train_policy(
                 keys=adata_obs[0].index.to_numpy(),
                 env_init=env_init,
                 meta={'Partition': partition},
-                dummy=False)
+                **rollout_kwargs)
 
         # Nothing running warning
-        if not num_futures and not rollout_feasible and not update_feasible:
+        if not num_futures and not run_rollout and not run_update:
             warnings.warn(
                 'Nothing running and no runs feasible! If this warning persists,'
                 ' please check your server configuration.', RuntimeWarning)
 
-        # Wait to scan again
+        # Print new records
         new_records = len(records) - num_records
         if new_records:
             for rec in records[-new_records:]:
                 print(rec)
-        time.sleep(1)
+        for m in messages: print(m)
 
         # Escape
         if ray.get(dm.policy_manager.get_policy_iteration.remote()) >= 50: break
+
+        # Wait to scan again
+        time.sleep(refresh_interval)

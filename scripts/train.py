@@ -1,17 +1,7 @@
 import os
-# os.environ['RAY_DEDUP_LOGS'] = '0'
-# os.environ['NCCL_DEBUG'] = 'WARN'
-# os.environ['RAY_ENABLE_RECORD_ACTOR_TASK_LOGGING'] = '1'
-# export RAY_BACKEND_LOG_LEVEL=debug
-import functools as ft
 import time
 
-import numpy as np
 import ray
-import torch
-import tqdm.auto
-import tqdm.notebook
-tqdm.notebook.tqdm = tqdm.auto.tqdm  # Enable text output in notebooks
 
 import celltrip
 
@@ -22,20 +12,23 @@ print(f'Cython is{" not" if not CYTHON_ACTIVE else ""} active')
 
 # %% [markdown]
 # - High priority
+#   - Auto set max GPUs for update (?)
+#   - Add node to event log
 #   - Implement stages
-#   - Allow memory to pre-process keys and persistent storage
 #   - Add checkpoints
 #   - Add model loading
 #   - Add train/val to dataloader
-#   - Add state manager to env and then parallelize in analysis, maybe make `analyze` function
-#   - Script arguments, including address for ray
 #   - Partition detection in `train_policy`
-#   - Seed policy initialization, add reproducibility tag to wait for all rollouts before updating
-#   - Add metric returns for updates
+#   - Script arguments, including address for ray
+# - Medium priority
+#   - Eliminate passing of persistent storage for memory objects
 #   - Add hook for wandb, etc.
-#   - Local data loading per worker
-#   - Subtract working memory on host node
+#   - Add state manager to env and then parallelize in analysis, maybe make `analyze` function
+# - Low priority
+#   - Seed policy initialization and unseed update, add reproducibility tag to wait for all rollouts before updating
 #   - Verify worker timeout
+#   - Subtract working memory on host node
+#   - Local data loading per worker
 
 # %%
 # # Arguments
@@ -52,6 +45,11 @@ print(f'Cython is{" not" if not CYTHON_ACTIVE else ""} active')
 
 
 # %%
+# Start timer
+start_time = time.perf_counter()
+
+
+# %%
 # Read data
 fnames = ['../data/MERFISH/expression.h5ad', '../data/MERFISH/spatial.h5ad']
 partition_cols = None
@@ -59,16 +57,12 @@ adatas = celltrip.utility.processing.read_adatas(*fnames, on_disk=False)
 celltrip.utility.processing.test_adatas(*adatas, partition_cols=partition_cols)
 
 # Construct dataloader
-dataloader = celltrip.utility.processing.PreprocessFromAnnData( # num_nodes=200
+dataloader = celltrip.utility.processing.PreprocessFromAnnData(
     *adatas, partition_cols=partition_cols, num_nodes=200, pca_dim=128, seed=42)
 modalities, adata_obs, adata_vars = dataloader.sample()
 
 # Initialize Ray
-ray.shutdown()
-# ray.init(
-#     resources={'VRAM': torch.cuda.get_device_properties(0).total_memory},
-#     dashboard_host='0.0.0.0')
-ray.init(
+ray.shutdown(); ray.init(
     address='ray://127.0.0.1:10001',
     runtime_env={
         'env_vars': {
@@ -82,21 +76,31 @@ ray.init(
 policy_init, memory_init = celltrip.train.get_train_initializers(
     3, [m.shape[1] for m in modalities])
 distributed_manager = celltrip.train.DistributedManager(
-    # modalities=modalities, env_init=env_init,
-    policy_init=policy_init,
-    memory_init=memory_init)
+    policy_init=policy_init, memory_init=memory_init,
+    max_jobs_per_gpu=2, update_gpus=1)
 
-# Available resources
-import json
-print(json.dumps(ray.available_resources(), indent=2, sort_keys=False))
-
-# %%
 # Perform training
-celltrip.train.train_policy(distributed_manager, dataloader)
+celltrip.train.train_policy(distributed_manager, dataloader, rollout_kwargs={'dummy': False})
+
 
 # %%
-# distributed_manager.policy_manager.release_locks.remote()
-# ray.get(distributed_manager.update())
+# End timer
+print(f'Ran for {time.perf_counter() - start_time:.0f} seconds')
+
+
+# %%
+# env_init = lambda policy, modalities: celltrip.environment.EnvironmentBase(
+#     *modalities,
+#     dim=policy.output_dim,
+#     # max_timesteps=1e2,
+#     penalty_bound=1,
+#     device=policy.device)
+# ray.get(distributed_manager.rollout(
+#     modalities=modalities,
+#     keys=adata_obs[0].index.to_numpy(),
+#     env_init=env_init,
+#     dummy=False))
+
 
 # %%
 # # Cancel
@@ -118,13 +122,12 @@ celltrip.train.train_policy(distributed_manager, dataloader)
 # memory.append_memory(
 #     *ray.get(distributed_manager.policy_manager.get_memory_storage.remote()))
 
+# # Update remote policy
+# distributed_manager.policy_manager.release_locks.remote()
+# ray.get(distributed_manager.update())
 
-# %%
 # # Get state of job from ObjectRef
 # import ray.util.state
 # object_id = dm.futures['simulation'][0].hex()
 # object_state = ray.util.state.get_objects(object_id)[0]
 # object_state.task_status
-
-
-

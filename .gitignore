@@ -9,6 +9,9 @@ build/
 **/models/*
 **/wandb
 
+# Training logs
+**/*_log*.txt
+
 # Profiling
 *.prof
 *_profile.*

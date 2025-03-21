@@ -9,9 +9,17 @@ from . import utility as _utility
 
 class AdvancedMemoryBuffer:
     "Memory-efficient implementation of memory"
-    def __init__(self, suffix_len, rs_nset=1e5, split_args={}, device='cpu'):
+    def __init__(
+        self,
+        suffix_len,
+        cache_suffix=False,  # Useful if envs and vision are fixed
+        rs_nset=1e5,
+        split_args={},
+        device='cpu',
+    ):
         # User parameters
         self.suffix_len = suffix_len
+        self.cache_suffix = cache_suffix
         self.rs_nset = rs_nset
         self.split_args = split_args
         self.device = device
@@ -76,7 +84,9 @@ class AdvancedMemoryBuffer:
                     if k == 'states':
                         # `_append_suffix` takes most time without caching, then `split_state`
                         val = _utility.processing.split_state(  # TIME BOTTLENECK
-                            self._append_suffix(self.storage[k][list_num], keys=self.storage['keys'][list_num]),  # TIME BOTTLENECK
+                            self._append_suffix(
+                                self.storage[k][list_num],
+                                keys=self.storage['keys'][list_num]),  # TIME BOTTLENECK
                             idx=local_idx,
                             **self.split_args,
                         )
@@ -134,7 +144,9 @@ class AdvancedMemoryBuffer:
                 # Special cases
                 if k == 'states':
                     val = _utility.processing.split_state(
-                        self._append_suffix(self.storage[k][list_num], keys=self.storage['keys'][list_num]),
+                        self._append_suffix(
+                            self.storage[k][list_num],
+                            keys=self.storage['keys'][list_num]),
                         idx=self_idx,
                         **self.split_args,
                     )
@@ -307,16 +319,15 @@ class AdvancedMemoryBuffer:
             dim=0) for i in range(2)]
         return states
 
-    def _append_suffix(self, state, *, keys, cache=True):
+    def _append_suffix(self, state, *, keys, cache=False):
         "Append suffixes to state vector with optional cache for common key layouts"
         # Read from cache
         # NOTE: Strings from numpy arrays are slower as keys
-        if cache and keys in self.persistent_storage['suffix_matrices']:
+        if self.cache_suffix and keys in self.persistent_storage['suffix_matrices']:
             suffix_matrix = self.persistent_storage['suffix_matrices'][keys]
 
         else:
             # Aggregate suffixes
-            # print('New aggregate')  # TODO: Add max number of suffixes
             suffix_matrix = None
             for k in keys:
                 val = self.persistent_storage['suffixes'][k].unsqueeze(0)
@@ -324,7 +335,7 @@ class AdvancedMemoryBuffer:
                 else: suffix_matrix = torch.concat((suffix_matrix, val), dim=0)
 
             # Add to cache
-            if cache:
+            if self.cache_suffix:
                 self.persistent_storage['suffix_matrices'][keys] = suffix_matrix
                 if len(self.persistent_storage['suffix_matrices']) == 101:
                     warnings.warn(
