@@ -55,9 +55,8 @@ class AdvancedMemoryBuffer:
             'suffixes',             # Suffixes corresponding to keys
             'suffix_matrices')      # Orderings of suffixes
         self.persistent_storage = {k: {} for k in persistent_storage_keys}
-        variable_storage_keys = (
-            'len', 'new_len', 'replay_len')  # Cache for variables which require computation
-        self.variable_storage = {k: None for k in variable_storage_keys}
+        # Cache for variables which require computation
+        self.variable_storage = {}
 
         # Maintenance variables
         self.recorded = {k: False for k in storage_keys}
@@ -93,8 +92,7 @@ class AdvancedMemoryBuffer:
                 else:
                     sto_dev = self.storage['states'][-1][j][-self.suffix_len:].device
                     if str(sto_dev) != 'cpu': warnings.warn(f'Tensor found on `{sto_dev}` in `AdvancedMemoryBuffer`.')
-                    acceptable_error = 1e-5  # Required due to lossy networking
-                    assert (np.abs(self.storage['states'][-1][j][-self.suffix_len:] - self.persistent_storage['suffixes'][k]) < acceptable_error).all(), (
+                    assert np.isclose(self.storage['states'][-1][j][-self.suffix_len:], self.persistent_storage['suffixes'][k]).all(), (
                     f'Key `{k}` does not obey 1-to-1 mapping with suffixes')
                     if len(self.persistent_storage['suffixes']) > 500_000: warnings.warn(
                         'Number of cached keys has surpassed 500,000.')
@@ -308,13 +306,18 @@ class AdvancedMemoryBuffer:
             ' and `self.propagate_rewards()` has been run.')
 
     def __len__(self):
-        if self.variable_storage['len'] is None:
+        if 'len' not in self.variable_storage:
             self.variable_storage['len'] = sum(len(keys) for keys in self.storage['keys'])
+            # Check that all keys are same len
+            k_len = [len(self.storage[k]) for k in self.storage]
+            assert np.isclose(k_len, k_len[0]).all(), (
+                f'Memory storage out of sync, found storage key lengths {k_len}'
+                f' for keys {list(self.storage.keys())}')
         return self.variable_storage['len']
     
     def get_new_len(self, max_per_step=None, invert=False):
-        key = 'new_len' if not invert else 'replay_len'
-        if self.variable_storage[key] is None:
+        key = ('new_len', max_per_step) if not invert else ('replay_len', max_per_step)
+        if key not in self.variable_storage:
             self.variable_storage[key] = 0
             for state, new_memory in zip(self.storage['states'], self.storage['new_memories']):
                 if new_memory^invert:
@@ -365,29 +368,103 @@ class AdvancedMemoryBuffer:
         "Remove replay memories with reservoir sampling"
         # Parameters
         if max_memories is None: max_memories = self.max_memories
+        if max_memories is None: return  # Unlimited memories
+
 
         # Cull
-        while len(self) > max_memories:
-            # Find memory to remove
-            invert_new_memories = ~np.array(self.storage['new_memories'])
-            if invert_new_memories.sum() == 0:
+        num_memories_to_remove = len(self) - max_memories
+        num_memories_removed = 0
+        new_steps = np.array(self.storage['new_memories'])
+        replay_steps = ~new_steps
+        steps_to_remove = np.zeros_like(new_steps, dtype=bool)
+        while num_memories_to_remove > num_memories_removed:
+            # If replay steps remain
+            if replay_steps.sum() > 0:
+                idx = np.random.choice(
+                    np.argwhere(replay_steps).flatten(), 1)[0]
+                steps_to_remove[idx] = True
+                replay_steps[idx] = False
+                num_memories_removed += self.storage['states'][idx].shape[0]
+
+            # If no replay steps are left
+            else:
                 warnings.warn(
-                    'No replay memories found to cull, removing new memories instead. Make sure to'
+                    'Insufficient replay memories found to cull, removing new memories instead. Make sure to'
                     ' mark memories after sampling or try raising `max_memories`.')
-                invert_new_memories = self.get_steps()
-            else: invert_new_memories = np.argwhere(invert_new_memories).flatten()
-            idx = np.random.choice(invert_new_memories, 1)[0]
-            # Remove memory
-            for k in self.storage:
-                v = self.storage[k].pop(idx)
-                if k == 'propagated_rewards':
-                    if v is None:
-                        raise ValueError(
-                            '`None` value found for `propagated_rewards` while culling.'
-                            ' Make sure to propagate rewards before cleaning.')
+                idx = np.random.choice(
+                    np.argwhere(new_steps).flatten(), 1)[0]
+                steps_to_remove[idx] = True
+                new_steps[idx] = False
+                num_memories_removed += self.storage['states'][idx].shape[0]
+
+        # Remove steps
+        idx = np.argwhere(steps_to_remove).flatten()[::-1]
+        for k in self.storage:
+            for i in idx:
+                v = self.storage[k].pop(i)
+                if k == 'propagated_rewards' and v is None:
+                    raise ValueError(
+                        '`None` value found for `propagated_rewards` while culling.'
+                        ' Make sure to propagate rewards before cleaning.')
 
         # Clear computed vars
-        self.clear_var_cache()
+        if len(idx) > 0: self.clear_var_cache()
+
+        # # Cull
+        # while len(self) > max_memories:
+        #     # Find memory to remove
+        #     invert_new_memories = ~np.array(self.storage['new_memories'])
+        #     if invert_new_memories.sum() == 0:
+        #         warnings.warn(
+        #             'Insufficient replay memories found to cull, removing new memories instead. Make sure to'
+        #             ' mark memories after sampling or try raising `max_memories`.')
+        #         population = self.get_steps()
+        #     else: population = np.argwhere(invert_new_memories).flatten()
+        #     idx = np.random.choice(population, 1)[0]
+        #     # Remove memory
+        #     for k in self.storage:
+        #         v = self.storage[k].pop(idx)
+        #         if k == 'propagated_rewards':
+        #             if v is None:
+        #                 raise ValueError(
+        #                     '`None` value found for `propagated_rewards` while culling.'
+        #                     ' Make sure to propagate rewards before cleaning.')
+
+        #     # Clear computed vars
+        #     self.clear_var_cache()
+
+        # # Cull
+        # num_memories_to_remove = len(self) - max_memories
+        # if num_memories_to_remove > 0:
+        #     # Find memories to remove
+        #     new_memories = np.array(self.storage['new_memories'])
+        #     invert_new_memories = ~new_memories
+        #     num_replay_memories = invert_new_memories.sum()
+        #     num_new_memories_to_remove = num_memories_to_remove - num_replay_memories
+        #     if num_new_memories_to_remove > 0:
+        #         warnings.warn(
+        #             'Insufficient replay memories found to cull, removing new memories instead. Make sure to'
+        #             ' mark memories after sampling or try raising `max_memories`.')
+        #         replay_memories_to_remove = np.argwhere(invert_new_memories).flatten()
+        #         print(new_memories.sum())
+        #         print(num_new_memories_to_remove)
+        #         new_memories_to_remove = np.random.choice(np.argwhere(new_memories).flatten(), num_new_memories_to_remove, replace=False)
+        #         idx = np.concatenate((replay_memories_to_remove, new_memories_to_remove))
+        #     else:
+        #         # Maybe do one at a time if memory-inefficient
+        #         idx = np.random.choice(np.argwhere(invert_new_memories).flatten(), num_memories_to_remove, replace=False)
+        #     idx.sort()
+        #     # Remove memory
+        #     for k in self.storage:
+        #         for i in idx[::-1]:
+        #             v = self.storage[k].pop(i)
+        #             if k == 'propagated_rewards' and v is None:
+        #                 raise ValueError(
+        #                     '`None` value found for `propagated_rewards` while culling.'
+        #                     ' Make sure to propagate rewards before cleaning.')
+
+        #     # Clear computed vars
+        #     self.clear_var_cache()
     
     def clean_records(self):
         "Remove all pruned records"
@@ -421,7 +498,7 @@ class AdvancedMemoryBuffer:
 
     def clear_var_cache(self):
         "Clear computed vars"
-        for k in self.variable_storage: self.variable_storage[k] = None
+        self.variable_storage.clear()
 
     def cleanup(self):
         "Clean memory"
@@ -468,8 +545,8 @@ class AdvancedMemoryBuffer:
                 if len(self.persistent_storage['suffix_matrices']) == 101:
                     warnings.warn(
                         'Persistent storage cache has exceeded 100 entries,'
-                        'please verify that there are over 100 unique environment '
-                        'states in your data.', RuntimeWarning)
+                        ' please verify that there are over 100 unique environment'
+                        ' states in your data.', RuntimeWarning)
 
         # Append to state
         return torch.concat((state, suffix_matrix), dim=1)

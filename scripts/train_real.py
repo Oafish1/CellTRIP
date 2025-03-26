@@ -1,13 +1,15 @@
 # %%
+# %load_ext autoreload
+# %autoreload 2
+
+
+# %%
 import ray
 import ray.util.collective as col
 import torch
 
 import celltrip
 
-
-# %%
-ray.shutdown()
 
 # %%
 ray.shutdown()
@@ -29,10 +31,10 @@ ray.init(
 
 
 # %%
-def env_init(local=False):
+def env_init(parent=False):
     # Create dataloader
     fnames = ['./data/MERFISH/expression.h5ad', './data/MERFISH/spatial.h5ad']
-    if local: fnames = ['.' + f for f in fnames]
+    if parent: fnames = ['.' + f for f in fnames]
     partition_cols = None  # 'layer'
     adatas = celltrip.utility.processing.read_adatas(*fnames, on_disk=False)
     celltrip.utility.processing.test_adatas(*adatas, partition_cols=partition_cols)
@@ -43,16 +45,14 @@ def env_init(local=False):
     return celltrip.environment.EnvironmentBase(dataloader, dim=3, penalty_bound=1)
 
 policy_init = lambda env: celltrip.policy.PPO(
-    2*env.dim, env.dataloader.modal_dims, env.dim) # minibatch_size=3e3,
-    
+    2*env.dim, env.dataloader.modal_dims, env.dim) # update_iterations=2, minibatch_size=3e3,
 
 memory_init = lambda policy: celltrip.memory.AdvancedMemoryBuffer(
-    sum(policy.modal_dims),
-    split_args=policy.split_args)  
+    sum(policy.modal_dims), split_args=policy.split_args)  
 
 
 # %%
-# env = env_init(local=True).to('cuda')
+# env = env_init(parent=True).to('cuda')
 # policy = policy_init(env).to('cuda')
 # memory = memory_init(policy)
 # celltrip.train.simulate_until_completion(policy, env, memory)
@@ -144,6 +144,7 @@ class Worker:
         return ref, ret
     
     @celltrip.decorator.metrics(append_to_dict=True)
+    # @celltrip.decorator.profile(time_annotation=True)
     def recv_memories(self, new_memories):
         # Append memories
         num_memories = 0
@@ -163,9 +164,8 @@ class Worker:
         return ret
         
     @celltrip.decorator.metrics(append_to_dict=True)
-    @celltrip.decorator.profile(time_annotation=True)
+    # @celltrip.decorator.profile(time_annotation=True)
     def update(self):
-        # TODO: Update time grows for some unknown reason with memory size
         # Perform update
         self.memory.normalize_rewards()
         self.policy.update(self.memory, verbose=True)
@@ -180,6 +180,7 @@ class Worker:
         self.memory.cleanup()
 
         # Record
+        # TODO: Fix num_* being incorrect (seems like `get_new_len` does half? Test others too)
         ret = {
             'Event Type': 'Update',
             'Policy Iteration': self.policy_iteration,
@@ -206,7 +207,7 @@ start = time.perf_counter()
 
 # %%
 @ray.remote
-def train(num_workers, updates):
+def train(num_workers, updates, steps):
     workers = [Worker.remote(
         policy_init, env_init, memory_init,
         world_size=num_workers, rank=i) for i in range(num_workers)]
@@ -216,7 +217,7 @@ def train(num_workers, updates):
     for _ in range(updates):
         # Rollouts
         num_records = len(records)
-        new_records = ray.get([w.rollout_until_new.remote(5e3/num_workers) for w in workers])
+        new_records = ray.get([w.rollout_until_new.remote(steps/num_workers) for w in workers])
         records += sum(new_records, [])
         for record in records[-(len(records)-num_records):]: print(record)
 
@@ -251,7 +252,8 @@ def train(num_workers, updates):
     # Return
     return workers
 
-workers = ray.get(train.remote(2, 50))
+workers = ray.get(train.remote(2, 50, 5e3))
+# workers = ray.get(train.remote(2, 10, 9e4))
 
 
 # %%
