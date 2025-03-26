@@ -52,27 +52,7 @@ class PolicyManager:
         self.locks = {
             'memory': threading.Lock(),
             'state': threading.Lock()}
-
-    def get_policy_state(self):
-        return get_policy_state(self.policy)
-    
-    def get_policy_iteration(self):
-        return self.policy_iteration
-    
-    def get_memory_storage(self, persistent=True):
-        storage = self.memory.get_storage()
-        if not persistent: storage = storage[0]
-        return storage
-    
-    def get_memory_len(self):
-        return len(self.memory)
-    
-    def get_memory_steps(self):
-        return self.memory.get_steps()
-
-    def set_policy_state(self, state_dicts):
-        set_policy_state(self.policy, state_dicts)
-
+        
     def get_lock(self, lock_id):
         if lock_id not in self.locks:
             raise ValueError(f'Lock `{lock_id}` not found.')
@@ -98,14 +78,39 @@ class PolicyManager:
             if self.locks[lock_id].locked():
                 self.locks[lock_id].release()
 
+    def get_policy_state(self):
+        return get_policy_state(self.policy)
+
+    def set_policy_state(self, state_dicts):
+        set_policy_state(self.policy, state_dicts)
+    
+    def get_policy_iteration(self):
+        return self.policy_iteration
+
     def increment_policy(self):
         self.policy_iteration += 1
+    
+    def get_memory_storage(self, persistent=True):
+        storage = self.memory.get_storage()
+        if not persistent: storage = storage[0]
+        return storage
 
-    def clear_memory(self):
-        self.memory.clear()
+    def memory_func(self, func):
+        # Only use for len functions, others are explicit
+        return func(self.memory)
 
     def append_memory(self, *args):
         self.memory.append_memory(*args)
+        self.memory.propagate_rewards(normalize=False)
+
+    def mark_sampled_memory(self):
+        self.memory.mark_sampled()
+
+    def normalize_memory(self):
+        self.memory.normalize_rewards()
+
+    def clear_memory(self):
+        self.memory.clear()
 
 
 @ray.remote(max_calls=1)
@@ -115,7 +120,7 @@ class PolicyManager:
     show_traceback=True,
     fallback_ret={'Event Type': 'Rollout Failed'})
 @_decorators.call_on_exit
-# @_decorators.profile
+@_decorators.profile
 def rollout_func(
     policy_manager,
     modalities,
@@ -165,6 +170,9 @@ def rollout_func(
 
 
 def simulate_until_completion(policy, env, memory=None, keys=None, dummy=False, verbose=False):
+    # Params
+    if keys is None: keys = env.get_keys()
+
     # Simulation
     ep_timestep = 0; ep_reward = 0; ep_itemized_reward = defaultdict(lambda: 0); finished = False
     while not finished:
@@ -194,9 +202,10 @@ def simulate_until_completion(policy, env, memory=None, keys=None, dummy=False, 
 
             # Dummy return for testing
             if dummy:
-                if memory:
-                    # 1024 dummy memories
-                    for _ in range(10): memory.append_memory(memory)
+                if memory and not finished:
+                    # 1000 steps
+                    for _ in range(999): memory.append_memory({k: v[-1:] for k, v in memory.storage.items()})
+                    memory.storage['is_terminals'][-1] = True
                 break
         
         # CLI
@@ -226,8 +235,9 @@ def update_func(
     return_metrics=False,
     **kwargs,
 ):
-    # Lock memory
+    # Lock memory and normalize rewards
     ray.get(policy_manager.lock.remote('memory', True))
+    ray.get(policy_manager.normalize_memory.remote())
 
     # Call collection
     futures = []
@@ -245,9 +255,9 @@ def update_func(
         for m in ret_list[1:]:
             for k in ret: ret[k] = max(ret[k], m[k])
 
-    # Clear and unlock memory
-    # NOTE: Keep locked during update to prevent adding memories and rerun on crash without clearing memories
-    ray.get(policy_manager.clear_memory.remote())
+    # Mark and unlock memory
+    # NOTE: Keep locked during update to prevent adding memories and rerun on crash without marking memories
+    ray.get(policy_manager.mark_sampled_memory.remote())
     ray.get(policy_manager.lock.remote('memory', False))
 
     # Format return
@@ -271,7 +281,7 @@ def update_helper(policy_manager, policy_init, memory_init, world_size=1, rank=0
     memory = memory_init(policy)
     memory.append_memory(
         *ray.get(policy_manager.get_memory_storage.remote()))
-    memory_len = ray.get(policy_manager.get_memory_len.remote())
+    memory_len = ray.get(policy_manager.memory_func.remote(lambda x: len(x)))
     
     # Perform backwards and update actor state
     policy.update(memory, world_size=world_size, rank=rank, **kwargs)
@@ -357,19 +367,8 @@ class DistributedManager:
         keys = list(self.futures.keys()) if len(keys) == 1 and keys[0] is None else keys
         return sum([self.futures[k] for k in keys], [])
     
-    def get_memory_len(self):
-        ray.get(self.policy_manager.lock.remote('memory', True))
-        memory_len = ray.get(self.policy_manager.get_memory_len.remote())
-        ray.get(self.policy_manager.lock.remote('memory', False))
-
-        return memory_len
-    
-    def get_memory_steps(self):
-        ray.get(self.policy_manager.lock.remote('memory', True))
-        memory_len = ray.get(self.policy_manager.get_memory_steps.remote())
-        ray.get(self.policy_manager.lock.remote('memory', False))
-
-        return memory_len
+    def memory_func(self, func):
+        return ray.get(self.policy_manager.memory_func.remote(func))
 
     # Futures
     def rollout(self, num_simulations=1, modalities=None, keys=None, env_init=None, **kwargs):
@@ -581,8 +580,8 @@ def train_policy(
         # Checks for update
         run_update = update_feasible
         run_update *= len(futures['update']) == 0
-        if update_trigger == 'memories': update_above_threshold = dm.get_memory_len() >= update_threshold
-        elif update_trigger == 'steps': update_above_threshold = dm.get_memory_steps() >= update_threshold
+        if update_trigger == 'memories': update_above_threshold = dm.memory_func(lambda x: x.get_new_len()) >= update_threshold
+        elif update_trigger == 'steps': update_above_threshold = dm.memory_func(lambda x: x.get_new_steps()) >= update_threshold
         run_update *= update_above_threshold
 
         # Checks for rollout
@@ -593,7 +592,9 @@ def train_policy(
 
         # Run update or rollout
         # NOTE: Will roll out far too many and throw unexpected errors if IPs are set wrong
-        if run_update: dm.update(**update_kwargs)
+        if run_update: 
+            return
+            dm.update(**update_kwargs)
         elif run_rollout:
             modalities, adata_obs, adata_vars, partition = dataloader.sample(return_partition=True)
             dm.rollout(

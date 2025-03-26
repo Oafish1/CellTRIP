@@ -21,6 +21,7 @@ print(f'Cython is{" not" if not CYTHON_ACTIVE else ""} active')
 #   - Partition detection in `train_policy`
 #   - Script arguments, including address for ray
 # - Medium priority
+#   - Add uncompressed memory buffer option
 #   - Eliminate passing of persistent storage for memory objects
 #   - Add hook for wandb, etc.
 #   - Add state manager to env and then parallelize in analysis, maybe make `analyze` function
@@ -74,10 +75,10 @@ ray.shutdown(); ray.init(
 
 # Initialize distributed manager
 policy_init, memory_init = celltrip.train.get_train_initializers(
-    3, [m.shape[1] for m in modalities])
+    3, [m.shape[1] for m in modalities], policy_kwargs={'epochs': 80})
 distributed_manager = celltrip.train.DistributedManager(
     policy_init=policy_init, memory_init=memory_init,
-    max_jobs_per_gpu=2, update_gpus=1)
+    max_jobs_per_gpu=3, update_gpus=2)
 
 # Perform training
 celltrip.train.train_policy(distributed_manager, dataloader, rollout_kwargs={'dummy': False})
@@ -89,6 +90,10 @@ print(f'Ran for {time.perf_counter() - start_time:.0f} seconds')
 
 
 # %%
+
+
+# %%
+# # Perform Rollout
 # env_init = lambda policy, modalities: celltrip.environment.EnvironmentBase(
 #     *modalities,
 #     dim=policy.output_dim,
@@ -101,13 +106,9 @@ print(f'Ran for {time.perf_counter() - start_time:.0f} seconds')
 #     env_init=env_init,
 #     dummy=False))
 
-
-# %%
-# # Cancel
-# # dm.cancel()
-# # dm.clean()
-# # dm.rollout(dummy=True)
-# # dm.wait()
+# # Update remote policy
+# distributed_manager.policy_manager.release_locks.remote()
+# ray.get(distributed_manager.update())
 
 # # Clear locks
 # distributed_manager.policy_manager.release_locks.remote()
@@ -121,10 +122,6 @@ print(f'Ran for {time.perf_counter() - start_time:.0f} seconds')
 # memory = memory_init(policy)
 # memory.append_memory(
 #     *ray.get(distributed_manager.policy_manager.get_memory_storage.remote()))
-
-# # Update remote policy
-# distributed_manager.policy_manager.release_locks.remote()
-# ray.get(distributed_manager.update())
 
 # # Get state of job from ObjectRef
 # import ray.util.state

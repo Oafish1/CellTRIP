@@ -1,3 +1,11 @@
+### 1.0.0+2025.3.21
+- Change default caching for `AdvancedMemoryBuffer._append_suffix` back to True
+- Change default prune value for `AdvancedMemoryBuffer` to 0
+- Memory buffer reservoir sampling for buffer overflow
+- Persistent reward propagation
+- Proportional replay sampling to combat catastrophic forgetting
+- Script cleanup
+
 ### 1.0.0+2025.3.20
 - Add debugging notes in relevant code locations
 - Add fallback return values to `try_catch` decorator

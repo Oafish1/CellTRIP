@@ -1,4 +1,5 @@
 import argparse
+import atexit
 import os
 import time
 import warnings
@@ -17,7 +18,11 @@ parser.add_argument(
 parser.add_argument(
     '-g', '--gpus', type=str, help='CUDA devices to use, separated by commas')
 parser.add_argument(
+    '-c', '--cpu', action='store_true', help='Use only CPU')
+parser.add_argument(
     '-t', '--timeout', type=int, help='Reservation time before the program exits, default unlimited for workers')
+parser.add_argument(
+    '-s', '--separate', action='store_true', help='Start a unique ray instance for each GPU')
 parser.add_argument(
     '-e', '--extras', type=str, help='Extra arguments')
 args = parser.parse_args()
@@ -32,10 +37,9 @@ elif args.timeout == -1:
     args.timeout = None
 
 # Get resources
-gpu_ids = list(map(int, args.gpus.split(','))) if args.gpus is not None else [i for i in range(torch.cuda.device_count())]
-num_gpus = len(gpu_ids)
-if len(gpu_ids) == 0: gpu_ids =[None]
-vram = [torch.cuda.get_device_properties(i).total_memory for i in range(num_gpus)]
+gpu_ids = list(map(lambda x: [int(x)], args.gpus.split(','))) if args.gpus is not None else [[i] for i in range(torch.cuda.device_count())]
+if not args.separate: gpu_ids = [sum(gpu_ids, [])]
+if len(gpu_ids) == 0 or args.cpu: gpu_ids =[None]
 
 # Initialize ray
 command = 'ray start --disable-usage-stats'
@@ -53,19 +57,23 @@ for i, gpu_id in enumerate(gpu_ids):
     else: cmd += f' --address {args.address}'
 
     # Block if last
-    if i+1==len(gpu_ids) and block: cmd += ' --block'
+    # if i+1==len(gpu_ids) and block: cmd += ' --block'
 
     # Add resources
     if gpu_id is not None:
-        cmd += f' --num-gpus=1'
-        cmd += f' --resources=\'{{"VRAM": {torch.cuda.get_device_properties(gpu_id).total_memory}}}\''
-        cmd = f'CUDA_VISIBLE_DEVICES={gpu_id} ' + cmd
+        cmd += f' --num-gpus={len(gpu_id)}'
+        cmd += f' --resources=\'{{"VRAM": {sum([torch.cuda.get_device_properties(gid).total_memory for gid in gpu_id])}}}\''
+        cmd = f'CUDA_VISIBLE_DEVICES={",".join(map(str, gpu_id))} ' + cmd
+    else:
+        cmd += f' --num-gpus=0'
 
     # Execute
     print(cmd)
     os.system(cmd)
 
 # Execute timeout
-if args.timeout is not None:
+atexit.register(lambda: os.system('ray stop'))
+if block:
+    while True: time.sleep(60)
+elif args.timeout is not None:
     time.sleep(args.timeout)
-    os.execute('ray stop')

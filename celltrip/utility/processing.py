@@ -22,10 +22,12 @@ class Preprocessing:
         top_variant=int(5e3),
         # PCA
         pca_dim=2**8,  # TODO: Add auto-handling for less PCA than samples
+        # Fitting
+        seed=None,
         # Subsampling
         num_nodes=int(5e3),
+        subsample_seed=None,
         # End cast
-        seed=42,
         device=None,
         **kwargs,
     ):
@@ -34,7 +36,12 @@ class Preprocessing:
         self.pca_dim = pca_dim
         self.num_nodes = num_nodes
         self.seed = seed
+        self.subsample_seed = subsample_seed
         self.device = device
+
+        # Subsample random
+        if subsample_seed is not None: self.subsample_rng = np.random.default_rng(subsample_seed)
+        else: self.subsample_rng = np.random
 
         # Data
         self.is_sparse_transform = None
@@ -108,6 +115,13 @@ class Preprocessing:
                     n_components=dim,
                     random_state=self.seed).fit(m)
                 for m, m_sparse, dim in zip(modalities, self.is_sparse_transform, self.pca_dim)]
+            
+        # Records
+        self.modal_dims = [
+            modalities[i].shape[1]
+            if self.pca_dim[i] is None else
+            self.pca_dim[i]
+            for i in range(len(modalities))]
             
         return self
 
@@ -213,7 +227,6 @@ class Preprocessing:
         modalities=None,
         adata_obs=None,
         partition_cols=None,
-        seed=None,
         return_partition=False,
         **kwargs
     ):
@@ -269,12 +282,10 @@ class Preprocessing:
         
         # Subsample nodes
         if self.num_nodes is not None and np.array([ms > self.num_nodes for ms in modal_sizes]).all():
-            if seed is not None: rng = np.random.default_rng(seed)
-            else: rng = np.random
             if adata_obs is not None:
                 # Get all sample ids and choose some
                 sample_ids = np.unique(sum([adata_ob.index.to_list() for adata_ob in adata_obs], []))
-                choice = rng.choice(sample_ids, self.num_nodes)
+                choice = self.subsample_rng.choice(sample_ids, self.num_nodes)
                 # Get numerical index
                 # There has to be a better way, right?
                 series = [pd.Series(np.arange(adata_ob.shape[0]), adata_ob.index) for adata_ob in adata_obs]
@@ -284,7 +295,7 @@ class Preprocessing:
                 assert np.array([ms == modal_sizes[0] for ms in modal_sizes]), (
                     'Modalities must be aligned if `adata_obs` is not provided and '
                     '`num_samples` is not `None`')
-                node_idx = rng.choice(modal_sizes[0], self.num_nodes, replace=False)
+                node_idx = self.subsample_rng.choice(modal_sizes[0], self.num_nodes, replace=False)
                 node_idxs = [node_idx for _ in range(len(modal_sizes))]
 
             # Apply random selection
@@ -343,11 +354,11 @@ class PreprocessFromAnnData:
         memory_efficient='auto',  # Also works on in-memory datasets
         partition_cols=None,
         fit_sample='auto',
-        seed=42,
+        seed=None,
         **kwargs
     ):
         self.adatas = adatas
-        self.preprocessing = Preprocessing(**kwargs)
+        self.preprocessing = Preprocessing(**kwargs, seed=seed)
         self.seed = seed
 
         # Parameters
@@ -363,6 +374,10 @@ class PreprocessFromAnnData:
             fit_sample = int(1e4) if memory_efficient else None
         self.fit_sample = fit_sample
 
+        # Public parameters
+        self.num_modalities = len(adatas)
+        self.raw_modal_dims = [adata.var.shape[0] for adata in adatas]
+
         # Functions
         if memory_efficient:
             self.fit = self._fit_disk
@@ -372,6 +387,7 @@ class PreprocessFromAnnData:
             self.transform = self._transform_memory
         self.sample = self.transform
         self.fit()
+        self.modal_dims = self.preprocessing.modal_dims
 
     def get_transformables(self):
         adata_obs = [adata.obs for adata in self.adatas]
@@ -422,6 +438,7 @@ class PreprocessFromAnnData:
 
         # Fit preprocessing
         self.preprocessing.fit(modalities)
+        # print(self.preprocessing.transform([adata[adata.obs.index[[0]]].X for adata in self.adatas], force_filter=True))
 
     def _transform_disk(self, return_partition=False):
         adata_obs = [adata.obs for adata in self.adatas]
@@ -500,9 +517,9 @@ def split_state(
         # Random sample `num_nodes` to `max_nodes`
         if sample_strategy == 'random':
             # Filter nodes to `max_nodes` per idx
-            probs = torch.rand_like(node_mask, dtype=torch.get_default_dtype(), generator=generator)
+            probs = torch.empty_like(node_mask, dtype=torch.get_default_dtype()).normal_(generator=generator)
             probs[~node_mask] = 0
-            selected_idx = probs.argsort(dim=-1)[..., -num_nodes:]  # Take `num_nodes` highest values
+            selected_idx = probs.topk(num_nodes, dim=-1)[1]  # Take `num_nodes` highest values
 
             # Create new mask
             node_mask = torch.zeros((state.shape[0], state.shape[0]), dtype=torch.bool, device=device)
@@ -519,7 +536,7 @@ def split_state(
             dist[~node_mask] = -1  # Set self-dist lowest for case of ties
 
             # Select `max_nodes` closest
-            selected_idx = dist.argsort(dim=-1)[..., 1:num_nodes+1]
+            selected_idx = dist.topk(num_nodes+1, largest=False, dim=-1)[1][..., 1:]
             
             # Create new mask
             node_mask = torch.zeros((state.shape[0], state.shape[0]), dtype=torch.bool, device=device)
@@ -593,3 +610,33 @@ def dict_map_recursive_tensor_idx_to(dict, idx, device):
     # Apply and return (if needed)
     dict = dict_map(dict, lambda x: recursive_tensor_func(x, subfunc))
     return dict
+
+
+def sample_and_cast(
+    memory,
+    larger_data,
+    larger_size,
+    smaller_size,
+    *,
+    current_level,
+    load_level,
+    cast_level,
+    device,
+    sequential_num=None):
+    "Sample and/or cast based on load level and cast level"
+    smaller_data = None
+    if larger_size is not None and larger_data is not None:
+        if sequential_num is not None:
+            min_idx = sequential_num * smaller_size
+            max_idx = (sequential_num+1)*smaller_size
+            # smaller_idx = np.arange(min_idx, min(max_idx, larger_size))
+            smaller_idx = slice(min_idx, max_idx)
+        else: smaller_idx = np.random.choice(larger_size, smaller_size, replace=False)
+    if load_level == current_level:
+        smaller_data = memory.fast_sample(smaller_size)
+    elif load_level < current_level:
+        smaller_data = _utility.processing.dict_map_recursive_tensor_idx_to(larger_data, smaller_idx, None)
+    if cast_level == current_level:
+        smaller_data = _utility.processing.dict_map_recursive_tensor_idx_to(smaller_data, None, device)
+
+    return smaller_data

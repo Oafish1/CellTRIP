@@ -250,7 +250,7 @@ Compiling requirements
 python -m pip freeze -r requirements.in | sed '/@/d' > requirements.txt
 
 Run local
-python scripts/start_node.py --node-ip-address 100.64.246.20 --timeout -1
+python scripts/start_node.py --node-ip-address 100.64.246.20 --timeout -1 --cpu
 
 Run remote
 python scripts/start_node.py --address 100.64.246.20:6379 --node-ip-address 100.85.187.118 --gpus 1
@@ -258,7 +258,7 @@ python scripts/start_node.py --address 100.64.246.20:6379 --node-ip-address 100.
 Run train script
 python -u train.py &> train_log.txt
 
-Sync with remote
+Sync with remote (doesn't delete C code)
 rsync -v ~/repos/inept/!(*.tar) precision:~/repos/INEPT && \
 rsync -v ~/repos/inept/celltrip/* precision:~/repos/INEPT/celltrip && \
 rsync -v ~/repos/inept/celltrip/utility/* precision:~/repos/INEPT/celltrip/utility && \
