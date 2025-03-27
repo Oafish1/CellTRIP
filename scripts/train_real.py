@@ -252,7 +252,7 @@ def train(num_workers, updates, steps):
     # Return
     return workers
 
-workers = ray.get(train.remote(2, 50, 5e3))
+workers = ray.get(train.remote(1, 50, 5e3))
 # workers = ray.get(train.remote(2, 10, 9e4))
 
 

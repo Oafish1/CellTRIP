@@ -141,7 +141,8 @@ class AdvancedMemoryBuffer:
         # Clear vars
         self.clear_var_cache()
 
-    def fast_sample(self, num_memories, replay_frac=None, max_samples_per_state=None, shuffle=True):
+    def fast_sample(self, num_memories, replay_frac=None, max_samples_per_state=None, shuffle=False):
+        # NOTE: Shuffle should only be used when sequential sampling is taking place
         # Parameters
         if replay_frac is None: replay_frac = self.replay_frac
         if max_samples_per_state is None: max_samples_per_state = self.max_samples_per_state
