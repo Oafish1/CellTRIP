@@ -218,15 +218,15 @@ class PPO(nn.Module):
             epsilon_clip=.2,
             actor_lr=3e-4,
             critic_lr=1e-3,
-            lr_gamma=1,
+            lr_gamma=.99,
             # Forward
-            forward_batch_size=int(5e2),
+            forward_batch_size=int(5e4),
             vision_size=int(1e2),
             sample_strategy='random-proximity',
             sample_dim=None,
             reproducible_strategy='mean',
             # Backward
-            update_iterations=80,
+            update_iterations=80,  # Can also be 'auto'
             pool_size=None,
             epoch_size=None,
             batch_size=int(1e4),
@@ -379,12 +379,16 @@ class PPO(nn.Module):
     def update(
         self,
         memory,
+        update_iterations=None,
         verbose=False,
         # Collective args
         sync_epochs=5,
     ):
         # NOTE: The number of epochs is spread across `world_size` workers
         # NOTE: Assumes col.init_collective_group has already been called if world_size > 1
+        # Parameters
+        if update_iterations is None: update_iterations = self.update_iterations
+
         # Collective operations
         use_collective = col.is_group_initialized('default')
         world_size = 1 if not use_collective else col.get_collective_group_size()
@@ -407,7 +411,8 @@ class PPO(nn.Module):
         minibatch_size = int(min(minibatch_size, batch_size))
 
         # Get number of iterations
-        update_iterations = np.ceil(self.update_iterations/world_size).astype(int)
+        if update_iterations == 'auto': update_iterations = .5 * memory.get_new_len() // batch_size  # Scale by memory size
+        # update_iterations = np.ceil(update_iterations/world_size).astype(int)  # Scale by num workers
 
         # Cap at max size to reduce redundancy for sequential samples
         # NOTE: Pool->epoch is the only non-sequential sample, and is thus not included here
@@ -477,9 +482,7 @@ class PPO(nn.Module):
                 sync_loop = (iterations) % sync_epochs == 0
                 last_epoch = iterations == update_iterations
                 if use_collective and (sync_loop or last_epoch):
-                    for k, w in self.state_dict().items():
-                        col.allreduce(w)
-                        w /= world_size
+                    self.synchronize()
                 # if epoch_num == 9: print(self.state_dict())  # Check that weights are the same across nodes
 
                 # CLI
@@ -500,6 +503,18 @@ class PPO(nn.Module):
 
         # Return self
         return self
+
+    def synchronize(self, group='learners'):
+        # TODO: Maybe call scheduler twice if two updates are aggregated?
+        # Collective operations
+        use_collective = col.is_group_initialized('default')
+        world_size = 1 if not use_collective else col.get_collective_group_size()
+
+        # Sync
+        # NOTE: Optimizer momentum not synced
+        for k, w in self.state_dict().items():
+            col.allreduce(w, group)
+            w /= world_size
 
     def backward(
         self,

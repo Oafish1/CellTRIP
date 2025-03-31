@@ -4,67 +4,46 @@
 
 
 # %%
+import time
+
+import numpy as np
 import ray
 import ray.util.collective as col
+import ray.util.scheduling_strategies
 import torch
 
 import celltrip
 
 
-# %%
-ray.shutdown()
-ray.init(
-    address='ray://127.0.0.1:10001',
-    runtime_env={
-        'env_vars': {
-            'RAY_DEDUP_LOGS': '0',
-            # Irregular node fixes
-            # NOTE: Important, NCCL will timeout if network device is non-standard
-            # 'CUDA_LAUNCH_BLOCKING': '1',  # Slow, only for compatibility with X windows
-            # 'NCCL_SOCKET_IFNAME': 'tailscale',  # lo,en,wls,docker,tailscale
-            # 'NCCL_IB_DISABLE': '1',
-            # 'NCCL_CUMEM_ENABLE': '0',
-            # 'NCCL_DEBUG': 'INFO',
-        }
-    }
-)
-
+# %% [markdown]
+# # Worker Definition
 
 # %%
-def env_init(parent=False):
+def env_init(parent_dir=False):
     # Create dataloader
     fnames = ['./data/MERFISH/expression.h5ad', './data/MERFISH/spatial.h5ad']
-    if parent: fnames = ['.' + f for f in fnames]
+    if parent_dir: fnames = ['.' + f for f in fnames]
     partition_cols = None  # 'layer'
     adatas = celltrip.utility.processing.read_adatas(*fnames, on_disk=False)
     celltrip.utility.processing.test_adatas(*adatas, partition_cols=partition_cols)
     dataloader = celltrip.utility.processing.PreprocessFromAnnData(
-        *adatas, partition_cols=partition_cols, num_nodes=200, pca_dim=128, seed=42)
+        *adatas, partition_cols=partition_cols,  num_nodes=200,
+        pca_dim=128, seed=42)
     # modalities, adata_obs, adata_vars = dataloader.sample()
     # Return env
-    return celltrip.environment.EnvironmentBase(dataloader, dim=3, penalty_bound=1)
+    return celltrip.environment.EnvironmentBase(dataloader, dim=3, penalty_bound=1, reward_origin=0)
 
+# Default 25Gb Forward, 14Gb Update, at max capacity
 policy_init = lambda env: celltrip.policy.PPO(
-    2*env.dim, env.dataloader.modal_dims, env.dim) # update_iterations=2, minibatch_size=3e3,
+    2*env.dim, env.dataloader.modal_dims, env.dim,
+    forward_batch_size=int(5e5)) # update_iterations=2, minibatch_size=3e3,
 
 memory_init = lambda policy: celltrip.memory.AdvancedMemoryBuffer(
-    sum(policy.modal_dims), split_args=policy.split_args)  
+    sum(policy.modal_dims), split_args=policy.split_args)
 
 
 # %%
-# env = env_init(parent=True).to('cuda')
-# policy = policy_init(env).to('cuda')
-# memory = memory_init(policy)
-# celltrip.train.simulate_until_completion(policy, env, memory)
-# memory.propagate_rewards()
-# memory.normalize_rewards()
-# # for _ in range(5):
-# #     memory.append_memory(memory)
-# len(memory)
-# # memory.fast_sample(10_000, shuffle=False)
-
-# %%
-@ray.remote(num_gpus=1)
+@ray.remote(num_cpus=1e-4, num_gpus=1e-4)
 class Worker:
     def __init__(
         self,
@@ -73,6 +52,8 @@ class Worker:
         memory_init=lambda: None,
         world_size=1,
         rank=0,
+        learner=True,
+        parent=None,  # Policy parent worker ref
     ):
         # Detect device
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -82,23 +63,26 @@ class Worker:
         self.policy = policy_init(self.env).to(device)
         self.memory = memory_init(self.policy)
         self.rank = rank
+        self.learner = learner
+        self.parent = parent
 
         # World initialization
-        col.init_collective_group(world_size, rank, 'nccl')
+        if learner: col.init_collective_group(world_size, rank, 'nccl', 'learners')
+        if parent is None: col.init_collective_group(world_size, rank, 'nccl', 'heads')
 
         # Policy parameters
-        self.sync_policy()
         self.policy_iteration = 0
+        self.sync_policy(iterate_if_exclusive_runner=False)  # Works because non-heads will wait for head init
 
         # Memory parameters
         self.memory_buffer = []
 
     @celltrip.decorator.metrics(append_to_dict=True)
     # @celltrip.decorator.profile(time_annotation=True)
-    def rollout(self):
+    def rollout(self, **kwargs):
         # Perform rollout
         result = celltrip.train.simulate_until_completion(
-            self.policy, self.env, self.memory, dummy=False)
+            self.policy, self.env, self.memory, **kwargs)
         self.memory.propagate_rewards()
         env_nodes = self.env.num_nodes
         self.env.reset()
@@ -118,7 +102,7 @@ class Worker:
             'Itemized Reward': itemized_reward}
         return ret
 
-    def rollout_until_new(self, num_new, condition='steps'):
+    def rollout_until_new(self, num_new, condition='steps', **kwargs):
         # Parameters
         if condition == 'memories': measure = self.memory.get_new_len
         elif condition == 'steps': measure = self.memory.get_new_steps
@@ -127,7 +111,32 @@ class Worker:
         # Compute rollouts
         ret = []
         while measure() < num_new:
-            ret.append(self.rollout())
+            ret.append(self.rollout(**kwargs))
+        return ret
+    
+    @celltrip.decorator.metrics(append_to_dict=True)
+    # @celltrip.decorator.profile(time_annotation=True)
+    def update(self, **kwargs):
+        # Perform update
+        self.memory.normalize_rewards()
+        self.policy.update(self.memory, **kwargs, verbose=True)
+
+        # Annotate
+        self.policy_iteration += 1
+        num_new_memories = self.memory.get_new_len()
+        num_replay_memories = self.memory.get_replay_len()
+
+        # Clean
+        self.memory.mark_sampled()
+
+        # Record
+        ret = {
+            'Event Type': 'Update',
+            'Policy Iteration': self.policy_iteration,
+            'Rank': self.rank,
+            'New Memories': num_new_memories,
+            'Replay Memories': num_replay_memories,
+            'Total Memories': len(self.memory)}
         return ret
 
     @celltrip.decorator.metrics(append_to_dict=True, dict_index=1)
@@ -162,68 +171,123 @@ class Worker:
             'Rank': self.rank,
             'Memories': num_memories}
         return ret
-        
+    
+    def get_policy_state(self):
+        return celltrip.train.get_policy_state(self.policy)
+    
     @celltrip.decorator.metrics(append_to_dict=True)
-    # @celltrip.decorator.profile(time_annotation=True)
-    def update(self):
-        # Perform update
-        self.memory.normalize_rewards()
-        self.policy.update(self.memory, verbose=True)
+    def sync_policy(self, iterate_if_exclusive_runner=True):
+        # Copy policy
+        if self.parent is not None:
+            policy_state = ray.get(self.parent.get_policy_state.remote())
+            celltrip.train.set_policy_state(self.policy, policy_state)
+        else:
+            self.policy.synchronize('heads')
 
-        # Annotate
-        self.policy_iteration += 1
-        num_new_memories = self.memory.get_new_len()
-        num_replay_memories = self.memory.get_replay_len()
-
-        # Clean
-        self.memory.mark_sampled()
-        self.memory.cleanup()
+        # Iterate policy
+        if not self.learner and iterate_if_exclusive_runner:
+            self.policy_iteration += 1
+            self.memory.mark_sampled()
 
         # Record
-        # TODO: Fix num_* being incorrect (seems like `get_new_len` does half? Test others too)
         ret = {
-            'Event Type': 'Update',
+            'Event Type': 'Synchronize Policy',
             'Policy Iteration': self.policy_iteration,
             'Rank': self.rank,
-            'New Memories': num_new_memories,
-            'Replay Memories': num_replay_memories,
-            'Total Memories': len(self.memory)}
+            'Inherited': self.parent is not None}
         return ret
-    
-    def sync_policy(self):
-        world_size = col.get_collective_group_size()
-        for k, w in self.policy.state_dict().items():
-            col.allreduce(w)
-            w /= world_size
 
     def destroy(self):
         col.destroy_collective_group()
 
 
+# %% [markdown]
+# # Runtime
+
 # %%
-import time
-start = time.perf_counter()
+ray.shutdown()
+ray.init(
+    address='ray://127.0.0.1:10001',
+    runtime_env={
+        'env_vars': {
+            'RAY_DEDUP_LOGS': '0',
+            # Irregular node fixes
+            # NOTE: Important, NCCL will timeout if network device is non-standard
+            # 'CUDA_LAUNCH_BLOCKING': '1',  # Slow, only for compatibility with X windows
+            # 'NCCL_SOCKET_IFNAME': 'tailscale',  # lo,en,wls,docker,tailscale
+            # 'NCCL_IB_DISABLE': '1',
+            # 'NCCL_CUMEM_ENABLE': '0',
+            # 'NCCL_DEBUG': 'INFO',
+        }
+    }
+)
 
 
 # %%
 @ray.remote
-def train(num_workers, updates, steps):
-    workers = [Worker.remote(
-        policy_init, env_init, memory_init,
-        world_size=num_workers, rank=i) for i in range(num_workers)]
-    # TODO: Learners and workers, maybe multiple workers per learner?
+def train(
+    num_gpus,
+    num_learners,
+    num_runners,
+    learners_can_be_runners=True,
+    sync_across_nodes=True,
+    updates=50,
+    steps=int(5e3),
+    rollout_kwargs={},
+    update_kwargs={}):
+    # Make placement group for GPUs
+    pg_gpu = ray.util.placement_group(num_gpus*[{'CPU': 1, 'GPU': 1}])
+    ray.get(pg_gpu.ready(), timeout=10)
 
+    # Assign workers
+    num_learner_runners = min(num_learners, num_runners) if learners_can_be_runners else 0
+    num_exclusive_learners = num_learners - num_learner_runners if learners_can_be_runners else num_learners
+    num_exclusive_runners = num_runners - num_learner_runners
+    num_workers = num_exclusive_learners + num_learner_runners + num_exclusive_runners
+    num_head_workers = min(num_gpus, num_workers)
+    assert num_learners <= num_gpus, '`num_learners` cannot be greater than `num_gpus`.'
+
+    # Create workers
+    workers = []
+    for i in range(num_workers):
+        bundle_idx = i % num_head_workers
+        child_num = i // num_head_workers
+        rank = float(bundle_idx + child_num * 10**-(np.floor(np.log10((num_workers-1)//num_head_workers))+1))
+        parent = workers[bundle_idx] if i >= num_head_workers else None
+        w = (
+            Worker
+                .options(
+                    scheduling_strategy=ray.util.scheduling_strategies.PlacementGroupSchedulingStrategy(
+                        placement_group=pg_gpu, placement_group_bundle_index=bundle_idx))
+                .remote(
+                    policy_init, env_init, memory_init,
+                    world_size=num_head_workers, rank=rank,
+                    learner=i<num_learners, parent=parent))
+        workers.append(w)
+    learners = workers[:-num_exclusive_runners]
+    runners = workers[num_exclusive_learners:]
+    heads = workers[:num_head_workers]
+    non_heads = workers[num_head_workers:]
+
+    # Run policy updates
+    # TODO: Add/try async updates
+    # TODO: Maybe 80 epochs
     records = []
-    for _ in range(updates):
+    for policy_iteration in range(updates):
         # Rollouts
         num_records = len(records)
-        new_records = ray.get([w.rollout_until_new.remote(steps/num_workers) for w in workers])
+        if policy_iteration==0:
+            new_records = ray.get([w.rollout.remote(**rollout_kwargs, return_metrics=True) for w in runners])
+            records += new_records
+            for record in records[-(len(records)-num_records):]: print(record)
+        num_records = len(records)
+        new_records = ray.get([w.rollout_until_new.remote(num_new=steps/num_workers, **rollout_kwargs) for w in runners])
         records += sum(new_records, [])
         for record in records[-(len(records)-num_records):]: print(record)
 
         # Collect memories
         num_records = len(records)
-        ret = ray.get([w.send_memory.remote(new=True) for w in workers])
+        ret = ray.get([w.send_memory.remote(new=True) for w in runners])
         new_memories, new_records = [[r[i] for r in ret] for i in range(2)]
         records += new_records
         for record in records[-(len(records)-num_records):]: print(record)
@@ -231,9 +295,12 @@ def train(num_workers, updates, steps):
         # Broadcast memories
         num_records = len(records)
         new_records = []
-        for i, w in enumerate(workers):
-            new_memories_w = [ref for j, ref in enumerate(new_memories) if i!=j]
-            future = w.recv_memories.remote(new_memories=new_memories_w)
+        for i, w1 in enumerate(learners):
+            if sync_across_nodes:
+                new_memories_w1 = [ref for w2, ref in zip(runners, new_memories) if w1!=w2]
+            else:
+                new_memories_w1 = new_memories[num_head_workers+i::num_head_workers]
+            future = w1.recv_memories.remote(new_memories=new_memories_w1)
             new_records.append(future)
         new_records = ray.get(new_records)
         records += new_records
@@ -241,7 +308,15 @@ def train(num_workers, updates, steps):
 
         # Updates
         num_records = len(records)
-        new_records = ray.get([w.update.remote() for w in workers])
+        new_records = ray.get([w.update.remote(
+            **update_kwargs, return_metrics=policy_iteration==0) for w in learners])
+        records += new_records
+        for record in records[-(len(records)-num_records):]: print(record)
+
+        # Synchronize policies
+        num_records = len(records)
+        new_records = ray.get([w.sync_policy.remote() for w in heads])
+        new_records += ray.get([w.sync_policy.remote() for w in non_heads])
         records += new_records
         for record in records[-(len(records)-num_records):]: print(record)
 
@@ -252,23 +327,24 @@ def train(num_workers, updates, steps):
     # Return
     return workers
 
-workers = ray.get(train.remote(1, 50, 5e3))
-# workers = ray.get(train.remote(2, 10, 9e4))
-
-
-# %%
-# # Parameters
-# num_runners = 4
-# num_learners = 2
-
-# # Create placement groups
-# pg_runners = ray.util.placement_group(num_runners*[{'CPU': 1e-4, 'GPU': 1e-4}], strategy='SPREAD')
-# pg_learners = ray.util.placement_group(num_learners*[{'CPU': 1e-4, 'GPU': 1e-4}], strategy='STRICT_SPREAD')
-# ray.get([pg_runners.ready(), pg_learners.ready()], timeout=10)
-
-
-# %%
+start = time.perf_counter()
+# workers = ray.get(train.remote(2, 2, 4, rollout_kwargs={'dummy': True}, update_kwargs={'update_iterations': 5}))
+# workers = ray.get(train.remote(2, 2, 4, sync_across_nodes=False))  # sync_across_nodes=False
+workers = ray.get(train.remote(2, 1, 4))  # TODO: Adjust lr_gamma
 print(time.perf_counter() - start)
+
+
+# %%
+# env = env_init(parent_dir=True).to('cuda')
+# policy = policy_init(env).to('cuda')
+# memory = memory_init(policy)
+# celltrip.train.simulate_until_completion(policy, env, memory)
+# memory.propagate_rewards()
+# memory.normalize_rewards()
+# # for _ in range(5):
+# #     memory.append_memory(memory)
+# len(memory)
+# # memory.fast_sample(10_000, shuffle=False)
 
 
 

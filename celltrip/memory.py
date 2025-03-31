@@ -21,6 +21,7 @@ class AdvancedMemoryBuffer:
         # Sampling
         replay_frac=.25,
         max_samples_per_state=100,
+        shuffle=False,
         # Split
         split_args={},
         device='cpu',
@@ -33,6 +34,7 @@ class AdvancedMemoryBuffer:
         self.prune = prune
         self.replay_frac = replay_frac
         self.max_samples_per_state = max_samples_per_state
+        self.shuffle = shuffle
         self.split_args = split_args
         self.device = device
 
@@ -141,11 +143,12 @@ class AdvancedMemoryBuffer:
         # Clear vars
         self.clear_var_cache()
 
-    def fast_sample(self, num_memories, replay_frac=None, max_samples_per_state=None, shuffle=False):
+    def fast_sample(self, num_memories, replay_frac=None, max_samples_per_state=None, shuffle=None):
         # NOTE: Shuffle should only be used when sequential sampling is taking place
         # Parameters
         if replay_frac is None: replay_frac = self.replay_frac
         if max_samples_per_state is None: max_samples_per_state = self.max_samples_per_state
+        if shuffle is None: shuffle = self.shuffle
         num_replay_memories = int(replay_frac * num_memories)
         num_new_memories = num_memories - num_replay_memories
 

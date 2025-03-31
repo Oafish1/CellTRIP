@@ -1,3 +1,6 @@
+### 1.0.0+2025.3.31
+
+
 ### 1.0.0+2025.3.21
 - Change default caching for `AdvancedMemoryBuffer._append_suffix` back to True
 - Change default prune value for `AdvancedMemoryBuffer` to 0

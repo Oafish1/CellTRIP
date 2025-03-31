@@ -204,7 +204,8 @@ def simulate_until_completion(policy, env, memory=None, keys=None, dummy=False, 
             if dummy:
                 if memory and not finished:
                     # 1000 steps
-                    for _ in range(999): memory.append_memory({k: v[-1:] for k, v in memory.storage.items()})
+                    ep_timestep = int(1e3)
+                    for _ in range(ep_timestep-1): memory.append_memory({k: v[-1:] for k, v in memory.storage.items()})
                     memory.storage['is_terminals'][-1] = True
                 break
         
