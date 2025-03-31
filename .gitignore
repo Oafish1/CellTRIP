@@ -39,3 +39,4 @@ frame_*.png
 # Hidden
 **/hidden_*
 **/*_old.*
+**/*_old_*

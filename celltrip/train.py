@@ -1,19 +1,11 @@
 from collections import defaultdict
-import functools as ft
-import json
-import threading
-import time
-import warnings
 
 import numpy as np
 import ray
+import ray.util.collective as col
 import torch
 
-from . import decorator as _decorators
-from . import environment as _environment
-from . import memory as _memory
-from . import policy as _policy
-from . import utility as _utility
+from . import decorator as _decorator
 
 
 def get_policy_state(policy):
@@ -41,132 +33,6 @@ def set_device_recursive(state_dict, device):
             except:
                 pass
     return state_dict
-
-
-@ray.remote
-class PolicyManager:
-    def __init__(self, policy_init, memory_init):
-        self.policy = policy_init()
-        self.memory = memory_init(self.policy)
-        self.policy_iteration = 0
-        self.locks = {
-            'memory': threading.Lock(),
-            'state': threading.Lock()}
-        
-    def get_lock(self, lock_id):
-        if lock_id not in self.locks:
-            raise ValueError(f'Lock `{lock_id}` not found.')
-
-        return self.locks[lock_id].locked()
-
-    def lock(self, lock_id, val):
-        # NOTE: These locks are not failure-resilient
-        if lock_id not in self.locks:
-            raise ValueError(f'Lock `{lock_id}` not found.')
-
-        if val: self.locks[lock_id].acquire()
-        else:
-            if self.locks[lock_id].locked():
-                self.locks[lock_id].release()
-            else:
-                warnings.warn('Attempting to release unreserved lock', RuntimeWarning)
-
-        return val
-
-    def release_locks(self):
-        for lock_id in self.locks:
-            if self.locks[lock_id].locked():
-                self.locks[lock_id].release()
-
-    def get_policy_state(self):
-        return get_policy_state(self.policy)
-
-    def set_policy_state(self, state_dicts):
-        set_policy_state(self.policy, state_dicts)
-    
-    def get_policy_iteration(self):
-        return self.policy_iteration
-
-    def increment_policy(self):
-        self.policy_iteration += 1
-    
-    def get_memory_storage(self, persistent=True):
-        storage = self.memory.get_storage()
-        if not persistent: storage = storage[0]
-        return storage
-
-    def memory_func(self, func):
-        # Only use for len functions, others are explicit
-        return func(self.memory)
-
-    def append_memory(self, *args):
-        self.memory.append_memory(*args)
-        self.memory.propagate_rewards(normalize=False)
-
-    def mark_sampled_memory(self):
-        self.memory.mark_sampled()
-
-    def normalize_memory(self):
-        self.memory.normalize_rewards()
-
-    def clear_memory(self):
-        self.memory.clear()
-
-
-@ray.remote(max_calls=1)
-# @_decorators.print_ret
-@_decorators.metrics(append_to_dict=True)
-@_decorators.try_catch(
-    show_traceback=True,
-    fallback_ret={'Event Type': 'Rollout Failed'})
-@_decorators.call_on_exit
-@_decorators.profile
-def rollout_func(
-    policy_manager,
-    modalities,
-    policy_init,
-    env_init,
-    memory_init,
-    meta=None,
-    **kwargs,
-):
-    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-
-    # Bookkeeping
-    start_time = time.perf_counter()
-
-    # Load policy
-    policy = policy_init().to(device)
-    ray.get(policy_manager.lock.remote('state', True))
-    set_policy_state(policy, ray.get(policy_manager.get_policy_state.remote()))
-    policy_iteration = ray.get(policy_manager.get_policy_iteration.remote())
-    ray.get(policy_manager.lock.remote('state', False))
-
-    # Initialize env/memory
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        modalities = [torch.from_numpy(m).to(device) for m in modalities]  # Must be float32
-    env = env_init(policy, modalities)
-    memory = memory_init(policy)
-    
-    # Simulate
-    ep_timestep, ep_reward, ep_itemized_reward = simulate_until_completion(policy, env, memory, **kwargs)
-
-    # Append memories
-    ray.get(policy_manager.lock.remote('memory', True))
-    ray.get(policy_manager.append_memory.remote(*memory.get_storage()))
-    ray.get(policy_manager.lock.remote('memory', False))
-
-    # Aggregate performance
-    ret = {
-        'Event Type': 'Rollout',
-        'Policy Iteration': policy_iteration,
-        'Episode timesteps': ep_timestep,
-        'Episode reward': ep_reward,
-        'Episode itemized reward': ep_itemized_reward,
-        'Memories': len(memory)}
-    if meta is not None: ret = _utility.general.dict_entry(ret, meta)
-    return ret
 
 
 def simulate_until_completion(policy, env, memory=None, keys=None, dummy=False, verbose=False):
@@ -219,407 +85,275 @@ def simulate_until_completion(policy, env, memory=None, keys=None, dummy=False, 
     return ep_timestep, ep_reward, ep_itemized_reward
 
 
-@ray.remote(max_calls=1)
-# @_decorators.print_ret
-# @_decorators.metrics(append_to_dict=True)
-@_decorators.try_catch(
-    show_traceback=True,
-    fallback_ret={'Event Type': 'Update Failed'})
-@_decorators.call_on_exit
-# @_decorators.profile
-def update_func(
-    policy_manager,
-    policy_init,
-    memory_init,
-    num_gpus=0,
-    meta=None,
-    return_metrics=False,
-    **kwargs,
-):
-    # Lock memory and normalize rewards
-    ray.get(policy_manager.lock.remote('memory', True))
-    ray.get(policy_manager.normalize_memory.remote())
-
-    # Call collection
-    futures = []
-    use_gpu = num_gpus > 0
-    num_workers = max(1, np.ceil(num_gpus))
-    for i in range(num_workers):
-        futures.append(update_helper.options(num_cpus=1e-4, num_gpus=1*use_gpu).remote(
-            policy_manager, policy_init, memory_init,
-            world_size=num_workers, rank=i, **kwargs,
-            return_metrics=return_metrics))
-    try: ret_list = ray.get(futures)  # Block until completion
-    except: raise RuntimeError('One or more nodes in the collection failed.')
-    ret = ret_list[0]
-    if num_workers > 1:
-        for m in ret_list[1:]:
-            for k in ret: ret[k] = max(ret[k], m[k])
-
-    # Mark and unlock memory
-    # NOTE: Keep locked during update to prevent adding memories and rerun on crash without marking memories
-    ray.get(policy_manager.mark_sampled_memory.remote())
-    ray.get(policy_manager.lock.remote('memory', False))
-
-    # Format return
-    if meta is not None: ret = _utility.general.dict_entry(ret, meta)
-    return ret
-
-
-@ray.remote(max_calls=1)
-@_decorators.metrics(append_to_dict=True)
-def update_helper(policy_manager, policy_init, memory_init, world_size=1, rank=0, **kwargs):
-    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-
-    # Load policy
-    policy = policy_init().to(device)
-    ray.get(policy_manager.lock.remote('state', True))
-    set_policy_state(policy, ray.get(policy_manager.get_policy_state.remote()))
-    policy_iteration = ray.get(policy_manager.get_policy_iteration.remote())
-    ray.get(policy_manager.lock.remote('state', False))
-
-    # Load memory
-    memory = memory_init(policy)
-    memory.append_memory(
-        *ray.get(policy_manager.get_memory_storage.remote()))
-    memory_len = ray.get(policy_manager.memory_func.remote(lambda x: len(x)))
-    
-    # Perform backwards and update actor state
-    policy.update(memory, world_size=world_size, rank=rank, **kwargs)
-
-    # Update policy on root
-    if rank == 0:
-        ray.get(policy_manager.lock.remote('state', True))
-        policy_state = set_device_recursive(get_policy_state(policy), 'cpu')
-        ray.get(policy_manager.set_policy_state.remote(policy_state))
-        ray.get(policy_manager.increment_policy.remote())
-        ray.get(policy_manager.lock.remote('state', False))
-
-    # Format return
-    ret = {
-        'Event Type': 'Update',
-        'Policy Iteration': policy_iteration+1,
-        'Memories': memory_len}
-    return ret
-
-
-class DistributedManager:
+@ray.remote(num_cpus=1e-4, num_gpus=1e-4)
+class Worker:
+    """
+    Learner, runner, or both. Runs given environment and synchronizes
+    policy with other workers on updates given behavior implied by
+    parent worker.
+    """
     def __init__(
         self,
-        modalities=None,
-        env_init=None,
-        policy_init=None,
-        memory_init=None,
-        use_gpu=True,
-        max_jobs_per_gpu=2,
-        update_gpus=2,
+        policy_init,
+        env_init,
+        memory_init=lambda: None,
+        world_size=1,
+        rank=0,
+        learner=True,
+        parent=None,  # Policy parent worker ref
     ):
-        # Record
-        self.modalities = modalities
-        self.env_init = env_init
-        self.policy_init = policy_init
-        self.memory_init = memory_init
-        self.max_jobs_per_gpu = max_jobs_per_gpu
-        self.update_gpus = update_gpus
+        # Detect device
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-        # Initialize linalg
-        torch.inverse(torch.ones((1, 1), device='cpu'))
-
-        # Initialize ray
-        if not ray.is_initialized(): ray.init()
-
-        # Put policy and modalities in object store
-        # self.policy_ref = ray.put(zerocopy.extract_tensors(self.policy))
-        if modalities is not None: self.modalities = ray.put(modalities)  # Zero copy
-        self.policy_manager = PolicyManager.options(max_concurrency=int(1e3), num_cpus=1).remote(policy_init, memory_init)
-        
-        # Initialize futures list
-        self.futures = defaultdict(lambda: [])
-
-        # Initialize requirements
-        self.resources = {
-            'rollout': {
-                'core': {
-                    'num_cpus': 1e-4,
-                    'memory': 0,
-                    'num_gpus': 1*use_gpu},
-                'custom': {
-                    'VRAM': 0}},
-            'update': {
-                'core': {
-                    'num_cpus': 1e-4,
-                    'memory': 0,
-                    'num_gpus': (1*use_gpu)*update_gpus},
-                'custom': {
-                    'VRAM': 0}}}
-        
-    def get_requirements(self, key):
-        requirements = ft.reduce(lambda l,r: dict(**l, **r), self.resources[key].values(), {})
-        requirements['CPU'] = requirements.pop('num_cpus')
-        requirements['GPU'] = requirements.pop('num_gpus')
-
-        return requirements
-
-    def get_futures(self):
-        return self.futures
-
-    def get_all_futures(self, keys=None):
-        if not _utility.general.is_list_like(keys): keys = [keys]
-        keys = list(self.futures.keys()) if len(keys) == 1 and keys[0] is None else keys
-        return sum([self.futures[k] for k in keys], [])
-    
-    def memory_func(self, func):
-        return ray.get(self.policy_manager.memory_func.remote(func))
-
-    # Futures
-    def rollout(self, num_simulations=1, modalities=None, keys=None, env_init=None, **kwargs):
-        # Defaults
-        if modalities is None: modalities = self.modalities
-        if keys is None: keys = torch.arange(modalities[0].shape[0]).tolist()
-        if env_init is None: env_init = self.env_init
-        assert modalities is not None; assert env_init is not None
-
-        # Run forward on each worker to completion until a certain number of steps is reached
-        def exit_hook():
-            ray.get(self.policy_manager.release_locks.remote())
-            print('Escaped running rollout')
-        rollouts = [
-            rollout_func
-                .options(**self.resources['rollout']['core'], resources=self.resources['rollout']['custom'])
-                .remote(
-                    self.policy_manager,
-                    modalities,
-                    self.policy_init,
-                    env_init,
-                    self.memory_init,
-                    keys=keys,
-                    **kwargs,
-                    return_metrics=self.resources['rollout']['core']['memory']==0,
-                    exit_hook=exit_hook)
-            for _ in range(num_simulations)]
-        self.futures['rollout'] += rollouts
-
-        return rollouts
-        
-    def update(self, **kwargs):
-        # Run update
-        def exit_hook():
-            ray.get(self.policy_manager.release_locks.remote())
-            print('Escaped running update')
-        resources_core = self.resources['update']['core'].copy()
-        num_gpus = resources_core.pop('num_gpus')
-        updates = [
-            update_func  # **self.resources['update']['core']
-                .options(**resources_core, resources=self.resources['update']['custom'])
-                .remote(
-                    self.policy_manager,
-                    self.policy_init,
-                    self.memory_init,
-                    num_gpus=num_gpus,
-                    **kwargs,
-                    return_metrics=self.resources['update']['core']['memory']==0,
-                    exit_hook=exit_hook)]
-        self.futures['update'] += updates
-
-        return updates
-    
-    # Utility
-    def cancel(self, keys=None):
-        # Cancel futures
-        if not _utility.general.is_list_like(keys): keys = [keys]
-        keys = list(self.futures.keys()) if len(keys) == 1 and keys[0] is None else keys
-        # NOTE: Current escape behavior is to release all locks, regardless of holding
-        [ray.cancel(future) for future in self.get_all_futures(keys)]
-    
-    def calibrate(self, keys=None, memory_overhead=500*2**20, vram_overhead=500*2**20):
-        # Need to add overhead to account for PolicyManager and data on main thread
         # Parameters
-        if not _utility.general.is_list_like(keys): keys = [keys]
-        keys = list(self.futures.keys()) if len(keys) == 1 and keys[0] is None else keys
-        # Calibrate
-        for k in keys:
-            completed_futures, _ = ray.wait(self.futures[k], num_returns=len(self.futures[k]), timeout=0)
-            if len(completed_futures) > 0:
-                metrics = [m for m in ray.get(completed_futures) if 'memory' in m]
-                assert len(metrics) > 0, f'`{k}` future(s) were run without `return_metrics=True`'
-                self.resources[k]['core']['memory'], self.resources[k]['custom']['VRAM'] = max([m['memory'] for m in metrics]), max([m['VRAM'] for m in metrics])
-                self.resources[k]['core']['memory'] += memory_overhead
-                if self.resources[k]['custom']['VRAM'] != 0:
-                    self.resources[k]['custom']['VRAM'] += vram_overhead
-                    if k != 'update':
-                        self.resources[k]['core']['num_gpus'] = max(1e-4, 1./self.max_jobs_per_gpu)
+        self.env = env_init().to(device)
+        self.policy = policy_init(self.env).to(device)
+        self.memory = memory_init(self.policy)
+        self.rank = rank
+        self.learner = learner
+        self.parent = parent
 
-    def wait(self, keys=None, **kwargs):
-        if not _utility.general.is_list_like(keys): keys = [keys]
-        keys = list(self.futures.keys()) if len(keys) == 1 and keys[0] is None else keys
-        return ray.wait(self.get_all_futures(keys), **kwargs)[0]  # Wait for at least one completion, return all completions
+        # World initialization
+        if learner: col.init_collective_group(world_size, rank, 'nccl', 'learners')
+        if parent is None: col.init_collective_group(world_size, rank, 'nccl', 'heads')
+
+        # Policy parameters
+        self.policy_iteration = 0
+        self.sync_policy(iterate_if_exclusive_runner=False)  # Works because non-heads will wait for head init
+
+        # Memory parameters
+        self.memory_buffer = []
+
+    @_decorator.metrics(append_to_dict=True)
+    # @_decorator.profile(time_annotation=True)
+    def rollout(self, **kwargs):
+        # Perform rollout
+        result = simulate_until_completion(
+            self.policy, self.env, self.memory, **kwargs)
+        self.memory.propagate_rewards()
+        env_nodes = self.env.num_nodes
+        self.env.reset()
+
+        # Clean memory
+        self.memory.cleanup()
+
+        # Record
+        timestep, reward, itemized_reward = result
+        ret = {
+            'Event Type': 'Rollout',
+            'Policy Iteration': self.policy_iteration,
+            'Rank': self.rank,
+            'Timesteps': timestep,
+            'Memories': timestep*env_nodes,
+            'Reward': reward,
+            'Itemized Reward': itemized_reward}
+        return ret
+
+    def rollout_until_new(self, num_new, condition='steps', **kwargs):
+        # Parameters
+        if condition == 'memories': measure = self.memory.get_new_len
+        elif condition == 'steps': measure = self.memory.get_new_steps
+        else: raise ValueError(f'Condition `{condition}` not found.')
+
+        # Compute rollouts
+        ret = []
+        while measure() < num_new:
+            ret.append(self.rollout(**kwargs))
+        return ret
     
-    def clean(self, keys=None):
-        # Remove finished futures, will be used in the future for metrics
-        if not _utility.general.is_list_like(keys): keys = [keys]
-        keys = list(self.futures.keys()) if keys[0] is None else keys
-        for k in keys:
-            completed_futures, self.futures[k] = ray.wait(self.futures[k], num_returns=len(self.futures[k]), timeout=0)
+    @_decorator.metrics(append_to_dict=True)
+    # @_decorator.profile(time_annotation=True)
+    def update(self, **kwargs):
+        # Perform update
+        self.memory.normalize_rewards()
+        self.policy.update(self.memory, **kwargs, verbose=True)
 
-        return completed_futures
+        # Annotate
+        self.policy_iteration += 1
+        num_new_memories = self.memory.get_new_len()
+        num_replay_memories = self.memory.get_replay_len()
 
+        # Clean
+        self.memory.mark_sampled()
 
-def get_train_initializers(
-    env_dim, 
-    modal_dims, 
-    policy_kwargs={}, 
-    memory_kwargs={},
-):
-    # Policy function
-    policy_init = lambda: _policy.PPO(
-        positional_dim=2*env_dim,
-        modal_dims=modal_dims,
-        output_dim=env_dim,
-        update_minibatch=3e3,
-        device='cpu',
-        # epochs=5, memory_prune=0,  # Testing
-        **policy_kwargs)
-    # policy = policy_init(modalities)
-    # policy_init = lambda _: policy
+        # Record
+        ret = {
+            'Event Type': 'Update',
+            'Policy Iteration': self.policy_iteration,
+            'Rank': self.rank,
+            'New Memories': num_new_memories,
+            'Replay Memories': num_replay_memories,
+            'Total Memories': len(self.memory)}
+        return ret
 
-    # Memory function
-    memory_init = lambda policy: _memory.AdvancedMemoryBuffer(
-        sum(policy.modal_dims),
-        split_args=policy.split_args,
-        **memory_kwargs)
+    @_decorator.metrics(append_to_dict=True, dict_index=1)
+    def send_memory(self, **kwargs):
+        # Put in object store
+        mem = self.memory.get_storage(**kwargs)
+        ref = ray.put(mem)
+
+        # Record
+        ret = {
+            'Event Type': 'Send Memory',
+            'Rank': self.rank,
+            'Memories': sum([s.shape[0] for s in mem[0]['states']])}
+        return ref, ret
     
-    return policy_init, memory_init
+    @_decorator.metrics(append_to_dict=True)
+    # @_decorator.profile(time_annotation=True)
+    def recv_memories(self, new_memories):
+        # Append memories
+        num_memories = 0
+        for new_memory in new_memories:
+            new_memory = ray.get(new_memory)
+            self.memory.append_memory(*new_memory)
+            num_memories += sum([s.shape[0] for s in new_memory[0]['states']])
+
+        # Clean memory
+        self.memory.cleanup()
+
+        # Record
+        ret = {
+            'Event Type': 'Receive Memories',
+            'Rank': self.rank,
+            'Memories': num_memories}
+        return ret
+    
+    def get_policy_state(self):
+        return get_policy_state(self.policy)
+    
+    @_decorator.metrics(append_to_dict=True)
+    def sync_policy(self, iterate_if_exclusive_runner=True):
+        # Copy policy
+        if self.parent is not None:
+            policy_state = ray.get(self.parent.get_policy_state.remote())
+            set_policy_state(self.policy, policy_state)
+        else:
+            self.policy.synchronize('heads')
+
+        # Iterate policy
+        if not self.learner and iterate_if_exclusive_runner:
+            self.policy_iteration += 1
+            self.memory.mark_sampled()
+
+        # Record
+        ret = {
+            'Event Type': 'Synchronize Policy',
+            'Policy Iteration': self.policy_iteration,
+            'Rank': self.rank,
+            'Inherited': self.parent is not None}
+        return ret
+
+    def destroy(self):
+        col.destroy_collective_group()
 
 
-def train_policy(
-    distributed_manager,
-    dataloader,
-    update_trigger='steps',
-    update_threshold=int(5e3),
-    refresh_interval=2,
-    # Kwargs
-    # environment_kwargs={},
+@ray.remote
+def train_celltrip(
+    num_gpus,
+    num_learners,
+    num_runners,
+    initializers,
+    learners_can_be_runners=True,
+    sync_across_nodes=True,
+    updates=50,
+    steps=int(5e3),
     rollout_kwargs={},
-    update_kwargs={},
-):
+    update_kwargs={}):
+    """
+    Train CellTRIP model to completion with given parameters and
+    cluster layout.
+    """
     # Parameters
-    assert update_trigger in ('memories', 'steps'), f'Update trigger "{update_trigger}" not found.'
-    dm = distributed_manager
+    policy_init, env_init, memory_init = initializers
 
-    # Make env init function
-    env_init = lambda policy, modalities: _environment.EnvironmentBase(
-        *modalities,
-        dim=policy.output_dim,
-        # max_timesteps=1e2,
-        penalty_bound=1,
-        device=policy.device)
+    # Make placement group for GPUs
+    pg_gpu = ray.util.placement_group(num_gpus*[{'CPU': 1, 'GPU': 1}])
+    ray.get(pg_gpu.ready(), timeout=10)
 
-    # Train loop iter
-    max_rollout_futures = 16
-    records = []; cluster_resources = {}
-    while True:
-        # Initialize messages
-        messages = []
+    # Assign workers
+    num_learner_runners = min(num_learners, num_runners) if learners_can_be_runners else 0
+    num_exclusive_learners = num_learners - num_learner_runners if learners_can_be_runners else num_learners
+    num_exclusive_runners = num_runners - num_learner_runners
+    num_workers = num_exclusive_learners + num_learner_runners + num_exclusive_runners
+    num_head_workers = min(num_gpus, num_workers)
+    assert num_learners <= num_gpus, '`num_learners` cannot be greater than `num_gpus`.'
 
-        # Retrieve active futures
-        futures = dm.get_futures()
-        num_futures = len(dm.get_all_futures())
+    # Create workers
+    workers = []
+    for i in range(num_workers):
+        bundle_idx = i % num_head_workers
+        child_num = i // num_head_workers
+        rank = float(bundle_idx + child_num * 10**-(np.floor(np.log10((num_workers-1)//num_head_workers))+1))
+        parent = workers[bundle_idx] if i >= num_head_workers else None
+        w = (
+            Worker
+                .options(
+                    scheduling_strategy=ray.util.scheduling_strategies.PlacementGroupSchedulingStrategy(
+                        placement_group=pg_gpu, placement_group_bundle_index=bundle_idx))
+                .remote(
+                    policy_init, env_init, memory_init,
+                    world_size=num_head_workers, rank=rank,
+                    learner=i<num_learners, parent=parent))
+        workers.append(w)
+    learners = workers[:-num_exclusive_runners]
+    runners = workers[num_exclusive_learners:]
+    heads = workers[:num_head_workers]
+    non_heads = workers[num_head_workers:]
+
+    # Run policy updates
+    # TODO: Maybe add/try async updates
+    records = []
+    for policy_iteration in range(updates):
+        # Rollouts
         num_records = len(records)
+        if policy_iteration==0:
+            new_records = ray.get([w.rollout.remote(**rollout_kwargs, return_metrics=True) for w in runners])
+            records += new_records
+            for record in records[-(len(records)-num_records):]: print(record)
+        num_records = len(records)
+        new_records = ray.get([w.rollout_until_new.remote(num_new=steps/num_workers, **rollout_kwargs) for w in runners])
+        records += sum(new_records, [])
+        for record in records[-(len(records)-num_records):]: print(record)
 
-        # Scan for differences in cluster configuration
-        new_cluster_resources = ray.cluster_resources()
-        resources = [cluster_resources, new_cluster_resources]
-        for k in (sum(map(list, resources), [])):
-            condition = np.array([k in res for res in resources]).all()
-            if condition: condition = cluster_resources[k] == new_cluster_resources[k]
-            if not condition:
-                records.append(
-                    {'Event Type': 'Cluster', 'Configuration': new_cluster_resources})
-                break
-        cluster_resources = new_cluster_resources
+        # Collect memories
+        num_records = len(records)
+        ret = ray.get([w.send_memory.remote(new=True) for w in runners])
+        new_memories, new_records = [[r[i] for r in ret] for i in range(2)]
+        records += new_records
+        for record in records[-(len(records)-num_records):]: print(record)
 
-        ## CHECK COMPLETED FUTURES
-        # Calibrate updates
-        # TODO: Add case where update or rollout doesn't have enough resources to run
-        if len(ray.wait(futures['update'], timeout=0)[0]) > 0:
-            # Calibrate if needed
-            if dm.get_requirements('update')['memory'] == 0:
-                dm.calibrate('update')
-                messages.append(
-                    f'Calibrated update'
-                    f' memory ({dm.get_requirements("update")["memory"] / 2**30:.2f} GiB)'
-                    f' and VRAM ({dm.get_requirements("update")["VRAM"] / 2**30:.2f} GiB)')
-            if dm.get_requirements('update')['memory'] != 0:
-                records += ray.get(dm.clean('update'))
+        # Broadcast memories
+        num_records = len(records)
+        new_records = []
+        for i, w1 in enumerate(learners):
+            if sync_across_nodes:
+                new_memories_w1 = [ref for w2, ref in zip(runners, new_memories) if w1!=w2]
+            else:
+                new_memories_w1 = new_memories[num_head_workers+i::num_head_workers]
+            future = w1.recv_memories.remote(new_memories=new_memories_w1)
+            new_records.append(future)
+        new_records = ray.get(new_records)
+        records += new_records
+        for record in records[-(len(records)-num_records):]: print(record)
 
-        # Calibrate rollouts
-        if len(ray.wait(futures['rollout'], timeout=0)[0]) > 0:
-            # Calibrate if needed
-            all_variants_run = True  # TODO: Set to true if all partitions have been run
-            if dm.resources['rollout']['core']['memory'] == 0 and all_variants_run:
-                dm.calibrate('rollout')
-                messages.append(
-                    f'Calibrated rollout'
-                    f' memory ({dm.get_requirements("rollout")["memory"] / 2**30:.2f} GiB)'
-                    f' and VRAM ({dm.get_requirements("rollout")["VRAM"] / 2**30:.2f} GiB)')
-            # Clean if calibrated (TODO: Record somewhere)
-            if dm.get_requirements('rollout')['memory'] != 0:
-                records += ray.get(dm.clean('rollout'))
+        # Updates
+        num_records = len(records)
+        new_records = ray.get([w.update.remote(
+            **update_kwargs, return_metrics=policy_iteration==0) for w in learners])
+        records += new_records
+        for record in records[-(len(records)-num_records):]: print(record)
 
-        ## ADD FUTURES
-        # Compute feasibility of futures
-        available_resources = ray.available_resources()
-        rollout_feasible = np.array([
-            v <= available_resources[k]
-            if k in available_resources else False
-            for k, v in dm.get_requirements('rollout').items()]).all()
-        update_feasible = np.array([
-            v <= available_resources[k]
-            if k in available_resources else False
-            for k, v in dm.get_requirements('update').items()]).all()
+        # Synchronize policies
+        num_records = len(records)
+        new_records = ray.get([w.sync_policy.remote() for w in heads])
+        new_records += ray.get([w.sync_policy.remote() for w in non_heads])
+        records += new_records
+        for record in records[-(len(records)-num_records):]: print(record)
 
-        # Checks for update
-        run_update = update_feasible
-        run_update *= len(futures['update']) == 0
-        if update_trigger == 'memories': update_above_threshold = dm.memory_func(lambda x: x.get_new_len()) >= update_threshold
-        elif update_trigger == 'steps': update_above_threshold = dm.memory_func(lambda x: x.get_new_steps()) >= update_threshold
-        run_update *= update_above_threshold
+    # Destroy
+    # workers[0].destroy.remote()
+    # [ray.kill(w) for w in workers]
 
-        # Checks for rollout
-        run_rollout = rollout_feasible
-        run_rollout *= len(futures['update']) == 0
-        run_rollout *= not update_above_threshold
-        run_rollout *= num_futures < max_rollout_futures
-
-        # Run update or rollout
-        # NOTE: Will roll out far too many and throw unexpected errors if IPs are set wrong
-        if run_update: 
-            return
-            dm.update(**update_kwargs)
-        elif run_rollout:
-            modalities, adata_obs, adata_vars, partition = dataloader.sample(return_partition=True)
-            dm.rollout(
-                modalities=modalities,
-                keys=adata_obs[0].index.to_numpy(),
-                env_init=env_init,
-                meta={'Partition': partition},
-                **rollout_kwargs)
-
-        # Nothing running warning
-        if not num_futures and not run_rollout and not run_update:
-            warnings.warn(
-                'Nothing running and no runs feasible! If this warning persists,'
-                ' please check your server configuration.', RuntimeWarning)
-
-        # Print new records
-        new_records = len(records) - num_records
-        if new_records:
-            for rec in records[-new_records:]:
-                print(rec)
-        for m in messages: print(m)
-
-        # Escape
-        if ray.get(dm.policy_manager.get_policy_iteration.remote()) >= 50: break
-
-        # Wait to scan again
-        time.sleep(refresh_interval)
+    # Return
+    return workers

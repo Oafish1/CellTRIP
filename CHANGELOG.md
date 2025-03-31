@@ -1,5 +1,67 @@
 ### 1.0.0+2025.3.31
-
+- General
+  - Additional profiling handling
+  - Cleanup and file organization
+  - Command hints in developer notes
+  - Cross-node synchronization commands using `rsync`
+  - Gitignore additions
+  - Profiling and optimization all around
+- Advanced memory buffer
+  - Add `clean_keys` function to remove unused keys - useful for large datasets
+  - Add `mark_sampled` function to mark all present states as sampled
+  - Add `normalize_rewards` function, replacing running normalization for compatibility with distributed implementation
+  - Add shuffling to `fast_sample`
+  - Aggressive culling optimization and replacement of naïve approaches
+  - Attribute computation and retrieval functions for new/replay steps/memories
+  - Cache cleanup wherever optimal
+  - Change default `prune` value to 0 states
+  - Fixes for fp-resistant equivalence testing for key suffix storage
+  - Internal function rearrangement for readability
+  - Memory appending checks and fixes
+  - Mixed new/replay sampling for `fast_sample`
+  - New storage values to reduce redundant computations
+  - Optimization and storage update for `propagate_rewards`, including avoidance of recalculation
+  - Optimization of `_append_suffix` function
+  - Optimization of sampling and sampling size - 10,000 appears near-optimal
+  - QOL default parameter rearrangement to initialization command
+  - Rolling memory buffer with reservoir sampling for replacing replay memories
+  - Statistic and variable caching to speed up common calls
+  - Storage for precomputed propagated and normalized values, as well as pruned states
+  - Various cleanup functions for reduction of memory footprint
+  - Warning for large amounts of unique key combinations in the buffer
+  - Warnings and errors for inappropriate sampling, pruning, and culling
+- Dataloader and Preprocessing
+  - Additional public variables for easier compatibility testing
+  - Seeding fix for `Preprocessing` when initialized in `PreprocessFromAnnData`
+  - Separate seeding for sampling and fitting
+- Decorators
+  - Add time annotation to `profile` output
+  - Bugfix for `profile` naming with variable fnames
+  - Extended return format handling for `metrics`
+- Distributed training
+  - Better handling of memory addition for `train.simulate_until_completion`
+  - Changes to `start_node` script, including many compatibility arguments, GPU selection, non-separation of GPUs on the same machine, and reliable timeouts and blocking
+  - Entirely rewrite distributed implementation to use RLLib-esque learner-runner architecture
+  - Greater than 5-fold reduction in time spent training through optimization and locality
+  - Hyperparameter tuning for policy and memory for most efficient training
+  - Mandatory local data loading for each node
+  - Modular number of learners, learner-runners, and runners
+  - Move to synchronous update architecture - pending revision
+  - Placement groups to ensure locality to head workers, which synchronize policy weights between nodes and GPUs
+- Environment
+  - Casting capability
+  - Dataloader compatibility
+  - Key storage
+- Policy
+  - Add `update_iterations='auto'` (formerly `epochs`)
+  - Add helper functions `synchronize`, `backward`, and `utility.processing.sample_and_cast`
+  - Adjust `lr_gamma` from `1` to `.99`
+  - Adjust default load level
+  - Readability cleanup of forward functions
+  - Remove collective initialization from `update` function
+  - Rename several initialization arguments for more explicit descriptions
+  - Research into entropy function - has no current backward as it is computed on old policy
+  - Revise sampling strategy to `pool, epoch, batch, minibatch` with more consistent terminology (formerly `maxbatch, batch, minibatch`)
 
 ### 1.0.0+2025.3.21
 - Change default caching for `AdvancedMemoryBuffer._append_suffix` back to True

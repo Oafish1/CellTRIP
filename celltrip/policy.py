@@ -5,7 +5,6 @@ from torch.distributions.multivariate_normal import MultivariateNormal
 import torch.nn as nn
 import torch.nn.functional as F
 
-from . import decorator as _decorator
 from . import utility as _utility
 
 

@@ -1,15 +1,10 @@
-import asyncio
 import cProfile
-import inspect
-import json
 import sys
 import time
 import traceback
 import tracemalloc
 
 import torch
-
-from . import utility as _utility
 
 
 def try_catch(_func=None, show_traceback=False, fallback_ret=None):
