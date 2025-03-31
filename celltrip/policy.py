@@ -51,8 +51,6 @@ class ResidualSA(nn.Module):
         return x
 
 
-
-
 ### Policy classes
 class EntitySelfAttention(nn.Module):
     def __init__(
@@ -145,7 +143,6 @@ class EntitySelfAttention(nn.Module):
         node_entities = self.embed_features(node_entities)
 
         # Self embedding
-        # print(self.self_embed.state_dict())
         self_embed = self.self_embed(self_entity).unsqueeze(-2)  # This has blown up with multi-gpu backward
         self_embed = self.layer_norm['self embedding'](self_embed)
         self_embed = self.activation(self_embed)
@@ -212,28 +209,29 @@ class PPO(nn.Module):
             positional_dim,
             modal_dims,
             output_dim,
+            # Model Parameters
             model=EntitySelfAttention,
             action_std_init=.6,
             action_std_decay=.05,
             action_std_min=.15,
-            epochs=80,
             epsilon_clip=.2,
-            memory_gamma=.95,
-            memory_prune=100,
             actor_lr=3e-4,
             critic_lr=1e-3,
-            lr_gamma=1,
-            max_batch=int(5e2),
-            max_nodes=int(1e2),
+            lr_gamma=.99,
+            # Forward
+            forward_batch_size=int(5e4),
+            vision_size=int(1e2),
             sample_strategy='random-proximity',
             sample_dim=None,
             reproducible_strategy='mean',
-            update_maxbatch=None,
-            update_batch=int(1e4),
-            update_minibatch=int(1e4),
-            update_load_level='batch',
-            update_cast_level='minibatch',
-            # rs_nset=1e5,
+            # Backward
+            update_iterations=80,  # Can also be 'auto'
+            pool_size=None,
+            epoch_size=None,
+            batch_size=int(1e4),
+            minibatch_size=int(1e4),
+            load_level='batch',
+            cast_level='minibatch',
             device='cpu',
             **kwargs,
     ):
@@ -248,26 +246,25 @@ class PPO(nn.Module):
         self.action_std = action_std_init
         self.action_std_decay = action_std_decay
         self.action_std_min = action_std_min
-        self.epochs = epochs
         self.epsilon_clip = epsilon_clip
-        self.memory_gamma = memory_gamma
-        self.memory_prune = memory_prune
 
         # Runtime management
-        self.max_batch = max_batch
+        self.forward_batch_size = forward_batch_size
         # NOTE: Assumes output corresponds to positional dims if not explicitly provided
         if sample_dim is None: sample_dim = output_dim
         self.split_args = {
-            'max_nodes': max_nodes,
+            'max_nodes': vision_size,
             'sample_strategy': sample_strategy,
             'reproducible_strategy': reproducible_strategy,
             'sample_dim': sample_dim,
         }
-        self.update_maxbatch = update_maxbatch
-        self.update_batch = update_batch
-        self.update_minibatch = update_minibatch
-        self.update_load_level = update_load_level
-        self.update_cast_level = update_cast_level
+        self.update_iterations = update_iterations
+        self.pool_size = pool_size
+        self.epoch_size = epoch_size
+        self.batch_size = batch_size
+        self.minibatch_size = minibatch_size
+        self.load_level = load_level
+        self.cast_level = cast_level
         self.device = device
 
         # New policy
@@ -323,7 +320,7 @@ class PPO(nn.Module):
         if return_all: return action, action_log, state_val
         return action
 
-    def act_macro(self, state, *, keys=None, memory=None, max_batch=None):
+    def act_macro(self, state, *, keys=None, memory=None, forward_batch_size=None):
         # Data Checks
         assert state.shape[0] > 0, 'Empty state matrix passed'
         if keys is not None: assert len(keys) == state.shape[0], (
@@ -332,22 +329,18 @@ class PPO(nn.Module):
         )
             
         # Defaults
-        if max_batch is None: max_batch = self.max_batch
+        if forward_batch_size is None: forward_batch_size = self.forward_batch_size
 
         # Act
-        if max_batch is not None:
+        if forward_batch_size is not None:
             # Compute `max_batch` at a time with randomized `max_nodes`
             initialized = False
-            for start_idx in range(0, state.shape[0], max_batch):
-                action_sub, action_log_sub, state_val_sub = self.act(
-                    *_utility.processing.split_state(
-                        state,
-                        idx=list( range(start_idx, min(start_idx+max_batch, state.shape[0])) ),
-                        **self.split_args,
-                    ),
-                    return_all=True,
-                )
-                # TODO (Major): Record the split for use during update
+            for start_idx in range(0, state.shape[0], forward_batch_size):
+                state_split = _utility.processing.split_state(
+                    state,
+                    idx=list( range(start_idx, min(start_idx+forward_batch_size, state.shape[0])) ),
+                    **self.split_args)
+                action_sub, action_log_sub, state_val_sub = self.act(*state_split, return_all=True)
 
                 # Concat
                 if not initialized:
@@ -385,182 +378,178 @@ class PPO(nn.Module):
     def update(
         self,
         memory,
-        fast_sample=True,
+        update_iterations=None,
         verbose=False,
         # Collective args
-        world_size=1,
-        rank=0,
         sync_epochs=5,
     ):
         # NOTE: The number of epochs is spread across `world_size` workers
-        # Collective operations
-        use_collective = world_size > 1
-        if use_collective:
-            col_backend = 'nccl' if self.device != 'cpu' else 'gloo'
-            col.init_collective_group(world_size, rank, col_backend, 'update')
+        # NOTE: Assumes col.init_collective_group has already been called if world_size > 1
+        # Parameters
+        if update_iterations is None: update_iterations = self.update_iterations
 
-        # Calculate rewards
-        rewards = memory.propagate_rewards(gamma=self.memory_gamma, prune=self.memory_prune)
-        if self.memory_prune is not None: rewards, rewards_mask, rewards_list_mask = rewards
-        else: rewards_mask = torch.ones(len(rewards), dtype=bool)
-        rewards, rewards_mask = rewards.detach(), rewards_mask.detach()
+        # Collective operations
+        use_collective = col.is_group_initialized('default')
+        world_size = 1 if not use_collective else col.get_collective_group_size()
 
         # Batch parameters
-        level_dict = {'maxbatch': 0, 'batch': 1, 'minibatch': 2}
-        load_level = level_dict[self.update_load_level]  # 0, 1, 2 : max, batch, mini
-        cast_level = level_dict[self.update_cast_level]  # 0, 1, 2 : max, batch, mini
+        level_dict = {'pool': 0, 'epoch': 1, 'batch': 2, 'minibatch': 3}
+        load_level = level_dict[self.load_level]
+        cast_level = level_dict[self.cast_level]
         assert cast_level >= load_level, 'Cannot cast without first loading'
 
-        # Determine batch sizes
-        memory_size = rewards_mask.sum()
-        maxbatch_size = self.update_maxbatch if self.update_maxbatch is not None else memory_size
-        maxbatch_size = int(min(maxbatch_size, memory_size))
-        batch_size = self.update_batch if self.update_batch is not None else maxbatch_size
-        batch_size = int(min(batch_size, maxbatch_size))
-        minibatch_size = self.update_minibatch if self.update_minibatch is not None else batch_size
+        # Determine level sizes
+        memory_size = len(memory)
+        pool_size = self.pool_size if self.pool_size is not None else memory_size
+        pool_size = int(min(pool_size, memory_size))
+        epoch_size = self.epoch_size if self.epoch_size is not None else pool_size
+        epoch_size = int(min(epoch_size, pool_size))
+        batch_size = self.batch_size if self.batch_size is not None else epoch_size
+        batch_size = int(min(batch_size, epoch_size))
+        minibatch_size = self.minibatch_size if self.minibatch_size is not None else batch_size
         minibatch_size = int(min(minibatch_size, batch_size))
 
-        # Load maxbatch
-        maxbatch_idx = np.random.choice(
-            np.arange(len(memory))[rewards_mask],  # Only consider states which have rewards with significant future samples
-            maxbatch_size,
-            replace=False,
-        )
-        maxbatch_absolute_idx = maxbatch_idx
-        if load_level == 0:
-            if not fast_sample:
-                maxbatch_data = memory[maxbatch_absolute_idx]
-            else:
-                maxbatch_data, maxbatch_absolute_idx = memory.fast_sample(maxbatch_size, rewards_list_mask)
-            maxbatch_rewards = rewards[maxbatch_absolute_idx]
-        if cast_level == 0:
-            maxbatch_data = _utility.processing.dict_map_recursive_tensor_idx_to(maxbatch_data, None, self.device)
-            maxbatch_rewards = maxbatch_rewards.to(self.device)
+        # Get number of iterations
+        if update_iterations == 'auto': update_iterations = .5 * memory.get_new_len() // batch_size  # Scale by memory size
+        # update_iterations = np.ceil(update_iterations/world_size).astype(int)  # Scale by num workers
+
+        # Cap at max size to reduce redundancy for sequential samples
+        # NOTE: Pool->epoch is the only non-sequential sample, and is thus not included here
+        max_unique_memories = batch_size * update_iterations
+        epoch_size = min(epoch_size, max_unique_memories)
+
+        # Load pool
+        pool_data = _utility.processing.sample_and_cast(
+            memory, None, None, pool_size,
+            current_level=0, load_level=load_level, cast_level=cast_level,
+            device=self.device)
 
         # Train
-        epochs = np.ceil(self.epochs/world_size).astype(int)
-        for epoch_num in range(epochs):
-            # Metrics
-            epoch_ppo = 0
-            epoch_critic = 0
-            epoch_entropy = 0
+        iterations = 0
+        while True:
+            # Load epoch
+            epoch_data = _utility.processing.sample_and_cast(
+                memory, pool_data, pool_size, epoch_size,
+                current_level=1, load_level=load_level, cast_level=cast_level,
+                device=self.device)
+            batches = np.ceil(epoch_size/batch_size).astype(int) if epoch_data is not None else 1
+            for batch_num in range(batches):
+                # Load batch
+                batch_loss = batch_ppo = batch_critic = batch_entropy = 0
+                batch_data = _utility.processing.sample_and_cast(
+                    memory, epoch_data, epoch_size, batch_size,
+                    current_level=2, load_level=load_level, cast_level=cast_level,
+                    device=self.device, sequential_num=batch_num)
+                minibatches = np.ceil(batch_size/minibatch_size).astype(int) if batch_data is not None else 1
+                for minibatch_num in range(minibatches):
+                    # Load minibatch
+                    minibatch_data = _utility.processing.sample_and_cast(
+                        memory, batch_data, batch_size, minibatch_size,
+                        current_level=3, load_level=load_level, cast_level=cast_level,
+                        device=self.device, sequential_num=minibatch_num)
 
-            # Load batch
-            batch_idx = np.random.choice(maxbatch_size, batch_size, replace=False)
-            batch_absolute_idx = maxbatch_absolute_idx[batch_idx]
-            if load_level == 1:
-                if not fast_sample:
-                    batch_data = memory[batch_absolute_idx]
-                else:
-                    batch_data, batch_absolute_idx = memory.fast_sample(batch_size, rewards_list_mask)
-                batch_rewards = rewards[batch_absolute_idx]
-            elif load_level < 1:
-                batch_data = _utility.processing.dict_map_recursive_tensor_idx_to(maxbatch_data, batch_idx, None)
-                batch_rewards = maxbatch_rewards[batch_idx]
-            if cast_level == 1:
-                batch_data = _utility.processing.dict_map_recursive_tensor_idx_to(batch_data, None, self.device)
-                batch_rewards = batch_rewards.to(self.device)
+                    # Get subset data
+                    states = minibatch_data['states']
+                    actions = minibatch_data['actions']
+                    action_logs = minibatch_data['action_logs']
+                    state_vals = minibatch_data['state_vals']
+                    rewards = minibatch_data['normalized_rewards']
 
-            # Gradient accumulation
-            for _, min_idx in enumerate(range(0, batch_size, minibatch_size)):
-                # Load minibatch
-                max_idx = min(min_idx + minibatch_size, batch_size)
-                minibatch_idx = np.arange(min_idx, max_idx)
-                minibatch_absolute_idx = batch_absolute_idx[minibatch_idx]
-                if load_level == 2:
-                    if not fast_sample:
-                        minibatch_data = memory[minibatch_absolute_idx]
-                    else:
-                        minibatch_data, minibatch_absolute_idx = memory.fast_sample(minibatch_size, rewards_list_mask)
-                    minibatch_rewards = rewards[minibatch_absolute_idx]
-                if load_level < 2:
-                    minibatch_data = _utility.processing.dict_map_recursive_tensor_idx_to(batch_data, minibatch_idx, None)
-                    minibatch_rewards = batch_rewards[minibatch_idx]
-                if cast_level == 2:
-                    minibatch_data = _utility.processing.dict_map_recursive_tensor_idx_to(minibatch_data, None, self.device)
-                    minibatch_rewards = minibatch_rewards.to(self.device)
+                    # Perform backward
+                    loss, loss_PPO, loss_critic, loss_entropy = self.backward(
+                        states, actions, action_logs, state_vals, rewards)
 
-                # Erase grad (Not needed, but included to be careful)
-                # minibatch_data = _utility.processing.dict_map(minibatch_data, lambda x: _utility.processing.recursive_tensor_func(x, lambda y: y.detach().requires_grad_()), inplace=True)
-                # minibatch_rewards = minibatch_rewards.detach().requires_grad_()
+                    # Scale and calculate gradient
+                    accumulation_frac = rewards.shape[0] / batch_size
+                    loss = loss * accumulation_frac
+                    loss.backward()  # Longest computation
 
-                # Get subset data
-                states_old_sub = minibatch_data['states']
-                actions_old_sub = minibatch_data['actions']
-                action_logs_old_sub = minibatch_data['action_logs']
-                state_vals_old_sub = minibatch_data['state_vals']
+                    # Scale and record
+                    batch_loss += loss.detach().mean()
+                    batch_ppo += loss_PPO.detach().mean() * accumulation_frac
+                    batch_critic += loss_critic.detach().mean() * accumulation_frac
+                    batch_entropy += loss_entropy.detach().mean() * accumulation_frac
 
-                # Get subset rewards
-                advantages_sub = minibatch_rewards - state_vals_old_sub
+                # Step
+                self.optimizer.step()
+                self.optimizer.zero_grad()
 
-                # Evaluate actions
-                action_logs, dist_entropy = self.actor.evaluate_action(states_old_sub, actions_old_sub)
+                # Increment
+                iterations += 1
+                    
+                # Synchronize GPU policies
+                sync_loop = (iterations) % sync_epochs == 0
+                last_epoch = iterations == update_iterations
+                if use_collective and (sync_loop or last_epoch):
+                    self.synchronize()
+                # if epoch_num == 9: print(self.state_dict())  # Check that weights are the same across nodes
 
-                # Evaluate states
-                state_vals = self.critic.evaluate_state(states_old_sub)
-
-                # Ratio between new and old probabilities
-                ratios = torch.exp(action_logs - action_logs_old_sub)
-
-                # Calculate PPO loss
-                unclipped = ratios * advantages_sub
-                clipped = torch.clamp(ratios, 1-self.epsilon_clip, 1+self.epsilon_clip) * advantages_sub
-                loss_PPO = -torch.min(unclipped, clipped)
-
-                # Calculate critic loss
-                loss_critic = .5 * F.mse_loss(state_vals, minibatch_rewards)
-
-                # Calculate entropy loss
-                # TODO (Minor): Figure out purpose
-                loss_entropy = -.01 * dist_entropy
-
-                # Calculate total loss
-                loss = loss_PPO + loss_critic + loss_entropy
-                loss = loss.mean()
-
-                # Scale and calculate gradient
-                accumulation_frac = (max_idx - min_idx) / batch_size
-                loss = loss * accumulation_frac
-                loss.backward()  # Longest computation
-
-                # Record
-                epoch_ppo += loss_PPO.detach().mean() * accumulation_frac
-                epoch_critic += loss_critic.detach().mean() * accumulation_frac
-                epoch_entropy += loss_entropy.detach().mean() * accumulation_frac
-
-            # Step
-            self.optimizer.step()
-            self.optimizer.zero_grad()
-
-            # CLI
-            if verbose and ((epoch_num + 1) % 10 == 0 or epoch_num in (0, 4)):
-                print(
-                    f'Epoch {epoch_num+1:02}'
-                    f' - PPO {epoch_ppo.item():.3f}'
-                    f', critic {epoch_critic.item():.3f}'
-                    f', entropy {epoch_entropy.item():.3f}')
-                
-            # Synchronize collective
-            sync_loop = (epoch_num+1) % sync_epochs == 0
-            last_epoch = epoch_num+1 == epochs
-            if use_collective and (sync_loop or last_epoch):
-                for k, w in self.state_dict().items():
-                    col.allreduce(w, 'update')
-                    w /= world_size
-            # if epoch_num == 9: print(self.state_dict())  # Check that weights are the same across nodes
+                # CLI
+                if verbose and ((iterations) % 10 == 0 or iterations in (1, 5)):
+                    print(
+                        f'Iteration {iterations:02}'
+                        f' - Loss ({batch_loss.item():.3f}) ='
+                        f' PPO ({batch_ppo.item():.3f}) +'
+                        f' Critic ({batch_critic.item():.3f}) +'
+                        f' Entropy ({batch_entropy.item():.3f})')
+                    
+                # Break
+                if iterations >= update_iterations: break
+            if iterations >= update_iterations: break
 
         # Update scheduler
         self.scheduler.step()
 
-        # Copy current weights
-        # self.update_old_policy()
-
-        # Clear memory
-        # self.memory.clear()
-
-        # Destroy group
-        if use_collective:
-            col.destroy_collective_group('update')
-
         # Return self
         return self
+
+    def synchronize(self, group='learners'):
+        # TODO: Maybe call scheduler twice if two updates are aggregated?
+        # Collective operations
+        use_collective = col.is_group_initialized('default')
+        world_size = 1 if not use_collective else col.get_collective_group_size()
+
+        # Sync
+        # NOTE: Optimizer momentum not synced
+        for k, w in self.state_dict().items():
+            col.allreduce(w, group)
+            w /= world_size
+
+    def backward(
+        self,
+        states,
+        actions,
+        action_logs,
+        state_vals,
+        rewards,
+    ):
+        # Get subset rewards
+        advantages = rewards - state_vals
+
+        # Evaluate actions
+        action_logs_new, dist_entropy = self.actor.evaluate_action(states, actions)
+
+        # Evaluate states
+        state_vals_new = self.critic.evaluate_state(states)
+
+        # Ratio between new and old probabilities
+        ratios = torch.exp(action_logs_new - action_logs)
+
+        # Calculate PPO loss
+        unclipped = ratios * advantages
+        clipped = torch.clamp(ratios, 1-self.epsilon_clip, 1+self.epsilon_clip) * advantages
+        loss_PPO = -torch.min(unclipped, clipped)
+
+        # Calculate critic loss
+        loss_critic = .5 * F.mse_loss(state_vals_new, rewards)
+
+        # Calculate entropy loss
+        # TODO (Minor): Figure out purpose
+        # NOTE: Found out, not even in the computation graph and does nothing, delete?
+        loss_entropy = -.01 * dist_entropy
+
+        # Construct final loss
+        loss = loss_PPO + loss_critic + loss_entropy
+        loss = loss.mean()
+
+        return loss, loss_PPO, loss_critic, loss_entropy

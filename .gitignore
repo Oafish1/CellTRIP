@@ -13,7 +13,7 @@ build/
 **/*_log*.txt
 
 # Profiling
-*.prof
+*.prof*
 *_profile.*
 
 # Docker images and archives
@@ -39,3 +39,4 @@ frame_*.png
 # Hidden
 **/hidden_*
 **/*_old.*
+**/*_old_*

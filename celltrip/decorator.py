@@ -1,13 +1,10 @@
 import cProfile
-import json
 import sys
 import time
 import traceback
 import tracemalloc
 
 import torch
-
-from . import utility as _utility
 
 
 def try_catch(_func=None, show_traceback=False, fallback_ret=None):
@@ -24,15 +21,18 @@ def try_catch(_func=None, show_traceback=False, fallback_ret=None):
     else: return try_catch_decorator(_func)
 
 
-def profile(_func=None, fname=None):
+def profile(_func=None, fname=None, time_annotation=False):
     # Adapted from https://stackoverflow.com/a/5376616
     def profile_decorator(func):
         def profile_wrapper(*args, **kwargs):
             nonlocal fname
-            if fname is None: fname = func.__name__ + '.prof'
+            nonlocal time_annotation
+            if fname is None: fname_use = func.__name__ + '.prof'
+            else: fname_use = fname
+            if time_annotation: fname_use += '.' + str(int(time.perf_counter()))
             prof = cProfile.Profile()
             ret = prof.runcall(func, *args, **kwargs)
-            prof.dump_stats(fname)
+            prof.dump_stats(fname_use)
             return ret
         return profile_wrapper
     
@@ -40,13 +40,14 @@ def profile(_func=None, fname=None):
     else: return profile_decorator(_func)
 
 
-def metrics(_func=None, append_to_dict=False):
+def metrics(_func=None, append_to_dict=False, dict_index=None):
     def metrics_decorator(func):
         "Add `return_metrics` argument to function, and return memory/VRAM usage if True"
         # NOTE: Might be incorrect if two running on the same kernel
         def metrics_wrapper(*args, return_metrics=False, **kwargs):
             # Parameters
             nonlocal append_to_dict
+            nonlocal dict_index
 
             # Record initial
             start_time = time.perf_counter()
@@ -82,9 +83,21 @@ def metrics(_func=None, append_to_dict=False):
                     metrics['VRAM'] = torch.cuda.max_memory_allocated() - base_vram  # VRAM usage
                 else: metrics['VRAM'] = 0
 
+            # if inspect.iscoroutinefunction(func):
+            #     async def ret_func():
+            #         ret = await ret
+            #         if append_to_dict:
+            #             if ret is None: ret = metrics
+            #             else: ret.update(metrics)
+            #             return ret
+            #         return ret, metrics
+            #     return ret_func()
+
             if append_to_dict:
                 if ret is None: ret = metrics
-                else: ret.update(metrics)
+                else:
+                    if dict_index is not None: ret[dict_index].update(metrics)
+                    else: ret.update(metrics)
                 return ret
             return ret, metrics
         
@@ -92,6 +105,7 @@ def metrics(_func=None, append_to_dict=False):
     
     if _func is None: return metrics_decorator
     else: return metrics_decorator(_func)
+
             
 def call_on_exit(func):
     "Add `exit_hook` argument to function, which runs on KeyboardInterrupt"

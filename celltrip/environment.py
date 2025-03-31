@@ -11,7 +11,7 @@ class EnvironmentBase:
     """
     def __init__(self,
         # Data
-        *modalities,
+        *modalities_or_dataloader,
         # Params
         dim=16,
         pos_bound=10,
@@ -36,7 +36,6 @@ class EnvironmentBase:
         **kwargs,
     ):
         # Record parameters
-        self.modalities = modalities
         self.dim = dim
         self.pos_bound = pos_bound
         self.pos_rand_bound = pos_rand_bound
@@ -48,8 +47,25 @@ class EnvironmentBase:
         self.reward_distance_target = reward_distance_target
         self.device = device
 
+        # Detect if modality input is dataloader
+        if (len(modalities_or_dataloader) == 1
+            and isinstance(modalities_or_dataloader[0],
+                           _utility.processing.PreprocessFromAnnData)):
+            self.dataloader, = modalities_or_dataloader
+            self.modalities = None
+            self.num_modalities = self.dataloader.num_modalities
+            self.num_nodes = None
+            self.keys = None
+        else:
+            self.dataloader = None
+            self.modalities = modalities_or_dataloader
+            self.num_modalities = len(self.modalities)
+            assert all(m.shape[0] == self.modalities[0].shape[0] for m in self.modalities)
+            self.num_nodes = self.modalities[0].shape[0]
+            self.keys = torch.arange(self.num_nodes)
+
         # Defaults
-        all_modalities = list(range(len(self.modalities)))
+        all_modalities = list(range(self.num_modalities))
         if self.reward_distance_target is None:
             # By default, all modalities will be targets
             self.reward_distance_target = all_modalities
@@ -58,7 +74,7 @@ class EnvironmentBase:
             self.reward_distance_target = [self.reward_distance_target]
 
         if self.modalities_to_return is None:
-            if len(self.reward_distance_target) == len(self.modalities):
+            if len(self.reward_distance_target) == self.num_modalities:
                 # By default, all modalities will be inputs if all modalities are targeted
                 self.modalities_to_return = all_modalities
             else:
@@ -94,12 +110,15 @@ class EnvironmentBase:
         # Storage
         self.dist = None
 
-        # Assert all modalities share the first dimension
-        assert all(m.shape[0] == self.modalities[0].shape[0] for m in self.modalities)
-        self.num_nodes = self.modalities[0].shape[0]
-
         # Initialize
         self.reset()
+
+    def to(self, device):
+        self.device = device
+        self.pos = self.pos.to(self.device)
+        self.vel = self.vel.to(self.device)
+        self.modalities = [m.to(self.device) for m in self.modalities]
+        return self
 
     ### State functions
     def step(self, actions=None, *, delta=None, return_itemized_rewards=False):
@@ -188,6 +207,14 @@ class EnvironmentBase:
         return ret
 
     def reset(self):
+        # Reset modalities if needed
+        if self.dataloader is not None:
+            modalities, adata_obs, _ = self.dataloader.sample()
+            self.set_modalities([
+                torch.tensor(m, device=self.device)
+                for m in modalities])
+            self.keys = adata_obs[0].index.to_numpy()
+
         # Assign random positions and velocities
         self.pos = self.pos_rand_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
         self.vel = self.vel_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
@@ -279,6 +306,9 @@ class EnvironmentBase:
 
     def get_velocities(self):
         return self.vel
+    
+    def get_keys(self):
+        return self.keys
 
     def get_target_modalities(self):
         return [m for i, m in enumerate(self.modalities) if i in self.reward_distance_target]
