@@ -43,7 +43,7 @@ def env_init(parent_dir=False):
         pca_dim=128, seed=42)
     # modalities, adata_obs, adata_vars = dataloader.sample()
     # Return env
-    return celltrip.environment.EnvironmentBase(dataloader, dim=3, penalty_bound=1, reward_origin=1)
+    return celltrip.environment.EnvironmentBase(dataloader, dim=3)  # , penalty_bound=1, reward_origin=1
 
 # Default 25Gb Forward, 14Gb Update, at max capacity
 policy_init = lambda env: celltrip.policy.PPO(

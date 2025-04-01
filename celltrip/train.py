@@ -35,7 +35,7 @@ def set_device_recursive(state_dict, device):
     return state_dict
 
 
-def simulate_until_completion(policy, env, memory=None, keys=None, dummy=False, verbose=False):
+def simulate_until_completion(env, policy, memory=None, keys=None, dummy=False, verbose=False):
     # Params
     if keys is None: keys = env.get_keys()
 
@@ -94,8 +94,8 @@ class Worker:
     """
     def __init__(
         self,
-        policy_init,
         env_init,
+        policy_init,
         memory_init,
         learner_world_size=1,
         head_world_size=1,
@@ -127,12 +127,16 @@ class Worker:
         # Memory parameters
         self.memory_buffer = []
 
+    def is_ready(self):
+        "This method is required to make initialization waitable in Ray"
+        return True
+
     @_decorator.metrics(append_to_dict=True)
     # @_decorator.profile(time_annotation=True)
     def rollout(self, **kwargs):
         # Perform rollout
         result = simulate_until_completion(
-            self.policy, self.env, self.memory, **kwargs)
+            self.env, self.policy, self.memory, **kwargs)
         self.memory.propagate_rewards()
         env_nodes = self.env.num_nodes
         self.env.reset()
@@ -295,10 +299,11 @@ def train_celltrip(
                     scheduling_strategy=ray.util.scheduling_strategies.PlacementGroupSchedulingStrategy(
                         placement_group=pg_gpu, placement_group_bundle_index=bundle_idx))
                 .remote(
-                    policy_init=policy_init, env_init=env_init, memory_init=memory_init,
+                    env_init=env_init, policy_init=policy_init, memory_init=memory_init,
                     learner_world_size=num_learners, head_world_size=num_head_workers, rank=rank,
                     learner=i<num_learners, parent=parent))
         workers.append(w)
+    ray.get([w.is_ready.remote() for w in workers])  # Wait for initialization
     learners = workers[:-num_exclusive_runners]
     runners = workers[num_exclusive_learners:]
     heads = workers[:num_head_workers]

@@ -1,3 +1,8 @@
+### 1.0.0+2025.3.31.2
+- Add ready function to worker, indicating the instance is initialized and waiting
+- Change environment, policy, memory argument ordering
+- Fix race condition with initial sync and rollout
+
 ### 1.0.0+2025.3.31.1
 - Notebook import cleanup and formatting
 - Fix bug with improper collection world size assignment when `num_learners` less than `num_head_workers`
