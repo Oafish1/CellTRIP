@@ -1,3 +1,8 @@
+### 1.0.0+2025.3.31.1
+- Notebook import cleanup and formatting
+- Fix bug with improper collection world size assignment when `num_learners` less than `num_head_workers`
+- QOL changes
+
 ### 1.0.0+2025.3.31
 - General
   - Additional profiling handling

@@ -96,8 +96,9 @@ class Worker:
         self,
         policy_init,
         env_init,
-        memory_init=lambda: None,
-        world_size=1,
+        memory_init,
+        learner_world_size=1,
+        head_world_size=1,
         rank=0,
         learner=True,
         parent=None,  # Policy parent worker ref
@@ -109,13 +110,15 @@ class Worker:
         self.env = env_init().to(device)
         self.policy = policy_init(self.env).to(device)
         self.memory = memory_init(self.policy)
+        self.learner_world_size = learner_world_size
+        self.head_world_size = head_world_size
         self.rank = rank
         self.learner = learner
         self.parent = parent
 
         # World initialization
-        if learner: col.init_collective_group(world_size, rank, 'nccl', 'learners')
-        if parent is None: col.init_collective_group(world_size, rank, 'nccl', 'heads')
+        if learner: col.init_collective_group(learner_world_size, rank, 'nccl', 'learners')
+        if parent is None: col.init_collective_group(head_world_size, rank, 'nccl', 'heads')
 
         # Policy parameters
         self.policy_iteration = 0
@@ -248,12 +251,12 @@ class Worker:
         col.destroy_collective_group()
 
 
-@ray.remote
+@ray.remote(num_cpus=1e-4)
 def train_celltrip(
+    initializers,
     num_gpus,
     num_learners,
     num_runners,
-    initializers,
     learners_can_be_runners=True,
     sync_across_nodes=True,
     updates=50,
@@ -269,7 +272,7 @@ def train_celltrip(
 
     # Make placement group for GPUs
     pg_gpu = ray.util.placement_group(num_gpus*[{'CPU': 1, 'GPU': 1}])
-    ray.get(pg_gpu.ready(), timeout=10)
+    ray.get(pg_gpu.ready())
 
     # Assign workers
     num_learner_runners = min(num_learners, num_runners) if learners_can_be_runners else 0
@@ -292,8 +295,8 @@ def train_celltrip(
                     scheduling_strategy=ray.util.scheduling_strategies.PlacementGroupSchedulingStrategy(
                         placement_group=pg_gpu, placement_group_bundle_index=bundle_idx))
                 .remote(
-                    policy_init, env_init, memory_init,
-                    world_size=num_head_workers, rank=rank,
+                    policy_init=policy_init, env_init=env_init, memory_init=memory_init,
+                    learner_world_size=num_learners, head_world_size=num_head_workers, rank=rank,
                     learner=i<num_learners, parent=parent))
         workers.append(w)
     learners = workers[:-num_exclusive_runners]

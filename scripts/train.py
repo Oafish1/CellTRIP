@@ -6,10 +6,7 @@
 # %%
 import time
 
-import numpy as np
 import ray
-import ray.util.scheduling_strategies
-import torch
 
 import celltrip
 
@@ -50,8 +47,7 @@ def env_init(parent_dir=False):
 
 # Default 25Gb Forward, 14Gb Update, at max capacity
 policy_init = lambda env: celltrip.policy.PPO(
-    2*env.dim, env.dataloader.modal_dims, env.dim,
-    forward_batch_size=int(5e5)) # update_iterations=2, minibatch_size=3e3,
+    2*env.dim, env.dataloader.modal_dims, env.dim)  # update_iterations=2, minibatch_size=3e3,
 
 memory_init = lambda policy: celltrip.memory.AdvancedMemoryBuffer(
     sum(policy.modal_dims), split_args=policy.split_args)
@@ -61,9 +57,12 @@ initializers = (policy_init, env_init, memory_init)
 
 # %%
 start = time.perf_counter()
-# workers = ray.get(celltrip.train.remote(2, 2, 4, rollout_kwargs={'dummy': True}, update_kwargs={'update_iterations': 5}))
-# workers = ray.get(celltrip.train.remote(2, 2, 4, sync_across_nodes=False))  # sync_across_nodes=False
-workers = ray.get(celltrip.train.train_celltrip.remote(2, 1, 4, initializers))
+# rollout_kwargs={'dummy': True}, update_kwargs={'update_iterations': 5}, sync_across_nodes=False
+workers = ray.get(celltrip.train.train_celltrip.remote(
+    initializers=initializers,
+    num_gpus=2,
+    num_learners=2,
+    num_runners=4))
 print(time.perf_counter() - start)
 
 
