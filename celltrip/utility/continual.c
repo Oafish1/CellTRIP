@@ -3,12 +3,12 @@
 /* BEGIN: Cython Metadata
 {
     "distutils": {
-        "name": "celltrip.utility.train",
+        "name": "celltrip.utility.continual",
         "sources": [
-            "celltrip/utility/train.py"
+            "celltrip/utility/continual.py"
         ]
     },
-    "module_name": "celltrip.utility.train"
+    "module_name": "celltrip.utility.continual"
 }
 END: Cython Metadata */
 
@@ -1228,8 +1228,8 @@ static CYTHON_INLINE float __PYX_NAN() {
   #endif
 #endif
 
-#define __PYX_HAVE__celltrip__utility__train
-#define __PYX_HAVE_API__celltrip__utility__train
+#define __PYX_HAVE__celltrip__utility__continual
+#define __PYX_HAVE_API__celltrip__utility__continual
 /* Early includes */
 #ifdef _OPENMP
 #include <omp.h>
@@ -1479,7 +1479,7 @@ static const char *__pyx_filename;
 /* #### Code section: filename_table ### */
 
 static const char *__pyx_f[] = {
-  "celltrip/utility/train.py",
+  "celltrip/utility/continual.py",
 };
 /* #### Code section: utility_code_proto_before_types ### */
 /* ForceInitThreads.proto */
@@ -2257,14 +2257,14 @@ static int __Pyx_InitStrings(__Pyx_StringTabEntry *t);
 
 /* #### Code section: module_declarations ### */
 
-/* Module declarations from "celltrip.utility.train" */
+/* Module declarations from "celltrip.utility.continual" */
 /* #### Code section: typeinfo ### */
 /* #### Code section: before_global_var ### */
-#define __Pyx_MODULE_NAME "celltrip.utility.train"
-extern int __pyx_module_is_main_celltrip__utility__train;
-int __pyx_module_is_main_celltrip__utility__train = 0;
+#define __Pyx_MODULE_NAME "celltrip.utility.continual"
+extern int __pyx_module_is_main_celltrip__utility__continual;
+int __pyx_module_is_main_celltrip__utility__continual = 0;
 
-/* Implementation of "celltrip.utility.train" */
+/* Implementation of "celltrip.utility.continual" */
 /* #### Code section: global_var ### */
 static PyObject *__pyx_builtin_print;
 static PyObject *__pyx_builtin_ValueError;
@@ -2373,31 +2373,31 @@ static const char __pyx_k_not_found_in_methods[] = "` not found in methods";
 static const char __pyx_k_time_logger_aggregate[] = "time_logger.aggregate";
 static const char __pyx_k_EarlyStopping_set_best[] = "EarlyStopping.set_best";
 static const char __pyx_k_RunningStatistics_mean[] = "RunningStatistics.mean";
-static const char __pyx_k_celltrip_utility_train[] = "celltrip.utility.train";
 static const char __pyx_k_RunningStatistics_reset[] = "RunningStatistics.reset";
 static const char __pyx_k_RunningStatistics___init[] = "RunningStatistics.__init__";
 static const char __pyx_k_RunningStatistics_update[] = "RunningStatistics.update";
-static const char __pyx_k_celltrip_utility_train_py[] = "celltrip/utility/train.py";
 static const char __pyx_k_RunningStatistics_variance[] = "RunningStatistics.variance";
+static const char __pyx_k_celltrip_utility_continual[] = "celltrip.utility.continual";
+static const char __pyx_k_celltrip_utility_continual_py[] = "celltrip/utility/continual.py";
 static const char __pyx_k_Early_stopping_class_with_a_few[] = "\n    Early stopping class with a few trigger methods\n\n    Methods\n    -------\n    'absolute': Takes absolute best values for comparison and thresholding\n    'average': Takes average values over a sliding window\n    ";
 static const char __pyx_k_Class_made_for_easy_logging_with[] = "Class made for easy logging with toggleable verbosity";
 static const char __pyx_k_EarlyStopping_calculate_threshol[] = "EarlyStopping.calculate_threshold";
 static const char __pyx_k_EarlyStopping_record_observation[] = "EarlyStopping.record_observation";
 /* #### Code section: decls ### */
-static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger___init__(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_discard_first_sample, PyObject *__pyx_v_record, PyObject *__pyx_v_verbose, PyObject *__pyx_v_memory_usage); /* proto */
-static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_str); /* proto */
-static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_method); /* proto */
-static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_method, PyObject *__pyx_v_buffer, PyObject *__pyx_v_delta, PyObject *__pyx_v_decreasing, PyObject *__pyx_v_window_size); /* proto */
-static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_objective); /* proto */
-static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_observation(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_objective); /* proto */
-static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_6reset(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_8set_best(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_objective); /* proto */
-static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_10calculate_threshold(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics___init__(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_n_set, PyObject *__pyx_v_kwargs); /* proto */
-static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_2reset(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_mean, PyObject *__pyx_v_m2); /* proto */
-static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_4update(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_x); /* proto */
-static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_6mean(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_8variance(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_11time_logger___init__(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_discard_first_sample, PyObject *__pyx_v_record, PyObject *__pyx_v_verbose, PyObject *__pyx_v_memory_usage); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_11time_logger_2log(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_str); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_11time_logger_4aggregate(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_method); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_13EarlyStopping___init__(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_method, PyObject *__pyx_v_buffer, PyObject *__pyx_v_delta, PyObject *__pyx_v_decreasing, PyObject *__pyx_v_window_size); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_13EarlyStopping_2__call__(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_objective); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_13EarlyStopping_4record_observation(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_objective); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_13EarlyStopping_6reset(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_13EarlyStopping_8set_best(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_objective); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_13EarlyStopping_10calculate_threshold(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_17RunningStatistics___init__(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_n_set, PyObject *__pyx_v_kwargs); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_17RunningStatistics_2reset(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_mean, PyObject *__pyx_v_m2); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_17RunningStatistics_4update(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_x); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_17RunningStatistics_6mean(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_17RunningStatistics_8variance(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self); /* proto */
 /* #### Code section: late_includes ### */
 /* #### Code section: module_state ### */
 typedef struct {
@@ -2463,8 +2463,8 @@ typedef struct {
   PyObject *__pyx_n_s_buffer;
   PyObject *__pyx_n_s_calculate_threshold;
   PyObject *__pyx_n_s_call;
-  PyObject *__pyx_n_s_celltrip_utility_train;
-  PyObject *__pyx_kp_s_celltrip_utility_train_py;
+  PyObject *__pyx_n_s_celltrip_utility_continual;
+  PyObject *__pyx_kp_s_celltrip_utility_continual_py;
   PyObject *__pyx_n_s_class_getitem;
   PyObject *__pyx_n_s_clear;
   PyObject *__pyx_n_s_cline_in_traceback;
@@ -2543,12 +2543,12 @@ typedef struct {
   PyObject *__pyx_n_s_verbose;
   PyObject *__pyx_n_s_window_size;
   PyObject *__pyx_n_s_x;
-  PyObject *__pyx_float_1eneg_3;
+  PyObject *__pyx_float_1eneg_2;
   PyObject *__pyx_int_0;
   PyObject *__pyx_int_1;
   PyObject *__pyx_int_2;
-  PyObject *__pyx_int_15;
-  PyObject *__pyx_int_30;
+  PyObject *__pyx_int_3;
+  PyObject *__pyx_int_6;
   PyObject *__pyx_int_neg_1;
   PyObject *__pyx_slice__3;
   PyObject *__pyx_tuple__7;
@@ -2659,8 +2659,8 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_n_s_buffer);
   Py_CLEAR(clear_module_state->__pyx_n_s_calculate_threshold);
   Py_CLEAR(clear_module_state->__pyx_n_s_call);
-  Py_CLEAR(clear_module_state->__pyx_n_s_celltrip_utility_train);
-  Py_CLEAR(clear_module_state->__pyx_kp_s_celltrip_utility_train_py);
+  Py_CLEAR(clear_module_state->__pyx_n_s_celltrip_utility_continual);
+  Py_CLEAR(clear_module_state->__pyx_kp_s_celltrip_utility_continual_py);
   Py_CLEAR(clear_module_state->__pyx_n_s_class_getitem);
   Py_CLEAR(clear_module_state->__pyx_n_s_clear);
   Py_CLEAR(clear_module_state->__pyx_n_s_cline_in_traceback);
@@ -2739,12 +2739,12 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_n_s_verbose);
   Py_CLEAR(clear_module_state->__pyx_n_s_window_size);
   Py_CLEAR(clear_module_state->__pyx_n_s_x);
-  Py_CLEAR(clear_module_state->__pyx_float_1eneg_3);
+  Py_CLEAR(clear_module_state->__pyx_float_1eneg_2);
   Py_CLEAR(clear_module_state->__pyx_int_0);
   Py_CLEAR(clear_module_state->__pyx_int_1);
   Py_CLEAR(clear_module_state->__pyx_int_2);
-  Py_CLEAR(clear_module_state->__pyx_int_15);
-  Py_CLEAR(clear_module_state->__pyx_int_30);
+  Py_CLEAR(clear_module_state->__pyx_int_3);
+  Py_CLEAR(clear_module_state->__pyx_int_6);
   Py_CLEAR(clear_module_state->__pyx_int_neg_1);
   Py_CLEAR(clear_module_state->__pyx_slice__3);
   Py_CLEAR(clear_module_state->__pyx_tuple__7);
@@ -2833,8 +2833,8 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_n_s_buffer);
   Py_VISIT(traverse_module_state->__pyx_n_s_calculate_threshold);
   Py_VISIT(traverse_module_state->__pyx_n_s_call);
-  Py_VISIT(traverse_module_state->__pyx_n_s_celltrip_utility_train);
-  Py_VISIT(traverse_module_state->__pyx_kp_s_celltrip_utility_train_py);
+  Py_VISIT(traverse_module_state->__pyx_n_s_celltrip_utility_continual);
+  Py_VISIT(traverse_module_state->__pyx_kp_s_celltrip_utility_continual_py);
   Py_VISIT(traverse_module_state->__pyx_n_s_class_getitem);
   Py_VISIT(traverse_module_state->__pyx_n_s_clear);
   Py_VISIT(traverse_module_state->__pyx_n_s_cline_in_traceback);
@@ -2913,12 +2913,12 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_n_s_verbose);
   Py_VISIT(traverse_module_state->__pyx_n_s_window_size);
   Py_VISIT(traverse_module_state->__pyx_n_s_x);
-  Py_VISIT(traverse_module_state->__pyx_float_1eneg_3);
+  Py_VISIT(traverse_module_state->__pyx_float_1eneg_2);
   Py_VISIT(traverse_module_state->__pyx_int_0);
   Py_VISIT(traverse_module_state->__pyx_int_1);
   Py_VISIT(traverse_module_state->__pyx_int_2);
-  Py_VISIT(traverse_module_state->__pyx_int_15);
-  Py_VISIT(traverse_module_state->__pyx_int_30);
+  Py_VISIT(traverse_module_state->__pyx_int_3);
+  Py_VISIT(traverse_module_state->__pyx_int_6);
   Py_VISIT(traverse_module_state->__pyx_int_neg_1);
   Py_VISIT(traverse_module_state->__pyx_slice__3);
   Py_VISIT(traverse_module_state->__pyx_tuple__7);
@@ -3017,8 +3017,8 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_n_s_buffer __pyx_mstate_global->__pyx_n_s_buffer
 #define __pyx_n_s_calculate_threshold __pyx_mstate_global->__pyx_n_s_calculate_threshold
 #define __pyx_n_s_call __pyx_mstate_global->__pyx_n_s_call
-#define __pyx_n_s_celltrip_utility_train __pyx_mstate_global->__pyx_n_s_celltrip_utility_train
-#define __pyx_kp_s_celltrip_utility_train_py __pyx_mstate_global->__pyx_kp_s_celltrip_utility_train_py
+#define __pyx_n_s_celltrip_utility_continual __pyx_mstate_global->__pyx_n_s_celltrip_utility_continual
+#define __pyx_kp_s_celltrip_utility_continual_py __pyx_mstate_global->__pyx_kp_s_celltrip_utility_continual_py
 #define __pyx_n_s_class_getitem __pyx_mstate_global->__pyx_n_s_class_getitem
 #define __pyx_n_s_clear __pyx_mstate_global->__pyx_n_s_clear
 #define __pyx_n_s_cline_in_traceback __pyx_mstate_global->__pyx_n_s_cline_in_traceback
@@ -3097,12 +3097,12 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_n_s_verbose __pyx_mstate_global->__pyx_n_s_verbose
 #define __pyx_n_s_window_size __pyx_mstate_global->__pyx_n_s_window_size
 #define __pyx_n_s_x __pyx_mstate_global->__pyx_n_s_x
-#define __pyx_float_1eneg_3 __pyx_mstate_global->__pyx_float_1eneg_3
+#define __pyx_float_1eneg_2 __pyx_mstate_global->__pyx_float_1eneg_2
 #define __pyx_int_0 __pyx_mstate_global->__pyx_int_0
 #define __pyx_int_1 __pyx_mstate_global->__pyx_int_1
 #define __pyx_int_2 __pyx_mstate_global->__pyx_int_2
-#define __pyx_int_15 __pyx_mstate_global->__pyx_int_15
-#define __pyx_int_30 __pyx_mstate_global->__pyx_int_30
+#define __pyx_int_3 __pyx_mstate_global->__pyx_int_3
+#define __pyx_int_6 __pyx_mstate_global->__pyx_int_6
 #define __pyx_int_neg_1 __pyx_mstate_global->__pyx_int_neg_1
 #define __pyx_slice__3 __pyx_mstate_global->__pyx_slice__3
 #define __pyx_tuple__7 __pyx_mstate_global->__pyx_tuple__7
@@ -3137,7 +3137,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_codeobj__36 __pyx_mstate_global->__pyx_codeobj__36
 /* #### Code section: module_code ### */
 
-/* "celltrip/utility/train.py":10
+/* "celltrip/utility/continual.py":10
  * class time_logger():
  *     """Class made for easy logging with toggleable verbosity"""
  *     def __init__(             # <<<<<<<<<<<<<<
@@ -3146,15 +3146,15 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_8celltrip_7utility_5train_11time_logger_1__init__(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_11time_logger_1__init__(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyMethodDef __pyx_mdef_8celltrip_7utility_5train_11time_logger_1__init__ = {"__init__", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_5train_11time_logger_1__init__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
-static PyObject *__pyx_pw_8celltrip_7utility_5train_11time_logger_1__init__(PyObject *__pyx_self, 
+static PyMethodDef __pyx_mdef_8celltrip_7utility_9continual_11time_logger_1__init__ = {"__init__", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_9continual_11time_logger_1__init__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_11time_logger_1__init__(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -3188,7 +3188,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject **__pyx_pyargnames[] = {&__pyx_n_s_self,&__pyx_n_s_discard_first_sample,&__pyx_n_s_record,&__pyx_n_s_verbose,&__pyx_n_s_memory_usage,0};
 
-    /* "celltrip/utility/train.py":12
+    /* "celltrip/utility/continual.py":12
  *     def __init__(
  *         self,
  *         discard_first_sample=False,             # <<<<<<<<<<<<<<
@@ -3197,7 +3197,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
  */
     values[1] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)Py_False)));
 
-    /* "celltrip/utility/train.py":13
+    /* "celltrip/utility/continual.py":13
  *         self,
  *         discard_first_sample=False,
  *         record=True,             # <<<<<<<<<<<<<<
@@ -3206,7 +3206,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
  */
     values[2] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)Py_True)));
 
-    /* "celltrip/utility/train.py":14
+    /* "celltrip/utility/continual.py":14
  *         discard_first_sample=False,
  *         record=True,
  *         verbose=False,             # <<<<<<<<<<<<<<
@@ -3215,7 +3215,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
  */
     values[3] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)Py_False)));
 
-    /* "celltrip/utility/train.py":15
+    /* "celltrip/utility/continual.py":15
  *         record=True,
  *         verbose=False,
  *         memory_usage=False,             # <<<<<<<<<<<<<<
@@ -3314,13 +3314,13 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       __Pyx_Arg_XDECREF_FASTCALL(values[__pyx_temp]);
     }
   }
-  __Pyx_AddTraceback("celltrip.utility.train.time_logger.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.time_logger.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_5train_11time_logger___init__(__pyx_self, __pyx_v_self, __pyx_v_discard_first_sample, __pyx_v_record, __pyx_v_verbose, __pyx_v_memory_usage);
+  __pyx_r = __pyx_pf_8celltrip_7utility_9continual_11time_logger___init__(__pyx_self, __pyx_v_self, __pyx_v_discard_first_sample, __pyx_v_record, __pyx_v_verbose, __pyx_v_memory_usage);
 
-  /* "celltrip/utility/train.py":10
+  /* "celltrip/utility/continual.py":10
  * class time_logger():
  *     """Class made for easy logging with toggleable verbosity"""
  *     def __init__(             # <<<<<<<<<<<<<<
@@ -3339,7 +3339,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger___init__(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_discard_first_sample, PyObject *__pyx_v_record, PyObject *__pyx_v_verbose, PyObject *__pyx_v_memory_usage) {
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_11time_logger___init__(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_discard_first_sample, PyObject *__pyx_v_record, PyObject *__pyx_v_verbose, PyObject *__pyx_v_memory_usage) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -3352,7 +3352,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger___init__(CYTHO
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("__init__", 1);
 
-  /* "celltrip/utility/train.py":17
+  /* "celltrip/utility/continual.py":17
  *         memory_usage=False,
  *     ):
  *         self.discard_first_sample = discard_first_sample             # <<<<<<<<<<<<<<
@@ -3361,7 +3361,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger___init__(CYTHO
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_discard_first_sample, __pyx_v_discard_first_sample) < 0) __PYX_ERR(0, 17, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":18
+  /* "celltrip/utility/continual.py":18
  *     ):
  *         self.discard_first_sample = discard_first_sample
  *         self.record = record             # <<<<<<<<<<<<<<
@@ -3370,7 +3370,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger___init__(CYTHO
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_record, __pyx_v_record) < 0) __PYX_ERR(0, 18, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":19
+  /* "celltrip/utility/continual.py":19
  *         self.discard_first_sample = discard_first_sample
  *         self.record = record
  *         self.verbose = verbose             # <<<<<<<<<<<<<<
@@ -3379,7 +3379,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger___init__(CYTHO
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_verbose, __pyx_v_verbose) < 0) __PYX_ERR(0, 19, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":20
+  /* "celltrip/utility/continual.py":20
  *         self.record = record
  *         self.verbose = verbose
  *         self.memory_usage = memory_usage             # <<<<<<<<<<<<<<
@@ -3388,7 +3388,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger___init__(CYTHO
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_memory_usage, __pyx_v_memory_usage) < 0) __PYX_ERR(0, 20, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":22
+  /* "celltrip/utility/continual.py":22
  *         self.memory_usage = memory_usage
  * 
  *         self.history = {}             # <<<<<<<<<<<<<<
@@ -3400,7 +3400,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger___init__(CYTHO
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_history, __pyx_t_1) < 0) __PYX_ERR(0, 22, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "celltrip/utility/train.py":23
+  /* "celltrip/utility/continual.py":23
  * 
  *         self.history = {}
  *         self.start_time = perf_counter()             # <<<<<<<<<<<<<<
@@ -3434,7 +3434,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger___init__(CYTHO
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_start_time, __pyx_t_1) < 0) __PYX_ERR(0, 23, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "celltrip/utility/train.py":25
+  /* "celltrip/utility/continual.py":25
  *         self.start_time = perf_counter()
  * 
  *         if memory_usage:             # <<<<<<<<<<<<<<
@@ -3444,7 +3444,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger___init__(CYTHO
   __pyx_t_5 = __Pyx_PyObject_IsTrue(__pyx_v_memory_usage); if (unlikely((__pyx_t_5 < 0))) __PYX_ERR(0, 25, __pyx_L1_error)
   if (__pyx_t_5) {
 
-    /* "celltrip/utility/train.py":26
+    /* "celltrip/utility/continual.py":26
  * 
  *         if memory_usage:
  *             self.history_mem = {}             # <<<<<<<<<<<<<<
@@ -3456,7 +3456,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger___init__(CYTHO
     if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_history_mem, __pyx_t_1) < 0) __PYX_ERR(0, 26, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-    /* "celltrip/utility/train.py":27
+    /* "celltrip/utility/continual.py":27
  *         if memory_usage:
  *             self.history_mem = {}
  *             tracemalloc.start()             # <<<<<<<<<<<<<<
@@ -3492,7 +3492,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger___init__(CYTHO
     }
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-    /* "celltrip/utility/train.py":25
+    /* "celltrip/utility/continual.py":25
  *         self.start_time = perf_counter()
  * 
  *         if memory_usage:             # <<<<<<<<<<<<<<
@@ -3501,7 +3501,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger___init__(CYTHO
  */
   }
 
-  /* "celltrip/utility/train.py":10
+  /* "celltrip/utility/continual.py":10
  * class time_logger():
  *     """Class made for easy logging with toggleable verbosity"""
  *     def __init__(             # <<<<<<<<<<<<<<
@@ -3516,7 +3516,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger___init__(CYTHO
   __Pyx_XDECREF(__pyx_t_1);
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_3);
-  __Pyx_AddTraceback("celltrip.utility.train.time_logger.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.time_logger.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -3524,7 +3524,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger___init__(CYTHO
   return __pyx_r;
 }
 
-/* "celltrip/utility/train.py":29
+/* "celltrip/utility/continual.py":29
  *             tracemalloc.start()
  * 
  *     def log(self, str=''):             # <<<<<<<<<<<<<<
@@ -3533,16 +3533,16 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger___init__(CYTHO
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_8celltrip_7utility_5train_11time_logger_3log(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_11time_logger_3log(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_8celltrip_7utility_5train_11time_logger_2log, "Print with message ``str`` if verbose.  Otherwise, skip");
-static PyMethodDef __pyx_mdef_8celltrip_7utility_5train_11time_logger_3log = {"log", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_5train_11time_logger_3log, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_8celltrip_7utility_5train_11time_logger_2log};
-static PyObject *__pyx_pw_8celltrip_7utility_5train_11time_logger_3log(PyObject *__pyx_self, 
+PyDoc_STRVAR(__pyx_doc_8celltrip_7utility_9continual_11time_logger_2log, "Print with message ``str`` if verbose.  Otherwise, skip");
+static PyMethodDef __pyx_mdef_8celltrip_7utility_9continual_11time_logger_3log = {"log", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_9continual_11time_logger_3log, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_8celltrip_7utility_9continual_11time_logger_2log};
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_11time_logger_3log(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -3628,11 +3628,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       __Pyx_Arg_XDECREF_FASTCALL(values[__pyx_temp]);
     }
   }
-  __Pyx_AddTraceback("celltrip.utility.train.time_logger.log", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.time_logger.log", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_5train_11time_logger_2log(__pyx_self, __pyx_v_self, __pyx_v_str);
+  __pyx_r = __pyx_pf_8celltrip_7utility_9continual_11time_logger_2log(__pyx_self, __pyx_v_self, __pyx_v_str);
 
   /* function exit code */
   {
@@ -3645,7 +3645,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_str) {
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_11time_logger_2log(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_str) {
   PyObject *__pyx_v_time_elapsed = NULL;
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
@@ -3664,7 +3664,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("log", 1);
 
-  /* "celltrip/utility/train.py":31
+  /* "celltrip/utility/continual.py":31
  *     def log(self, str=''):
  *         """Print with message ``str`` if verbose.  Otherwise, skip"""
  *         if not (self.verbose or self.record):             # <<<<<<<<<<<<<<
@@ -3689,7 +3689,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
   __pyx_t_3 = (!__pyx_t_1);
   if (__pyx_t_3) {
 
-    /* "celltrip/utility/train.py":32
+    /* "celltrip/utility/continual.py":32
  *         """Print with message ``str`` if verbose.  Otherwise, skip"""
  *         if not (self.verbose or self.record):
  *             return  # Cut timing for optimization             # <<<<<<<<<<<<<<
@@ -3700,7 +3700,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
     __pyx_r = Py_None; __Pyx_INCREF(Py_None);
     goto __pyx_L0;
 
-    /* "celltrip/utility/train.py":31
+    /* "celltrip/utility/continual.py":31
  *     def log(self, str=''):
  *         """Print with message ``str`` if verbose.  Otherwise, skip"""
  *         if not (self.verbose or self.record):             # <<<<<<<<<<<<<<
@@ -3709,7 +3709,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
  */
   }
 
-  /* "celltrip/utility/train.py":33
+  /* "celltrip/utility/continual.py":33
  *         if not (self.verbose or self.record):
  *             return  # Cut timing for optimization
  *         self.end_time = perf_counter()             # <<<<<<<<<<<<<<
@@ -3743,7 +3743,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_end_time, __pyx_t_2) < 0) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "celltrip/utility/train.py":36
+  /* "celltrip/utility/continual.py":36
  * 
  *         # Perform any auxiliary operations here
  *         time_elapsed = self.end_time - self.start_time             # <<<<<<<<<<<<<<
@@ -3761,7 +3761,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
   __pyx_v_time_elapsed = __pyx_t_5;
   __pyx_t_5 = 0;
 
-  /* "celltrip/utility/train.py":38
+  /* "celltrip/utility/continual.py":38
  *         time_elapsed = self.end_time - self.start_time
  *         # Record time
  *         if self.record:             # <<<<<<<<<<<<<<
@@ -3774,7 +3774,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
   if (__pyx_t_3) {
 
-    /* "celltrip/utility/train.py":39
+    /* "celltrip/utility/continual.py":39
  *         # Record time
  *         if self.record:
  *             if str not in self.history:             # <<<<<<<<<<<<<<
@@ -3787,7 +3787,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
     if (__pyx_t_3) {
 
-      /* "celltrip/utility/train.py":40
+      /* "celltrip/utility/continual.py":40
  *         if self.record:
  *             if str not in self.history:
  *                 self.history[str] = []             # <<<<<<<<<<<<<<
@@ -3802,7 +3802,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
       __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
       __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-      /* "celltrip/utility/train.py":39
+      /* "celltrip/utility/continual.py":39
  *         # Record time
  *         if self.record:
  *             if str not in self.history:             # <<<<<<<<<<<<<<
@@ -3811,7 +3811,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
  */
     }
 
-    /* "celltrip/utility/train.py":41
+    /* "celltrip/utility/continual.py":41
  *             if str not in self.history:
  *                 self.history[str] = []
  *             self.history[str].append(time_elapsed)             # <<<<<<<<<<<<<<
@@ -3826,7 +3826,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
     __pyx_t_7 = __Pyx_PyObject_Append(__pyx_t_4, __pyx_v_time_elapsed); if (unlikely(__pyx_t_7 == ((int)-1))) __PYX_ERR(0, 41, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-    /* "celltrip/utility/train.py":38
+    /* "celltrip/utility/continual.py":38
  *         time_elapsed = self.end_time - self.start_time
  *         # Record time
  *         if self.record:             # <<<<<<<<<<<<<<
@@ -3835,7 +3835,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
  */
   }
 
-  /* "celltrip/utility/train.py":42
+  /* "celltrip/utility/continual.py":42
  *                 self.history[str] = []
  *             self.history[str].append(time_elapsed)
  *         if self.verbose:             # <<<<<<<<<<<<<<
@@ -3848,7 +3848,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
   if (__pyx_t_3) {
 
-    /* "celltrip/utility/train.py":43
+    /* "celltrip/utility/continual.py":43
  *             self.history[str].append(time_elapsed)
  *         if self.verbose:
  *             print(f'{str}: {time_elapsed}')             # <<<<<<<<<<<<<<
@@ -3885,7 +3885,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-    /* "celltrip/utility/train.py":42
+    /* "celltrip/utility/continual.py":42
  *                 self.history[str] = []
  *             self.history[str].append(time_elapsed)
  *         if self.verbose:             # <<<<<<<<<<<<<<
@@ -3894,7 +3894,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
  */
   }
 
-  /* "celltrip/utility/train.py":45
+  /* "celltrip/utility/continual.py":45
  *             print(f'{str}: {time_elapsed}')
  *         # Record memory
  *         if self.memory_usage:             # <<<<<<<<<<<<<<
@@ -3907,7 +3907,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
   if (__pyx_t_3) {
 
-    /* "celltrip/utility/train.py":46
+    /* "celltrip/utility/continual.py":46
  *         # Record memory
  *         if self.memory_usage:
  *             if self.record:             # <<<<<<<<<<<<<<
@@ -3920,7 +3920,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     if (__pyx_t_3) {
 
-      /* "celltrip/utility/train.py":47
+      /* "celltrip/utility/continual.py":47
  *         if self.memory_usage:
  *             if self.record:
  *                 if str not in self.history_mem:             # <<<<<<<<<<<<<<
@@ -3933,7 +3933,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
       __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
       if (__pyx_t_3) {
 
-        /* "celltrip/utility/train.py":48
+        /* "celltrip/utility/continual.py":48
  *             if self.record:
  *                 if str not in self.history_mem:
  *                     self.history_mem[str] = []             # <<<<<<<<<<<<<<
@@ -3948,7 +3948,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
         __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
         __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-        /* "celltrip/utility/train.py":47
+        /* "celltrip/utility/continual.py":47
  *         if self.memory_usage:
  *             if self.record:
  *                 if str not in self.history_mem:             # <<<<<<<<<<<<<<
@@ -3957,7 +3957,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
  */
       }
 
-      /* "celltrip/utility/train.py":49
+      /* "celltrip/utility/continual.py":49
  *                 if str not in self.history_mem:
  *                     self.history_mem[str] = []
  *                 self.history_mem[str].append(tracemalloc.get_traced_memory())             # <<<<<<<<<<<<<<
@@ -4000,7 +4000,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
       __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
       __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-      /* "celltrip/utility/train.py":46
+      /* "celltrip/utility/continual.py":46
  *         # Record memory
  *         if self.memory_usage:
  *             if self.record:             # <<<<<<<<<<<<<<
@@ -4009,7 +4009,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
  */
     }
 
-    /* "celltrip/utility/train.py":50
+    /* "celltrip/utility/continual.py":50
  *                     self.history_mem[str] = []
  *                 self.history_mem[str].append(tracemalloc.get_traced_memory())
  *             if self.verbose:             # <<<<<<<<<<<<<<
@@ -4022,7 +4022,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     if (__pyx_t_3) {
 
-      /* "celltrip/utility/train.py":51
+      /* "celltrip/utility/continual.py":51
  *                 self.history_mem[str].append(tracemalloc.get_traced_memory())
  *             if self.verbose:
  *                 print(f'{str} Memory: Stored {self.history_mem[-1][0]} - Peak {self.history_mem[-1][1]}')             # <<<<<<<<<<<<<<
@@ -4088,7 +4088,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
       __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
       __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-      /* "celltrip/utility/train.py":50
+      /* "celltrip/utility/continual.py":50
  *                     self.history_mem[str] = []
  *                 self.history_mem[str].append(tracemalloc.get_traced_memory())
  *             if self.verbose:             # <<<<<<<<<<<<<<
@@ -4097,7 +4097,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
  */
     }
 
-    /* "celltrip/utility/train.py":52
+    /* "celltrip/utility/continual.py":52
  *             if self.verbose:
  *                 print(f'{str} Memory: Stored {self.history_mem[-1][0]} - Peak {self.history_mem[-1][1]}')
  *             tracemalloc.stop()             # <<<<<<<<<<<<<<
@@ -4133,7 +4133,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
     }
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-    /* "celltrip/utility/train.py":45
+    /* "celltrip/utility/continual.py":45
  *             print(f'{str}: {time_elapsed}')
  *         # Record memory
  *         if self.memory_usage:             # <<<<<<<<<<<<<<
@@ -4142,7 +4142,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
  */
   }
 
-  /* "celltrip/utility/train.py":55
+  /* "celltrip/utility/continual.py":55
  * 
  *         # Re-time to avoid extra runtime cost
  *         self.start_time = perf_counter()             # <<<<<<<<<<<<<<
@@ -4176,7 +4176,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_start_time, __pyx_t_4) < 0) __PYX_ERR(0, 55, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-  /* "celltrip/utility/train.py":56
+  /* "celltrip/utility/continual.py":56
  *         # Re-time to avoid extra runtime cost
  *         self.start_time = perf_counter()
  *         if self.memory_usage:             # <<<<<<<<<<<<<<
@@ -4189,7 +4189,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
   if (__pyx_t_3) {
 
-    /* "celltrip/utility/train.py":58
+    /* "celltrip/utility/continual.py":58
  *         if self.memory_usage:
  *             # WARNING, does not end tracemalloc
  *             tracemalloc.start()             # <<<<<<<<<<<<<<
@@ -4225,7 +4225,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
     }
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-    /* "celltrip/utility/train.py":56
+    /* "celltrip/utility/continual.py":56
  *         # Re-time to avoid extra runtime cost
  *         self.start_time = perf_counter()
  *         if self.memory_usage:             # <<<<<<<<<<<<<<
@@ -4234,7 +4234,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
  */
   }
 
-  /* "celltrip/utility/train.py":29
+  /* "celltrip/utility/continual.py":29
  *             tracemalloc.start()
  * 
  *     def log(self, str=''):             # <<<<<<<<<<<<<<
@@ -4250,7 +4250,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
   __Pyx_XDECREF(__pyx_t_4);
   __Pyx_XDECREF(__pyx_t_5);
   __Pyx_XDECREF(__pyx_t_10);
-  __Pyx_AddTraceback("celltrip.utility.train.time_logger.log", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.time_logger.log", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_time_elapsed);
@@ -4259,7 +4259,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
   return __pyx_r;
 }
 
-/* "celltrip/utility/train.py":60
+/* "celltrip/utility/continual.py":60
  *             tracemalloc.start()
  * 
  *     def aggregate(self, method='mean'):             # <<<<<<<<<<<<<<
@@ -4268,16 +4268,16 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_2log(CYTHON_UN
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_8celltrip_7utility_5train_11time_logger_5aggregate(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_11time_logger_5aggregate(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_8celltrip_7utility_5train_11time_logger_4aggregate, "Print mean times for all keys in ``self.history``");
-static PyMethodDef __pyx_mdef_8celltrip_7utility_5train_11time_logger_5aggregate = {"aggregate", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_5train_11time_logger_5aggregate, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_8celltrip_7utility_5train_11time_logger_4aggregate};
-static PyObject *__pyx_pw_8celltrip_7utility_5train_11time_logger_5aggregate(PyObject *__pyx_self, 
+PyDoc_STRVAR(__pyx_doc_8celltrip_7utility_9continual_11time_logger_4aggregate, "Print mean times for all keys in ``self.history``");
+static PyMethodDef __pyx_mdef_8celltrip_7utility_9continual_11time_logger_5aggregate = {"aggregate", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_9continual_11time_logger_5aggregate, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_8celltrip_7utility_9continual_11time_logger_4aggregate};
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_11time_logger_5aggregate(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -4363,11 +4363,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       __Pyx_Arg_XDECREF_FASTCALL(values[__pyx_temp]);
     }
   }
-  __Pyx_AddTraceback("celltrip.utility.train.time_logger.aggregate", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.time_logger.aggregate", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(__pyx_self, __pyx_v_self, __pyx_v_method);
+  __pyx_r = __pyx_pf_8celltrip_7utility_9continual_11time_logger_4aggregate(__pyx_self, __pyx_v_self, __pyx_v_method);
 
   /* function exit code */
   {
@@ -4380,7 +4380,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_method) {
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_11time_logger_4aggregate(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_method) {
   PyObject *__pyx_v_running_total = NULL;
   PyObject *__pyx_v_k = NULL;
   PyObject *__pyx_v_v = NULL;
@@ -4410,7 +4410,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("aggregate", 1);
 
-  /* "celltrip/utility/train.py":62
+  /* "celltrip/utility/continual.py":62
  *     def aggregate(self, method='mean'):
  *         """Print mean times for all keys in ``self.history``"""
  *         running_total = 0             # <<<<<<<<<<<<<<
@@ -4420,7 +4420,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
   __Pyx_INCREF(__pyx_int_0);
   __pyx_v_running_total = __pyx_int_0;
 
-  /* "celltrip/utility/train.py":63
+  /* "celltrip/utility/continual.py":63
  *         """Print mean times for all keys in ``self.history``"""
  *         running_total = 0
  *         for k, v in self.history.items():             # <<<<<<<<<<<<<<
@@ -4451,7 +4451,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
     __Pyx_XDECREF_SET(__pyx_v_v, __pyx_t_5);
     __pyx_t_5 = 0;
 
-    /* "celltrip/utility/train.py":64
+    /* "celltrip/utility/continual.py":64
  *         running_total = 0
  *         for k, v in self.history.items():
  *             avg_time_elapsed = np.array(v)             # <<<<<<<<<<<<<<
@@ -4488,7 +4488,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
     __Pyx_XDECREF_SET(__pyx_v_avg_time_elapsed, __pyx_t_5);
     __pyx_t_5 = 0;
 
-    /* "celltrip/utility/train.py":65
+    /* "celltrip/utility/continual.py":65
  *         for k, v in self.history.items():
  *             avg_time_elapsed = np.array(v)
  *             if self.discard_first_sample:             # <<<<<<<<<<<<<<
@@ -4501,7 +4501,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
     if (__pyx_t_10) {
 
-      /* "celltrip/utility/train.py":66
+      /* "celltrip/utility/continual.py":66
  *             avg_time_elapsed = np.array(v)
  *             if self.discard_first_sample:
  *                 avg_time_elapsed = avg_time_elapsed[1:]             # <<<<<<<<<<<<<<
@@ -4513,7 +4513,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
       __Pyx_DECREF_SET(__pyx_v_avg_time_elapsed, __pyx_t_5);
       __pyx_t_5 = 0;
 
-      /* "celltrip/utility/train.py":65
+      /* "celltrip/utility/continual.py":65
  *         for k, v in self.history.items():
  *             avg_time_elapsed = np.array(v)
  *             if self.discard_first_sample:             # <<<<<<<<<<<<<<
@@ -4522,7 +4522,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
  */
     }
 
-    /* "celltrip/utility/train.py":67
+    /* "celltrip/utility/continual.py":67
  *             if self.discard_first_sample:
  *                 avg_time_elapsed = avg_time_elapsed[1:]
  *             if method == 'mean':             # <<<<<<<<<<<<<<
@@ -4532,7 +4532,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
     __pyx_t_10 = (__Pyx_PyUnicode_Equals(__pyx_v_method, __pyx_n_u_mean, Py_EQ)); if (unlikely((__pyx_t_10 < 0))) __PYX_ERR(0, 67, __pyx_L1_error)
     if (__pyx_t_10) {
 
-      /* "celltrip/utility/train.py":68
+      /* "celltrip/utility/continual.py":68
  *                 avg_time_elapsed = avg_time_elapsed[1:]
  *             if method == 'mean':
  *                 avg_time_elapsed = np.mean(np.array(v))             # <<<<<<<<<<<<<<
@@ -4597,7 +4597,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
       __Pyx_DECREF_SET(__pyx_v_avg_time_elapsed, __pyx_t_5);
       __pyx_t_5 = 0;
 
-      /* "celltrip/utility/train.py":67
+      /* "celltrip/utility/continual.py":67
  *             if self.discard_first_sample:
  *                 avg_time_elapsed = avg_time_elapsed[1:]
  *             if method == 'mean':             # <<<<<<<<<<<<<<
@@ -4607,7 +4607,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
       goto __pyx_L6;
     }
 
-    /* "celltrip/utility/train.py":69
+    /* "celltrip/utility/continual.py":69
  *             if method == 'mean':
  *                 avg_time_elapsed = np.mean(np.array(v))
  *             elif method == 'sum':             # <<<<<<<<<<<<<<
@@ -4617,7 +4617,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
     __pyx_t_10 = (__Pyx_PyUnicode_Equals(__pyx_v_method, __pyx_n_u_sum, Py_EQ)); if (unlikely((__pyx_t_10 < 0))) __PYX_ERR(0, 69, __pyx_L1_error)
     if (__pyx_t_10) {
 
-      /* "celltrip/utility/train.py":70
+      /* "celltrip/utility/continual.py":70
  *                 avg_time_elapsed = np.mean(np.array(v))
  *             elif method == 'sum':
  *                 avg_time_elapsed = np.sum(np.array(v))             # <<<<<<<<<<<<<<
@@ -4682,7 +4682,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
       __Pyx_DECREF_SET(__pyx_v_avg_time_elapsed, __pyx_t_5);
       __pyx_t_5 = 0;
 
-      /* "celltrip/utility/train.py":69
+      /* "celltrip/utility/continual.py":69
  *             if method == 'mean':
  *                 avg_time_elapsed = np.mean(np.array(v))
  *             elif method == 'sum':             # <<<<<<<<<<<<<<
@@ -4692,7 +4692,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
     }
     __pyx_L6:;
 
-    /* "celltrip/utility/train.py":72
+    /* "celltrip/utility/continual.py":72
  *                 avg_time_elapsed = np.sum(np.array(v))
  * 
  *             running_total += avg_time_elapsed             # <<<<<<<<<<<<<<
@@ -4704,7 +4704,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
     __Pyx_DECREF_SET(__pyx_v_running_total, __pyx_t_5);
     __pyx_t_5 = 0;
 
-    /* "celltrip/utility/train.py":73
+    /* "celltrip/utility/continual.py":73
  * 
  *             running_total += avg_time_elapsed
  *             print(f'{k}: {avg_time_elapsed}')             # <<<<<<<<<<<<<<
@@ -4741,7 +4741,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-    /* "celltrip/utility/train.py":74
+    /* "celltrip/utility/continual.py":74
  *             running_total += avg_time_elapsed
  *             print(f'{k}: {avg_time_elapsed}')
  *             if self.memory_usage:             # <<<<<<<<<<<<<<
@@ -4754,7 +4754,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
     if (__pyx_t_10) {
 
-      /* "celltrip/utility/train.py":75
+      /* "celltrip/utility/continual.py":75
  *             print(f'{k}: {avg_time_elapsed}')
  *             if self.memory_usage:
  *                 stored = 0             # <<<<<<<<<<<<<<
@@ -4764,7 +4764,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
       __Pyx_INCREF(__pyx_int_0);
       __Pyx_XDECREF_SET(__pyx_v_stored, __pyx_int_0);
 
-      /* "celltrip/utility/train.py":76
+      /* "celltrip/utility/continual.py":76
  *             if self.memory_usage:
  *                 stored = 0
  *                 peak = 0             # <<<<<<<<<<<<<<
@@ -4774,7 +4774,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
       __Pyx_INCREF(__pyx_int_0);
       __Pyx_XDECREF_SET(__pyx_v_peak, __pyx_int_0);
 
-      /* "celltrip/utility/train.py":77
+      /* "celltrip/utility/continual.py":77
  *                 stored = 0
  *                 peak = 0
  *                 for val in self.history_mem[k]:             # <<<<<<<<<<<<<<
@@ -4842,7 +4842,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
         __Pyx_XDECREF_SET(__pyx_v_val, __pyx_t_8);
         __pyx_t_8 = 0;
 
-        /* "celltrip/utility/train.py":78
+        /* "celltrip/utility/continual.py":78
  *                 peak = 0
  *                 for val in self.history_mem[k]:
  *                     stored += val[0]             # <<<<<<<<<<<<<<
@@ -4857,7 +4857,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
         __Pyx_DECREF_SET(__pyx_v_stored, __pyx_t_6);
         __pyx_t_6 = 0;
 
-        /* "celltrip/utility/train.py":79
+        /* "celltrip/utility/continual.py":79
  *                 for val in self.history_mem[k]:
  *                     stored += val[0]
  *                     if val[1] > peak:             # <<<<<<<<<<<<<<
@@ -4872,7 +4872,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
         __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
         if (__pyx_t_10) {
 
-          /* "celltrip/utility/train.py":80
+          /* "celltrip/utility/continual.py":80
  *                     stored += val[0]
  *                     if val[1] > peak:
  *                         peak = val[1]             # <<<<<<<<<<<<<<
@@ -4884,7 +4884,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
           __Pyx_DECREF_SET(__pyx_v_peak, __pyx_t_8);
           __pyx_t_8 = 0;
 
-          /* "celltrip/utility/train.py":79
+          /* "celltrip/utility/continual.py":79
  *                 for val in self.history_mem[k]:
  *                     stored += val[0]
  *                     if val[1] > peak:             # <<<<<<<<<<<<<<
@@ -4893,7 +4893,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
  */
         }
 
-        /* "celltrip/utility/train.py":77
+        /* "celltrip/utility/continual.py":77
  *                 stored = 0
  *                 peak = 0
  *                 for val in self.history_mem[k]:             # <<<<<<<<<<<<<<
@@ -4903,7 +4903,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
       }
       __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-      /* "celltrip/utility/train.py":81
+      /* "celltrip/utility/continual.py":81
  *                     if val[1] > peak:
  *                         peak = val[1]
  *                 print(f'{k} Memory: Stored {stored} - Peak {peak}')             # <<<<<<<<<<<<<<
@@ -4951,7 +4951,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
       __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
       __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-      /* "celltrip/utility/train.py":74
+      /* "celltrip/utility/continual.py":74
  *             running_total += avg_time_elapsed
  *             print(f'{k}: {avg_time_elapsed}')
  *             if self.memory_usage:             # <<<<<<<<<<<<<<
@@ -4962,7 +4962,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "celltrip/utility/train.py":82
+  /* "celltrip/utility/continual.py":82
  *                         peak = val[1]
  *                 print(f'{k} Memory: Stored {stored} - Peak {peak}')
  *         print(f'Total: {running_total}')             # <<<<<<<<<<<<<<
@@ -4979,7 +4979,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "celltrip/utility/train.py":60
+  /* "celltrip/utility/continual.py":60
  *             tracemalloc.start()
  * 
  *     def aggregate(self, method='mean'):             # <<<<<<<<<<<<<<
@@ -4997,7 +4997,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
   __Pyx_XDECREF(__pyx_t_8);
   __Pyx_XDECREF(__pyx_t_11);
   __Pyx_XDECREF(__pyx_t_12);
-  __Pyx_AddTraceback("celltrip.utility.train.time_logger.aggregate", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.time_logger.aggregate", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_running_total);
@@ -5012,7 +5012,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
   return __pyx_r;
 }
 
-/* "celltrip/utility/train.py":94
+/* "celltrip/utility/continual.py":94
  *     'average': Takes average values over a sliding window
  *     """
  *     def __init__(             # <<<<<<<<<<<<<<
@@ -5021,15 +5021,15 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_11time_logger_4aggregate(CYT
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_1__init__(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_1__init__(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyMethodDef __pyx_mdef_8celltrip_7utility_5train_13EarlyStopping_1__init__ = {"__init__", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_1__init__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
-static PyObject *__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_1__init__(PyObject *__pyx_self, 
+static PyMethodDef __pyx_mdef_8celltrip_7utility_9continual_13EarlyStopping_1__init__ = {"__init__", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_1__init__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_1__init__(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -5064,18 +5064,18 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject **__pyx_pyargnames[] = {&__pyx_n_s_self,&__pyx_n_s_method,&__pyx_n_s_buffer,&__pyx_n_s_delta,&__pyx_n_s_decreasing,&__pyx_n_s_window_size,0};
     values[1] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_n_u_average)));
-    values[2] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)__pyx_int_30)));
-    values[3] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_float_1eneg_3)));
+    values[2] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)__pyx_int_6)));
+    values[3] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_float_1eneg_2)));
 
-    /* "celltrip/utility/train.py":100
- *         buffer=30,
- *         delta=1e-3,
+    /* "celltrip/utility/continual.py":100
+ *         buffer=6,
+ *         delta=1e-2,
  *         decreasing=False,             # <<<<<<<<<<<<<<
  * 
  *         # `average` method parameters
  */
     values[4] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)Py_False)));
-    values[5] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)__pyx_int_15)));
+    values[5] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)__pyx_int_3)));
     if (__pyx_kwds) {
       Py_ssize_t kw_args;
       switch (__pyx_nargs) {
@@ -5179,13 +5179,13 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       __Pyx_Arg_XDECREF_FASTCALL(values[__pyx_temp]);
     }
   }
-  __Pyx_AddTraceback("celltrip.utility.train.EarlyStopping.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.EarlyStopping.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(__pyx_self, __pyx_v_self, __pyx_v_method, __pyx_v_buffer, __pyx_v_delta, __pyx_v_decreasing, __pyx_v_window_size);
+  __pyx_r = __pyx_pf_8celltrip_7utility_9continual_13EarlyStopping___init__(__pyx_self, __pyx_v_self, __pyx_v_method, __pyx_v_buffer, __pyx_v_delta, __pyx_v_decreasing, __pyx_v_window_size);
 
-  /* "celltrip/utility/train.py":94
+  /* "celltrip/utility/continual.py":94
  *     'average': Takes average values over a sliding window
  *     """
  *     def __init__(             # <<<<<<<<<<<<<<
@@ -5204,7 +5204,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_method, PyObject *__pyx_v_buffer, PyObject *__pyx_v_delta, PyObject *__pyx_v_decreasing, PyObject *__pyx_v_window_size) {
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_13EarlyStopping___init__(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_method, PyObject *__pyx_v_buffer, PyObject *__pyx_v_delta, PyObject *__pyx_v_decreasing, PyObject *__pyx_v_window_size) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -5221,7 +5221,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(CYT
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("__init__", 1);
 
-  /* "celltrip/utility/train.py":109
+  /* "celltrip/utility/continual.py":109
  *     ):
  *         # Global parameters
  *         self.method = method             # <<<<<<<<<<<<<<
@@ -5230,7 +5230,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(CYT
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_method, __pyx_v_method) < 0) __PYX_ERR(0, 109, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":110
+  /* "celltrip/utility/continual.py":110
  *         # Global parameters
  *         self.method = method
  *         self.buffer = buffer             # <<<<<<<<<<<<<<
@@ -5239,7 +5239,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(CYT
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_buffer, __pyx_v_buffer) < 0) __PYX_ERR(0, 110, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":111
+  /* "celltrip/utility/continual.py":111
  *         self.method = method
  *         self.buffer = buffer
  *         self.delta = delta             # <<<<<<<<<<<<<<
@@ -5248,7 +5248,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(CYT
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_delta, __pyx_v_delta) < 0) __PYX_ERR(0, 111, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":112
+  /* "celltrip/utility/continual.py":112
  *         self.buffer = buffer
  *         self.delta = delta
  *         self.decreasing = decreasing             # <<<<<<<<<<<<<<
@@ -5257,7 +5257,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(CYT
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_decreasing, __pyx_v_decreasing) < 0) __PYX_ERR(0, 112, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":115
+  /* "celltrip/utility/continual.py":115
  * 
  *         # `average` method parameters
  *         self.window_size = window_size             # <<<<<<<<<<<<<<
@@ -5266,7 +5266,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(CYT
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_window_size, __pyx_v_window_size) < 0) __PYX_ERR(0, 115, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":116
+  /* "celltrip/utility/continual.py":116
  *         # `average` method parameters
  *         self.window_size = window_size
  *         self.history = deque([], window_size)             # <<<<<<<<<<<<<<
@@ -5303,7 +5303,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(CYT
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_history, __pyx_t_1) < 0) __PYX_ERR(0, 116, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "celltrip/utility/train.py":122
+  /* "celltrip/utility/continual.py":122
  * 
  *         # Checks
  *         if self.method not in ('absolute', 'average'):             # <<<<<<<<<<<<<<
@@ -5325,7 +5325,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(CYT
   __pyx_t_7 = __pyx_t_6;
   if (unlikely(__pyx_t_7)) {
 
-    /* "celltrip/utility/train.py":123
+    /* "celltrip/utility/continual.py":123
  *         # Checks
  *         if self.method not in ('absolute', 'average'):
  *             raise ValueError(f'`{self.method}` not found in methods')             # <<<<<<<<<<<<<<
@@ -5364,7 +5364,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(CYT
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
     __PYX_ERR(0, 123, __pyx_L1_error)
 
-    /* "celltrip/utility/train.py":122
+    /* "celltrip/utility/continual.py":122
  * 
  *         # Checks
  *         if self.method not in ('absolute', 'average'):             # <<<<<<<<<<<<<<
@@ -5373,7 +5373,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(CYT
  */
   }
 
-  /* "celltrip/utility/train.py":126
+  /* "celltrip/utility/continual.py":126
  * 
  *         # Initialize
  *         self.reset()             # <<<<<<<<<<<<<<
@@ -5406,7 +5406,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(CYT
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "celltrip/utility/train.py":94
+  /* "celltrip/utility/continual.py":94
  *     'average': Takes average values over a sliding window
  *     """
  *     def __init__(             # <<<<<<<<<<<<<<
@@ -5422,7 +5422,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(CYT
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_3);
   __Pyx_XDECREF(__pyx_t_4);
-  __Pyx_AddTraceback("celltrip.utility.train.EarlyStopping.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.EarlyStopping.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -5430,7 +5430,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(CYT
   return __pyx_r;
 }
 
-/* "celltrip/utility/train.py":128
+/* "celltrip/utility/continual.py":128
  *         self.reset()
  * 
  *     def __call__(self, objective):             # <<<<<<<<<<<<<<
@@ -5439,16 +5439,16 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping___init__(CYT
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_3__call__(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_3__call__(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_8celltrip_7utility_5train_13EarlyStopping_2__call__, "Return `True` if stop, else `False`.");
-static PyMethodDef __pyx_mdef_8celltrip_7utility_5train_13EarlyStopping_3__call__ = {"__call__", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_3__call__, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_8celltrip_7utility_5train_13EarlyStopping_2__call__};
-static PyObject *__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_3__call__(PyObject *__pyx_self, 
+PyDoc_STRVAR(__pyx_doc_8celltrip_7utility_9continual_13EarlyStopping_2__call__, "Return `True` if stop, else `False`.");
+static PyMethodDef __pyx_mdef_8celltrip_7utility_9continual_13EarlyStopping_3__call__ = {"__call__", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_3__call__, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_8celltrip_7utility_9continual_13EarlyStopping_2__call__};
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_3__call__(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -5533,11 +5533,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       __Pyx_Arg_XDECREF_FASTCALL(values[__pyx_temp]);
     }
   }
-  __Pyx_AddTraceback("celltrip.utility.train.EarlyStopping.__call__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.EarlyStopping.__call__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(__pyx_self, __pyx_v_self, __pyx_v_objective);
+  __pyx_r = __pyx_pf_8celltrip_7utility_9continual_13EarlyStopping_2__call__(__pyx_self, __pyx_v_self, __pyx_v_objective);
 
   /* function exit code */
   {
@@ -5550,7 +5550,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_objective) {
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_13EarlyStopping_2__call__(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_objective) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -5566,7 +5566,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(CY
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("__call__", 1);
 
-  /* "celltrip/utility/train.py":131
+  /* "celltrip/utility/continual.py":131
  *         """Return `True` if stop, else `False`."""
  *         # Record observation
  *         self.record_observation(objective)             # <<<<<<<<<<<<<<
@@ -5599,7 +5599,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(CY
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "celltrip/utility/train.py":134
+  /* "celltrip/utility/continual.py":134
  * 
  *         # Exit if not ready yet
  *         if self.current is None: return False             # <<<<<<<<<<<<<<
@@ -5617,7 +5617,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(CY
     goto __pyx_L0;
   }
 
-  /* "celltrip/utility/train.py":137
+  /* "celltrip/utility/continual.py":137
  * 
  *         # First observation
  *         if self.best is None: self.set_best(self.current)             # <<<<<<<<<<<<<<
@@ -5659,7 +5659,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(CY
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   }
 
-  /* "celltrip/utility/train.py":140
+  /* "celltrip/utility/continual.py":140
  * 
  *         # Check for new best
  *         if self.decreasing and (self.current < self.threshold): self.set_best(self.current)             # <<<<<<<<<<<<<<
@@ -5718,7 +5718,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(CY
     goto __pyx_L5;
   }
 
-  /* "celltrip/utility/train.py":141
+  /* "celltrip/utility/continual.py":141
  *         # Check for new best
  *         if self.decreasing and (self.current < self.threshold): self.set_best(self.current)
  *         elif not self.decreasing and (self.current > self.threshold): self.set_best(self.current)             # <<<<<<<<<<<<<<
@@ -5778,7 +5778,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(CY
     goto __pyx_L5;
   }
 
-  /* "celltrip/utility/train.py":142
+  /* "celltrip/utility/continual.py":142
  *         if self.decreasing and (self.current < self.threshold): self.set_best(self.current)
  *         elif not self.decreasing and (self.current > self.threshold): self.set_best(self.current)
  *         else: self.lapses += 1             # <<<<<<<<<<<<<<
@@ -5796,7 +5796,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(CY
   }
   __pyx_L5:;
 
-  /* "celltrip/utility/train.py":145
+  /* "celltrip/utility/continual.py":145
  * 
  *         # Check lapses
  *         if self.lapses >= self.buffer:             # <<<<<<<<<<<<<<
@@ -5814,7 +5814,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(CY
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   if (__pyx_t_5) {
 
-    /* "celltrip/utility/train.py":146
+    /* "celltrip/utility/continual.py":146
  *         # Check lapses
  *         if self.lapses >= self.buffer:
  *             return True             # <<<<<<<<<<<<<<
@@ -5826,7 +5826,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(CY
     __pyx_r = Py_True;
     goto __pyx_L0;
 
-    /* "celltrip/utility/train.py":145
+    /* "celltrip/utility/continual.py":145
  * 
  *         # Check lapses
  *         if self.lapses >= self.buffer:             # <<<<<<<<<<<<<<
@@ -5835,7 +5835,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(CY
  */
   }
 
-  /* "celltrip/utility/train.py":147
+  /* "celltrip/utility/continual.py":147
  *         if self.lapses >= self.buffer:
  *             return True
  *         return False             # <<<<<<<<<<<<<<
@@ -5847,7 +5847,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(CY
   __pyx_r = Py_False;
   goto __pyx_L0;
 
-  /* "celltrip/utility/train.py":128
+  /* "celltrip/utility/continual.py":128
  *         self.reset()
  * 
  *     def __call__(self, objective):             # <<<<<<<<<<<<<<
@@ -5861,7 +5861,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(CY
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_3);
   __Pyx_XDECREF(__pyx_t_6);
-  __Pyx_AddTraceback("celltrip.utility.train.EarlyStopping.__call__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.EarlyStopping.__call__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -5869,7 +5869,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(CY
   return __pyx_r;
 }
 
-/* "celltrip/utility/train.py":149
+/* "celltrip/utility/continual.py":149
  *         return False
  * 
  *     def record_observation(self, objective):             # <<<<<<<<<<<<<<
@@ -5878,16 +5878,16 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_2__call__(CY
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_5record_observation(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_5record_observation(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_8celltrip_7utility_5train_13EarlyStopping_4record_observation, "Record observation into internal `current` var based on method");
-static PyMethodDef __pyx_mdef_8celltrip_7utility_5train_13EarlyStopping_5record_observation = {"record_observation", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_5record_observation, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_8celltrip_7utility_5train_13EarlyStopping_4record_observation};
-static PyObject *__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_5record_observation(PyObject *__pyx_self, 
+PyDoc_STRVAR(__pyx_doc_8celltrip_7utility_9continual_13EarlyStopping_4record_observation, "Record observation into internal `current` var based on method");
+static PyMethodDef __pyx_mdef_8celltrip_7utility_9continual_13EarlyStopping_5record_observation = {"record_observation", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_5record_observation, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_8celltrip_7utility_9continual_13EarlyStopping_4record_observation};
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_5record_observation(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -5972,11 +5972,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       __Pyx_Arg_XDECREF_FASTCALL(values[__pyx_temp]);
     }
   }
-  __Pyx_AddTraceback("celltrip.utility.train.EarlyStopping.record_observation", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.EarlyStopping.record_observation", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_observation(__pyx_self, __pyx_v_self, __pyx_v_objective);
+  __pyx_r = __pyx_pf_8celltrip_7utility_9continual_13EarlyStopping_4record_observation(__pyx_self, __pyx_v_self, __pyx_v_objective);
 
   /* function exit code */
   {
@@ -5989,7 +5989,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_observation(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_objective) {
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_13EarlyStopping_4record_observation(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_objective) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -6006,7 +6006,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_obse
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("record_observation", 1);
 
-  /* "celltrip/utility/train.py":151
+  /* "celltrip/utility/continual.py":151
  *     def record_observation(self, objective):
  *         "Record observation into internal `current` var based on method"
  *         if self.method == 'absolute':             # <<<<<<<<<<<<<<
@@ -6019,7 +6019,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_obse
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   if (__pyx_t_2) {
 
-    /* "celltrip/utility/train.py":152
+    /* "celltrip/utility/continual.py":152
  *         "Record observation into internal `current` var based on method"
  *         if self.method == 'absolute':
  *             self.current = objective             # <<<<<<<<<<<<<<
@@ -6028,7 +6028,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_obse
  */
     if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_current, __pyx_v_objective) < 0) __PYX_ERR(0, 152, __pyx_L1_error)
 
-    /* "celltrip/utility/train.py":151
+    /* "celltrip/utility/continual.py":151
  *     def record_observation(self, objective):
  *         "Record observation into internal `current` var based on method"
  *         if self.method == 'absolute':             # <<<<<<<<<<<<<<
@@ -6038,7 +6038,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_obse
     goto __pyx_L3;
   }
 
-  /* "celltrip/utility/train.py":154
+  /* "celltrip/utility/continual.py":154
  *             self.current = objective
  * 
  *         elif self.method == 'average':             # <<<<<<<<<<<<<<
@@ -6051,7 +6051,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_obse
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   if (likely(__pyx_t_2)) {
 
-    /* "celltrip/utility/train.py":155
+    /* "celltrip/utility/continual.py":155
  * 
  *         elif self.method == 'average':
  *             self.history.append(objective)             # <<<<<<<<<<<<<<
@@ -6063,7 +6063,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_obse
     __pyx_t_3 = __Pyx_PyObject_Append(__pyx_t_1, __pyx_v_objective); if (unlikely(__pyx_t_3 == ((int)-1))) __PYX_ERR(0, 155, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-    /* "celltrip/utility/train.py":156
+    /* "celltrip/utility/continual.py":156
  *         elif self.method == 'average':
  *             self.history.append(objective)
  *             if len(self.history) >= self.window_size:             # <<<<<<<<<<<<<<
@@ -6085,7 +6085,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_obse
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     if (__pyx_t_2) {
 
-      /* "celltrip/utility/train.py":157
+      /* "celltrip/utility/continual.py":157
  *             self.history.append(objective)
  *             if len(self.history) >= self.window_size:
  *                 self.current = np.mean(self.history)             # <<<<<<<<<<<<<<
@@ -6125,7 +6125,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_obse
       if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_current, __pyx_t_6) < 0) __PYX_ERR(0, 157, __pyx_L1_error)
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-      /* "celltrip/utility/train.py":156
+      /* "celltrip/utility/continual.py":156
  *         elif self.method == 'average':
  *             self.history.append(objective)
  *             if len(self.history) >= self.window_size:             # <<<<<<<<<<<<<<
@@ -6134,7 +6134,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_obse
  */
     }
 
-    /* "celltrip/utility/train.py":154
+    /* "celltrip/utility/continual.py":154
  *             self.current = objective
  * 
  *         elif self.method == 'average':             # <<<<<<<<<<<<<<
@@ -6144,7 +6144,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_obse
     goto __pyx_L3;
   }
 
-  /* "celltrip/utility/train.py":159
+  /* "celltrip/utility/continual.py":159
  *                 self.current = np.mean(self.history)
  * 
  *         else: raise ValueError(f'`{self.method}` not found in methods')             # <<<<<<<<<<<<<<
@@ -6186,7 +6186,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_obse
   }
   __pyx_L3:;
 
-  /* "celltrip/utility/train.py":149
+  /* "celltrip/utility/continual.py":149
  *         return False
  * 
  *     def record_observation(self, objective):             # <<<<<<<<<<<<<<
@@ -6202,7 +6202,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_obse
   __Pyx_XDECREF(__pyx_t_5);
   __Pyx_XDECREF(__pyx_t_6);
   __Pyx_XDECREF(__pyx_t_7);
-  __Pyx_AddTraceback("celltrip.utility.train.EarlyStopping.record_observation", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.EarlyStopping.record_observation", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -6210,7 +6210,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_obse
   return __pyx_r;
 }
 
-/* "celltrip/utility/train.py":161
+/* "celltrip/utility/continual.py":161
  *         else: raise ValueError(f'`{self.method}` not found in methods')
  * 
  *     def reset(self):             # <<<<<<<<<<<<<<
@@ -6219,16 +6219,16 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_4record_obse
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_7reset(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_7reset(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_8celltrip_7utility_5train_13EarlyStopping_6reset, "Reset class to default state");
-static PyMethodDef __pyx_mdef_8celltrip_7utility_5train_13EarlyStopping_7reset = {"reset", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_7reset, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_8celltrip_7utility_5train_13EarlyStopping_6reset};
-static PyObject *__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_7reset(PyObject *__pyx_self, 
+PyDoc_STRVAR(__pyx_doc_8celltrip_7utility_9continual_13EarlyStopping_6reset, "Reset class to default state");
+static PyMethodDef __pyx_mdef_8celltrip_7utility_9continual_13EarlyStopping_7reset = {"reset", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_7reset, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_8celltrip_7utility_9continual_13EarlyStopping_6reset};
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_7reset(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -6298,11 +6298,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       __Pyx_Arg_XDECREF_FASTCALL(values[__pyx_temp]);
     }
   }
-  __Pyx_AddTraceback("celltrip.utility.train.EarlyStopping.reset", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.EarlyStopping.reset", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_5train_13EarlyStopping_6reset(__pyx_self, __pyx_v_self);
+  __pyx_r = __pyx_pf_8celltrip_7utility_9continual_13EarlyStopping_6reset(__pyx_self, __pyx_v_self);
 
   /* function exit code */
   {
@@ -6315,7 +6315,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_6reset(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self) {
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_13EarlyStopping_6reset(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -6327,7 +6327,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_6reset(CYTHO
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("reset", 1);
 
-  /* "celltrip/utility/train.py":164
+  /* "celltrip/utility/continual.py":164
  *         "Reset class to default state"
  *         # State variables
  *         self.history.clear()             # <<<<<<<<<<<<<<
@@ -6363,7 +6363,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_6reset(CYTHO
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "celltrip/utility/train.py":165
+  /* "celltrip/utility/continual.py":165
  *         # State variables
  *         self.history.clear()
  *         self.current = None             # <<<<<<<<<<<<<<
@@ -6372,7 +6372,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_6reset(CYTHO
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_current, Py_None) < 0) __PYX_ERR(0, 165, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":166
+  /* "celltrip/utility/continual.py":166
  *         self.history.clear()
  *         self.current = None
  *         self.best = None             # <<<<<<<<<<<<<<
@@ -6381,7 +6381,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_6reset(CYTHO
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_best, Py_None) < 0) __PYX_ERR(0, 166, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":167
+  /* "celltrip/utility/continual.py":167
  *         self.current = None
  *         self.best = None
  *         self.threshold = None             # <<<<<<<<<<<<<<
@@ -6390,7 +6390,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_6reset(CYTHO
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_threshold, Py_None) < 0) __PYX_ERR(0, 167, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":168
+  /* "celltrip/utility/continual.py":168
  *         self.best = None
  *         self.threshold = None
  *         self.lapses = 0             # <<<<<<<<<<<<<<
@@ -6399,7 +6399,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_6reset(CYTHO
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_lapses, __pyx_int_0) < 0) __PYX_ERR(0, 168, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":161
+  /* "celltrip/utility/continual.py":161
  *         else: raise ValueError(f'`{self.method}` not found in methods')
  * 
  *     def reset(self):             # <<<<<<<<<<<<<<
@@ -6414,7 +6414,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_6reset(CYTHO
   __Pyx_XDECREF(__pyx_t_1);
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_3);
-  __Pyx_AddTraceback("celltrip.utility.train.EarlyStopping.reset", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.EarlyStopping.reset", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -6422,7 +6422,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_6reset(CYTHO
   return __pyx_r;
 }
 
-/* "celltrip/utility/train.py":170
+/* "celltrip/utility/continual.py":170
  *         self.lapses = 0
  * 
  *     def set_best(self, objective):             # <<<<<<<<<<<<<<
@@ -6431,16 +6431,16 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_6reset(CYTHO
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_9set_best(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_9set_best(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_8celltrip_7utility_5train_13EarlyStopping_8set_best, "Set current best");
-static PyMethodDef __pyx_mdef_8celltrip_7utility_5train_13EarlyStopping_9set_best = {"set_best", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_9set_best, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_8celltrip_7utility_5train_13EarlyStopping_8set_best};
-static PyObject *__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_9set_best(PyObject *__pyx_self, 
+PyDoc_STRVAR(__pyx_doc_8celltrip_7utility_9continual_13EarlyStopping_8set_best, "Set current best");
+static PyMethodDef __pyx_mdef_8celltrip_7utility_9continual_13EarlyStopping_9set_best = {"set_best", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_9set_best, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_8celltrip_7utility_9continual_13EarlyStopping_8set_best};
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_9set_best(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -6525,11 +6525,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       __Pyx_Arg_XDECREF_FASTCALL(values[__pyx_temp]);
     }
   }
-  __Pyx_AddTraceback("celltrip.utility.train.EarlyStopping.set_best", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.EarlyStopping.set_best", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_5train_13EarlyStopping_8set_best(__pyx_self, __pyx_v_self, __pyx_v_objective);
+  __pyx_r = __pyx_pf_8celltrip_7utility_9continual_13EarlyStopping_8set_best(__pyx_self, __pyx_v_self, __pyx_v_objective);
 
   /* function exit code */
   {
@@ -6542,7 +6542,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_8set_best(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_objective) {
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_13EarlyStopping_8set_best(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_objective) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -6554,7 +6554,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_8set_best(CY
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("set_best", 1);
 
-  /* "celltrip/utility/train.py":172
+  /* "celltrip/utility/continual.py":172
  *     def set_best(self, objective):
  *         "Set current best"
  *         self.best = objective             # <<<<<<<<<<<<<<
@@ -6563,7 +6563,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_8set_best(CY
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_best, __pyx_v_objective) < 0) __PYX_ERR(0, 172, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":173
+  /* "celltrip/utility/continual.py":173
  *         "Set current best"
  *         self.best = objective
  *         self.calculate_threshold()             # <<<<<<<<<<<<<<
@@ -6596,7 +6596,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_8set_best(CY
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "celltrip/utility/train.py":174
+  /* "celltrip/utility/continual.py":174
  *         self.best = objective
  *         self.calculate_threshold()
  *         self.lapses = 0             # <<<<<<<<<<<<<<
@@ -6605,7 +6605,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_8set_best(CY
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_lapses, __pyx_int_0) < 0) __PYX_ERR(0, 174, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":170
+  /* "celltrip/utility/continual.py":170
  *         self.lapses = 0
  * 
  *     def set_best(self, objective):             # <<<<<<<<<<<<<<
@@ -6620,7 +6620,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_8set_best(CY
   __Pyx_XDECREF(__pyx_t_1);
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_3);
-  __Pyx_AddTraceback("celltrip.utility.train.EarlyStopping.set_best", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.EarlyStopping.set_best", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -6628,7 +6628,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_8set_best(CY
   return __pyx_r;
 }
 
-/* "celltrip/utility/train.py":176
+/* "celltrip/utility/continual.py":176
  *         self.lapses = 0
  * 
  *     def calculate_threshold(self):             # <<<<<<<<<<<<<<
@@ -6637,16 +6637,16 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_8set_best(CY
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_11calculate_threshold(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_11calculate_threshold(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_8celltrip_7utility_5train_13EarlyStopping_10calculate_threshold, "Calculate threshold for improvement");
-static PyMethodDef __pyx_mdef_8celltrip_7utility_5train_13EarlyStopping_11calculate_threshold = {"calculate_threshold", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_11calculate_threshold, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_8celltrip_7utility_5train_13EarlyStopping_10calculate_threshold};
-static PyObject *__pyx_pw_8celltrip_7utility_5train_13EarlyStopping_11calculate_threshold(PyObject *__pyx_self, 
+PyDoc_STRVAR(__pyx_doc_8celltrip_7utility_9continual_13EarlyStopping_10calculate_threshold, "Calculate threshold for improvement");
+static PyMethodDef __pyx_mdef_8celltrip_7utility_9continual_13EarlyStopping_11calculate_threshold = {"calculate_threshold", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_11calculate_threshold, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_8celltrip_7utility_9continual_13EarlyStopping_10calculate_threshold};
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_13EarlyStopping_11calculate_threshold(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -6716,11 +6716,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       __Pyx_Arg_XDECREF_FASTCALL(values[__pyx_temp]);
     }
   }
-  __Pyx_AddTraceback("celltrip.utility.train.EarlyStopping.calculate_threshold", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.EarlyStopping.calculate_threshold", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_5train_13EarlyStopping_10calculate_threshold(__pyx_self, __pyx_v_self);
+  __pyx_r = __pyx_pf_8celltrip_7utility_9continual_13EarlyStopping_10calculate_threshold(__pyx_self, __pyx_v_self);
 
   /* function exit code */
   {
@@ -6733,7 +6733,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_10calculate_threshold(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self) {
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_13EarlyStopping_10calculate_threshold(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -6746,7 +6746,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_10calculate_
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("calculate_threshold", 1);
 
-  /* "celltrip/utility/train.py":178
+  /* "celltrip/utility/continual.py":178
  *     def calculate_threshold(self):
  *         "Calculate threshold for improvement"
  *         self.threshold = self.best + (-1 if self.decreasing else 1) * self.delta             # <<<<<<<<<<<<<<
@@ -6779,7 +6779,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_10calculate_
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_threshold, __pyx_t_3) < 0) __PYX_ERR(0, 178, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":176
+  /* "celltrip/utility/continual.py":176
  *         self.lapses = 0
  * 
  *     def calculate_threshold(self):             # <<<<<<<<<<<<<<
@@ -6795,7 +6795,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_10calculate_
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_3);
   __Pyx_XDECREF(__pyx_t_5);
-  __Pyx_AddTraceback("celltrip.utility.train.EarlyStopping.calculate_threshold", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.EarlyStopping.calculate_threshold", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -6803,7 +6803,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_10calculate_
   return __pyx_r;
 }
 
-/* "celltrip/utility/train.py":183
+/* "celltrip/utility/continual.py":183
  * class RunningStatistics:
  *     # https://github.com/fredlarochelle/RunningStats/blob/main/src/RunningStats.cpp
  *     def __init__(self, n_set=None, **kwargs):             # <<<<<<<<<<<<<<
@@ -6812,15 +6812,15 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_13EarlyStopping_10calculate_
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_8celltrip_7utility_5train_17RunningStatistics_1__init__(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_17RunningStatistics_1__init__(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyMethodDef __pyx_mdef_8celltrip_7utility_5train_17RunningStatistics_1__init__ = {"__init__", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_5train_17RunningStatistics_1__init__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
-static PyObject *__pyx_pw_8celltrip_7utility_5train_17RunningStatistics_1__init__(PyObject *__pyx_self, 
+static PyMethodDef __pyx_mdef_8celltrip_7utility_9continual_17RunningStatistics_1__init__ = {"__init__", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_9continual_17RunningStatistics_1__init__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_17RunningStatistics_1__init__(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -6910,11 +6910,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
     }
   }
   __Pyx_DECREF(__pyx_v_kwargs); __pyx_v_kwargs = 0;
-  __Pyx_AddTraceback("celltrip.utility.train.RunningStatistics.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.RunningStatistics.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_5train_17RunningStatistics___init__(__pyx_self, __pyx_v_self, __pyx_v_n_set, __pyx_v_kwargs);
+  __pyx_r = __pyx_pf_8celltrip_7utility_9continual_17RunningStatistics___init__(__pyx_self, __pyx_v_self, __pyx_v_n_set, __pyx_v_kwargs);
 
   /* function exit code */
   __Pyx_DECREF(__pyx_v_kwargs);
@@ -6928,7 +6928,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics___init__(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_n_set, PyObject *__pyx_v_kwargs) {
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_17RunningStatistics___init__(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_n_set, PyObject *__pyx_v_kwargs) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -6939,7 +6939,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics___init__
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("__init__", 1);
 
-  /* "celltrip/utility/train.py":185
+  /* "celltrip/utility/continual.py":185
  *     def __init__(self, n_set=None, **kwargs):
  *         # Defaults
  *         self.reset(**kwargs)             # <<<<<<<<<<<<<<
@@ -6956,7 +6956,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics___init__
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":188
+  /* "celltrip/utility/continual.py":188
  * 
  *         # Params
  *         self.n_set = n_set             # <<<<<<<<<<<<<<
@@ -6965,7 +6965,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics___init__
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_n_set, __pyx_v_n_set) < 0) __PYX_ERR(0, 188, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":183
+  /* "celltrip/utility/continual.py":183
  * class RunningStatistics:
  *     # https://github.com/fredlarochelle/RunningStats/blob/main/src/RunningStats.cpp
  *     def __init__(self, n_set=None, **kwargs):             # <<<<<<<<<<<<<<
@@ -6980,7 +6980,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics___init__
   __Pyx_XDECREF(__pyx_t_1);
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_3);
-  __Pyx_AddTraceback("celltrip.utility.train.RunningStatistics.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.RunningStatistics.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -6988,7 +6988,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics___init__
   return __pyx_r;
 }
 
-/* "celltrip/utility/train.py":190
+/* "celltrip/utility/continual.py":190
  *         self.n_set = n_set
  * 
  *     def reset(self, mean=0, m2=0):             # <<<<<<<<<<<<<<
@@ -6997,15 +6997,15 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics___init__
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_8celltrip_7utility_5train_17RunningStatistics_3reset(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_17RunningStatistics_3reset(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyMethodDef __pyx_mdef_8celltrip_7utility_5train_17RunningStatistics_3reset = {"reset", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_5train_17RunningStatistics_3reset, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
-static PyObject *__pyx_pw_8celltrip_7utility_5train_17RunningStatistics_3reset(PyObject *__pyx_self, 
+static PyMethodDef __pyx_mdef_8celltrip_7utility_9continual_17RunningStatistics_3reset = {"reset", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_9continual_17RunningStatistics_3reset, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_17RunningStatistics_3reset(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -7105,11 +7105,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       __Pyx_Arg_XDECREF_FASTCALL(values[__pyx_temp]);
     }
   }
-  __Pyx_AddTraceback("celltrip.utility.train.RunningStatistics.reset", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.RunningStatistics.reset", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_5train_17RunningStatistics_2reset(__pyx_self, __pyx_v_self, __pyx_v_mean, __pyx_v_m2);
+  __pyx_r = __pyx_pf_8celltrip_7utility_9continual_17RunningStatistics_2reset(__pyx_self, __pyx_v_self, __pyx_v_mean, __pyx_v_m2);
 
   /* function exit code */
   {
@@ -7122,7 +7122,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_2reset(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_mean, PyObject *__pyx_v_m2) {
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_17RunningStatistics_2reset(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_mean, PyObject *__pyx_v_m2) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   int __pyx_lineno = 0;
@@ -7130,7 +7130,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_2reset(C
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("reset", 1);
 
-  /* "celltrip/utility/train.py":191
+  /* "celltrip/utility/continual.py":191
  * 
  *     def reset(self, mean=0, m2=0):
  *         self.mean_x = mean             # <<<<<<<<<<<<<<
@@ -7139,7 +7139,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_2reset(C
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_mean_x, __pyx_v_mean) < 0) __PYX_ERR(0, 191, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":192
+  /* "celltrip/utility/continual.py":192
  *     def reset(self, mean=0, m2=0):
  *         self.mean_x = mean
  *         self.m2 = m2             # <<<<<<<<<<<<<<
@@ -7148,7 +7148,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_2reset(C
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_m2, __pyx_v_m2) < 0) __PYX_ERR(0, 192, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":193
+  /* "celltrip/utility/continual.py":193
  *         self.mean_x = mean
  *         self.m2 = m2
  *         self.n = 0             # <<<<<<<<<<<<<<
@@ -7157,7 +7157,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_2reset(C
  */
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_n, __pyx_int_0) < 0) __PYX_ERR(0, 193, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":190
+  /* "celltrip/utility/continual.py":190
  *         self.n_set = n_set
  * 
  *     def reset(self, mean=0, m2=0):             # <<<<<<<<<<<<<<
@@ -7169,7 +7169,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_2reset(C
   __pyx_r = Py_None; __Pyx_INCREF(Py_None);
   goto __pyx_L0;
   __pyx_L1_error:;
-  __Pyx_AddTraceback("celltrip.utility.train.RunningStatistics.reset", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.RunningStatistics.reset", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -7177,7 +7177,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_2reset(C
   return __pyx_r;
 }
 
-/* "celltrip/utility/train.py":195
+/* "celltrip/utility/continual.py":195
  *         self.n = 0
  * 
  *     def update(self, x):             # <<<<<<<<<<<<<<
@@ -7186,15 +7186,15 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_2reset(C
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_8celltrip_7utility_5train_17RunningStatistics_5update(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_17RunningStatistics_5update(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyMethodDef __pyx_mdef_8celltrip_7utility_5train_17RunningStatistics_5update = {"update", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_5train_17RunningStatistics_5update, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
-static PyObject *__pyx_pw_8celltrip_7utility_5train_17RunningStatistics_5update(PyObject *__pyx_self, 
+static PyMethodDef __pyx_mdef_8celltrip_7utility_9continual_17RunningStatistics_5update = {"update", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_9continual_17RunningStatistics_5update, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_17RunningStatistics_5update(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -7279,11 +7279,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       __Pyx_Arg_XDECREF_FASTCALL(values[__pyx_temp]);
     }
   }
-  __Pyx_AddTraceback("celltrip.utility.train.RunningStatistics.update", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.RunningStatistics.update", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_5train_17RunningStatistics_4update(__pyx_self, __pyx_v_self, __pyx_v_x);
+  __pyx_r = __pyx_pf_8celltrip_7utility_9continual_17RunningStatistics_4update(__pyx_self, __pyx_v_self, __pyx_v_x);
 
   /* function exit code */
   {
@@ -7296,7 +7296,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_4update(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_x) {
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_17RunningStatistics_4update(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_x) {
   PyObject *__pyx_v_n = NULL;
   PyObject *__pyx_v_delta = NULL;
   PyObject *__pyx_r = NULL;
@@ -7310,7 +7310,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_4update(
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("update", 1);
 
-  /* "celltrip/utility/train.py":196
+  /* "celltrip/utility/continual.py":196
  * 
  *     def update(self, x):
  *         self.n += 1             # <<<<<<<<<<<<<<
@@ -7325,7 +7325,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_4update(
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_n, __pyx_t_2) < 0) __PYX_ERR(0, 196, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "celltrip/utility/train.py":197
+  /* "celltrip/utility/continual.py":197
  *     def update(self, x):
  *         self.n += 1
  *         n = self.n_set if self.n_set is not None else self.n             # <<<<<<<<<<<<<<
@@ -7350,7 +7350,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_4update(
   __pyx_v_n = __pyx_t_2;
   __pyx_t_2 = 0;
 
-  /* "celltrip/utility/train.py":199
+  /* "celltrip/utility/continual.py":199
  *         n = self.n_set if self.n_set is not None else self.n
  * 
  *         delta = x - self.mean_x             # <<<<<<<<<<<<<<
@@ -7365,7 +7365,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_4update(
   __pyx_v_delta = __pyx_t_1;
   __pyx_t_1 = 0;
 
-  /* "celltrip/utility/train.py":200
+  /* "celltrip/utility/continual.py":200
  * 
  *         delta = x - self.mean_x
  *         self.mean_x += delta / n             # <<<<<<<<<<<<<<
@@ -7383,7 +7383,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_4update(
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_mean_x, __pyx_t_4) < 0) __PYX_ERR(0, 200, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-  /* "celltrip/utility/train.py":201
+  /* "celltrip/utility/continual.py":201
  *         delta = x - self.mean_x
  *         self.mean_x += delta / n
  *         self.m2 += delta * (x - self.mean_x)             # <<<<<<<<<<<<<<
@@ -7407,7 +7407,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_4update(
   if (__Pyx_PyObject_SetAttrStr(__pyx_v_self, __pyx_n_s_m2, __pyx_t_1) < 0) __PYX_ERR(0, 201, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "celltrip/utility/train.py":195
+  /* "celltrip/utility/continual.py":195
  *         self.n = 0
  * 
  *     def update(self, x):             # <<<<<<<<<<<<<<
@@ -7422,7 +7422,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_4update(
   __Pyx_XDECREF(__pyx_t_1);
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_4);
-  __Pyx_AddTraceback("celltrip.utility.train.RunningStatistics.update", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.RunningStatistics.update", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_n);
@@ -7432,7 +7432,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_4update(
   return __pyx_r;
 }
 
-/* "celltrip/utility/train.py":203
+/* "celltrip/utility/continual.py":203
  *         self.m2 += delta * (x - self.mean_x)
  * 
  *     def mean(self):             # <<<<<<<<<<<<<<
@@ -7441,15 +7441,15 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_4update(
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_8celltrip_7utility_5train_17RunningStatistics_7mean(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_17RunningStatistics_7mean(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyMethodDef __pyx_mdef_8celltrip_7utility_5train_17RunningStatistics_7mean = {"mean", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_5train_17RunningStatistics_7mean, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
-static PyObject *__pyx_pw_8celltrip_7utility_5train_17RunningStatistics_7mean(PyObject *__pyx_self, 
+static PyMethodDef __pyx_mdef_8celltrip_7utility_9continual_17RunningStatistics_7mean = {"mean", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_9continual_17RunningStatistics_7mean, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_17RunningStatistics_7mean(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -7519,11 +7519,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       __Pyx_Arg_XDECREF_FASTCALL(values[__pyx_temp]);
     }
   }
-  __Pyx_AddTraceback("celltrip.utility.train.RunningStatistics.mean", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.RunningStatistics.mean", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_5train_17RunningStatistics_6mean(__pyx_self, __pyx_v_self);
+  __pyx_r = __pyx_pf_8celltrip_7utility_9continual_17RunningStatistics_6mean(__pyx_self, __pyx_v_self);
 
   /* function exit code */
   {
@@ -7536,7 +7536,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_6mean(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self) {
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_17RunningStatistics_6mean(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -7545,7 +7545,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_6mean(CY
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("mean", 1);
 
-  /* "celltrip/utility/train.py":204
+  /* "celltrip/utility/continual.py":204
  * 
  *     def mean(self):
  *         return self.mean_x             # <<<<<<<<<<<<<<
@@ -7559,7 +7559,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_6mean(CY
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "celltrip/utility/train.py":203
+  /* "celltrip/utility/continual.py":203
  *         self.m2 += delta * (x - self.mean_x)
  * 
  *     def mean(self):             # <<<<<<<<<<<<<<
@@ -7570,7 +7570,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_6mean(CY
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("celltrip.utility.train.RunningStatistics.mean", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.RunningStatistics.mean", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -7578,7 +7578,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_6mean(CY
   return __pyx_r;
 }
 
-/* "celltrip/utility/train.py":206
+/* "celltrip/utility/continual.py":206
  *         return self.mean_x
  * 
  *     def variance(self):             # <<<<<<<<<<<<<<
@@ -7587,15 +7587,15 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_6mean(CY
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_8celltrip_7utility_5train_17RunningStatistics_9variance(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_17RunningStatistics_9variance(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyMethodDef __pyx_mdef_8celltrip_7utility_5train_17RunningStatistics_9variance = {"variance", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_5train_17RunningStatistics_9variance, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
-static PyObject *__pyx_pw_8celltrip_7utility_5train_17RunningStatistics_9variance(PyObject *__pyx_self, 
+static PyMethodDef __pyx_mdef_8celltrip_7utility_9continual_17RunningStatistics_9variance = {"variance", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_9continual_17RunningStatistics_9variance, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
+static PyObject *__pyx_pw_8celltrip_7utility_9continual_17RunningStatistics_9variance(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -7665,11 +7665,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       __Pyx_Arg_XDECREF_FASTCALL(values[__pyx_temp]);
     }
   }
-  __Pyx_AddTraceback("celltrip.utility.train.RunningStatistics.variance", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.RunningStatistics.variance", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_5train_17RunningStatistics_8variance(__pyx_self, __pyx_v_self);
+  __pyx_r = __pyx_pf_8celltrip_7utility_9continual_17RunningStatistics_8variance(__pyx_self, __pyx_v_self);
 
   /* function exit code */
   {
@@ -7682,7 +7682,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_8variance(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self) {
+static PyObject *__pyx_pf_8celltrip_7utility_9continual_17RunningStatistics_8variance(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self) {
   PyObject *__pyx_v_n = NULL;
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
@@ -7695,7 +7695,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_8varianc
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("variance", 1);
 
-  /* "celltrip/utility/train.py":207
+  /* "celltrip/utility/continual.py":207
  * 
  *     def variance(self):
  *         n = self.n_set if self.n_set is not None else self.n             # <<<<<<<<<<<<<<
@@ -7720,7 +7720,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_8varianc
   __pyx_v_n = __pyx_t_1;
   __pyx_t_1 = 0;
 
-  /* "celltrip/utility/train.py":208
+  /* "celltrip/utility/continual.py":208
  *     def variance(self):
  *         n = self.n_set if self.n_set is not None else self.n
  *         if n < 2: return 0             # <<<<<<<<<<<<<<
@@ -7736,7 +7736,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_8varianc
     goto __pyx_L0;
   }
 
-  /* "celltrip/utility/train.py":209
+  /* "celltrip/utility/continual.py":209
  *         n = self.n_set if self.n_set is not None else self.n
  *         if n < 2: return 0
  *         else: return self.m2 / (self.n - 1)             # <<<<<<<<<<<<<<
@@ -7759,7 +7759,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_8varianc
     goto __pyx_L0;
   }
 
-  /* "celltrip/utility/train.py":206
+  /* "celltrip/utility/continual.py":206
  *         return self.mean_x
  * 
  *     def variance(self):             # <<<<<<<<<<<<<<
@@ -7772,7 +7772,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_5train_17RunningStatistics_8varianc
   __Pyx_XDECREF(__pyx_t_1);
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_4);
-  __Pyx_AddTraceback("celltrip.utility.train.RunningStatistics.variance", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("celltrip.utility.continual.RunningStatistics.variance", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_n);
@@ -7833,8 +7833,8 @@ static int __Pyx_CreateStringTabAndInitStrings(void) {
     {&__pyx_n_s_buffer, __pyx_k_buffer, sizeof(__pyx_k_buffer), 0, 0, 1, 1},
     {&__pyx_n_s_calculate_threshold, __pyx_k_calculate_threshold, sizeof(__pyx_k_calculate_threshold), 0, 0, 1, 1},
     {&__pyx_n_s_call, __pyx_k_call, sizeof(__pyx_k_call), 0, 0, 1, 1},
-    {&__pyx_n_s_celltrip_utility_train, __pyx_k_celltrip_utility_train, sizeof(__pyx_k_celltrip_utility_train), 0, 0, 1, 1},
-    {&__pyx_kp_s_celltrip_utility_train_py, __pyx_k_celltrip_utility_train_py, sizeof(__pyx_k_celltrip_utility_train_py), 0, 0, 1, 0},
+    {&__pyx_n_s_celltrip_utility_continual, __pyx_k_celltrip_utility_continual, sizeof(__pyx_k_celltrip_utility_continual), 0, 0, 1, 1},
+    {&__pyx_kp_s_celltrip_utility_continual_py, __pyx_k_celltrip_utility_continual_py, sizeof(__pyx_k_celltrip_utility_continual_py), 0, 0, 1, 0},
     {&__pyx_n_s_class_getitem, __pyx_k_class_getitem, sizeof(__pyx_k_class_getitem), 0, 0, 1, 1},
     {&__pyx_n_s_clear, __pyx_k_clear, sizeof(__pyx_k_clear), 0, 0, 1, 1},
     {&__pyx_n_s_cline_in_traceback, __pyx_k_cline_in_traceback, sizeof(__pyx_k_cline_in_traceback), 0, 0, 1, 1},
@@ -7931,7 +7931,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__Pyx_InitCachedConstants", 0);
 
-  /* "celltrip/utility/train.py":66
+  /* "celltrip/utility/continual.py":66
  *             avg_time_elapsed = np.array(v)
  *             if self.discard_first_sample:
  *                 avg_time_elapsed = avg_time_elapsed[1:]             # <<<<<<<<<<<<<<
@@ -7942,7 +7942,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __Pyx_GOTREF(__pyx_slice__3);
   __Pyx_GIVEREF(__pyx_slice__3);
 
-  /* "celltrip/utility/train.py":10
+  /* "celltrip/utility/continual.py":10
  * class time_logger():
  *     """Class made for easy logging with toggleable verbosity"""
  *     def __init__(             # <<<<<<<<<<<<<<
@@ -7952,12 +7952,12 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __pyx_tuple__7 = PyTuple_Pack(5, __pyx_n_s_self, __pyx_n_s_discard_first_sample, __pyx_n_s_record, __pyx_n_s_verbose, __pyx_n_s_memory_usage); if (unlikely(!__pyx_tuple__7)) __PYX_ERR(0, 10, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__7);
   __Pyx_GIVEREF(__pyx_tuple__7);
-  __pyx_codeobj__8 = (PyObject*)__Pyx_PyCode_New(5, 0, 0, 5, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__7, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_train_py, __pyx_n_s_init, 10, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__8)) __PYX_ERR(0, 10, __pyx_L1_error)
+  __pyx_codeobj__8 = (PyObject*)__Pyx_PyCode_New(5, 0, 0, 5, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__7, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_continual_py, __pyx_n_s_init, 10, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__8)) __PYX_ERR(0, 10, __pyx_L1_error)
   __pyx_tuple__9 = PyTuple_Pack(4, ((PyObject *)Py_False), ((PyObject *)Py_True), ((PyObject *)Py_False), ((PyObject *)Py_False)); if (unlikely(!__pyx_tuple__9)) __PYX_ERR(0, 10, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__9);
   __Pyx_GIVEREF(__pyx_tuple__9);
 
-  /* "celltrip/utility/train.py":29
+  /* "celltrip/utility/continual.py":29
  *             tracemalloc.start()
  * 
  *     def log(self, str=''):             # <<<<<<<<<<<<<<
@@ -7967,12 +7967,12 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __pyx_tuple__10 = PyTuple_Pack(3, __pyx_n_s_self, __pyx_n_s_str, __pyx_n_s_time_elapsed); if (unlikely(!__pyx_tuple__10)) __PYX_ERR(0, 29, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__10);
   __Pyx_GIVEREF(__pyx_tuple__10);
-  __pyx_codeobj__11 = (PyObject*)__Pyx_PyCode_New(2, 0, 0, 3, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__10, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_train_py, __pyx_n_s_log, 29, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__11)) __PYX_ERR(0, 29, __pyx_L1_error)
+  __pyx_codeobj__11 = (PyObject*)__Pyx_PyCode_New(2, 0, 0, 3, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__10, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_continual_py, __pyx_n_s_log, 29, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__11)) __PYX_ERR(0, 29, __pyx_L1_error)
   __pyx_tuple__12 = PyTuple_Pack(1, ((PyObject*)__pyx_kp_u_)); if (unlikely(!__pyx_tuple__12)) __PYX_ERR(0, 29, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__12);
   __Pyx_GIVEREF(__pyx_tuple__12);
 
-  /* "celltrip/utility/train.py":60
+  /* "celltrip/utility/continual.py":60
  *             tracemalloc.start()
  * 
  *     def aggregate(self, method='mean'):             # <<<<<<<<<<<<<<
@@ -7982,12 +7982,12 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __pyx_tuple__13 = PyTuple_Pack(9, __pyx_n_s_self, __pyx_n_s_method, __pyx_n_s_running_total, __pyx_n_s_k, __pyx_n_s_v, __pyx_n_s_avg_time_elapsed, __pyx_n_s_stored, __pyx_n_s_peak, __pyx_n_s_val); if (unlikely(!__pyx_tuple__13)) __PYX_ERR(0, 60, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__13);
   __Pyx_GIVEREF(__pyx_tuple__13);
-  __pyx_codeobj__14 = (PyObject*)__Pyx_PyCode_New(2, 0, 0, 9, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__13, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_train_py, __pyx_n_s_aggregate, 60, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__14)) __PYX_ERR(0, 60, __pyx_L1_error)
+  __pyx_codeobj__14 = (PyObject*)__Pyx_PyCode_New(2, 0, 0, 9, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__13, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_continual_py, __pyx_n_s_aggregate, 60, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__14)) __PYX_ERR(0, 60, __pyx_L1_error)
   __pyx_tuple__15 = PyTuple_Pack(1, ((PyObject*)__pyx_n_u_mean)); if (unlikely(!__pyx_tuple__15)) __PYX_ERR(0, 60, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__15);
   __Pyx_GIVEREF(__pyx_tuple__15);
 
-  /* "celltrip/utility/train.py":94
+  /* "celltrip/utility/continual.py":94
  *     'average': Takes average values over a sliding window
  *     """
  *     def __init__(             # <<<<<<<<<<<<<<
@@ -7997,12 +7997,12 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __pyx_tuple__16 = PyTuple_Pack(6, __pyx_n_s_self, __pyx_n_s_method, __pyx_n_s_buffer, __pyx_n_s_delta, __pyx_n_s_decreasing, __pyx_n_s_window_size); if (unlikely(!__pyx_tuple__16)) __PYX_ERR(0, 94, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__16);
   __Pyx_GIVEREF(__pyx_tuple__16);
-  __pyx_codeobj__17 = (PyObject*)__Pyx_PyCode_New(6, 0, 0, 6, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__16, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_train_py, __pyx_n_s_init, 94, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__17)) __PYX_ERR(0, 94, __pyx_L1_error)
-  __pyx_tuple__18 = PyTuple_Pack(5, ((PyObject*)__pyx_n_u_average), ((PyObject *)__pyx_int_30), ((PyObject*)__pyx_float_1eneg_3), ((PyObject *)Py_False), ((PyObject *)__pyx_int_15)); if (unlikely(!__pyx_tuple__18)) __PYX_ERR(0, 94, __pyx_L1_error)
+  __pyx_codeobj__17 = (PyObject*)__Pyx_PyCode_New(6, 0, 0, 6, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__16, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_continual_py, __pyx_n_s_init, 94, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__17)) __PYX_ERR(0, 94, __pyx_L1_error)
+  __pyx_tuple__18 = PyTuple_Pack(5, ((PyObject*)__pyx_n_u_average), ((PyObject *)__pyx_int_6), ((PyObject*)__pyx_float_1eneg_2), ((PyObject *)Py_False), ((PyObject *)__pyx_int_3)); if (unlikely(!__pyx_tuple__18)) __PYX_ERR(0, 94, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__18);
   __Pyx_GIVEREF(__pyx_tuple__18);
 
-  /* "celltrip/utility/train.py":128
+  /* "celltrip/utility/continual.py":128
  *         self.reset()
  * 
  *     def __call__(self, objective):             # <<<<<<<<<<<<<<
@@ -8012,18 +8012,18 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __pyx_tuple__19 = PyTuple_Pack(2, __pyx_n_s_self, __pyx_n_s_objective); if (unlikely(!__pyx_tuple__19)) __PYX_ERR(0, 128, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__19);
   __Pyx_GIVEREF(__pyx_tuple__19);
-  __pyx_codeobj__20 = (PyObject*)__Pyx_PyCode_New(2, 0, 0, 2, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__19, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_train_py, __pyx_n_s_call, 128, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__20)) __PYX_ERR(0, 128, __pyx_L1_error)
+  __pyx_codeobj__20 = (PyObject*)__Pyx_PyCode_New(2, 0, 0, 2, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__19, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_continual_py, __pyx_n_s_call, 128, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__20)) __PYX_ERR(0, 128, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":149
+  /* "celltrip/utility/continual.py":149
  *         return False
  * 
  *     def record_observation(self, objective):             # <<<<<<<<<<<<<<
  *         "Record observation into internal `current` var based on method"
  *         if self.method == 'absolute':
  */
-  __pyx_codeobj__21 = (PyObject*)__Pyx_PyCode_New(2, 0, 0, 2, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__19, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_train_py, __pyx_n_s_record_observation, 149, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__21)) __PYX_ERR(0, 149, __pyx_L1_error)
+  __pyx_codeobj__21 = (PyObject*)__Pyx_PyCode_New(2, 0, 0, 2, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__19, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_continual_py, __pyx_n_s_record_observation, 149, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__21)) __PYX_ERR(0, 149, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":161
+  /* "celltrip/utility/continual.py":161
  *         else: raise ValueError(f'`{self.method}` not found in methods')
  * 
  *     def reset(self):             # <<<<<<<<<<<<<<
@@ -8033,27 +8033,27 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __pyx_tuple__22 = PyTuple_Pack(1, __pyx_n_s_self); if (unlikely(!__pyx_tuple__22)) __PYX_ERR(0, 161, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__22);
   __Pyx_GIVEREF(__pyx_tuple__22);
-  __pyx_codeobj__23 = (PyObject*)__Pyx_PyCode_New(1, 0, 0, 1, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__22, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_train_py, __pyx_n_s_reset, 161, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__23)) __PYX_ERR(0, 161, __pyx_L1_error)
+  __pyx_codeobj__23 = (PyObject*)__Pyx_PyCode_New(1, 0, 0, 1, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__22, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_continual_py, __pyx_n_s_reset, 161, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__23)) __PYX_ERR(0, 161, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":170
+  /* "celltrip/utility/continual.py":170
  *         self.lapses = 0
  * 
  *     def set_best(self, objective):             # <<<<<<<<<<<<<<
  *         "Set current best"
  *         self.best = objective
  */
-  __pyx_codeobj__24 = (PyObject*)__Pyx_PyCode_New(2, 0, 0, 2, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__19, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_train_py, __pyx_n_s_set_best, 170, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__24)) __PYX_ERR(0, 170, __pyx_L1_error)
+  __pyx_codeobj__24 = (PyObject*)__Pyx_PyCode_New(2, 0, 0, 2, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__19, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_continual_py, __pyx_n_s_set_best, 170, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__24)) __PYX_ERR(0, 170, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":176
+  /* "celltrip/utility/continual.py":176
  *         self.lapses = 0
  * 
  *     def calculate_threshold(self):             # <<<<<<<<<<<<<<
  *         "Calculate threshold for improvement"
  *         self.threshold = self.best + (-1 if self.decreasing else 1) * self.delta
  */
-  __pyx_codeobj__25 = (PyObject*)__Pyx_PyCode_New(1, 0, 0, 1, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__22, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_train_py, __pyx_n_s_calculate_threshold, 176, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__25)) __PYX_ERR(0, 176, __pyx_L1_error)
+  __pyx_codeobj__25 = (PyObject*)__Pyx_PyCode_New(1, 0, 0, 1, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__22, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_continual_py, __pyx_n_s_calculate_threshold, 176, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__25)) __PYX_ERR(0, 176, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":183
+  /* "celltrip/utility/continual.py":183
  * class RunningStatistics:
  *     # https://github.com/fredlarochelle/RunningStats/blob/main/src/RunningStats.cpp
  *     def __init__(self, n_set=None, **kwargs):             # <<<<<<<<<<<<<<
@@ -8063,12 +8063,12 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __pyx_tuple__26 = PyTuple_Pack(3, __pyx_n_s_self, __pyx_n_s_n_set, __pyx_n_s_kwargs); if (unlikely(!__pyx_tuple__26)) __PYX_ERR(0, 183, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__26);
   __Pyx_GIVEREF(__pyx_tuple__26);
-  __pyx_codeobj__27 = (PyObject*)__Pyx_PyCode_New(2, 0, 0, 3, 0, CO_OPTIMIZED|CO_NEWLOCALS|CO_VARKEYWORDS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__26, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_train_py, __pyx_n_s_init, 183, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__27)) __PYX_ERR(0, 183, __pyx_L1_error)
+  __pyx_codeobj__27 = (PyObject*)__Pyx_PyCode_New(2, 0, 0, 3, 0, CO_OPTIMIZED|CO_NEWLOCALS|CO_VARKEYWORDS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__26, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_continual_py, __pyx_n_s_init, 183, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__27)) __PYX_ERR(0, 183, __pyx_L1_error)
   __pyx_tuple__28 = PyTuple_Pack(1, Py_None); if (unlikely(!__pyx_tuple__28)) __PYX_ERR(0, 183, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__28);
   __Pyx_GIVEREF(__pyx_tuple__28);
 
-  /* "celltrip/utility/train.py":190
+  /* "celltrip/utility/continual.py":190
  *         self.n_set = n_set
  * 
  *     def reset(self, mean=0, m2=0):             # <<<<<<<<<<<<<<
@@ -8078,12 +8078,12 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __pyx_tuple__29 = PyTuple_Pack(3, __pyx_n_s_self, __pyx_n_s_mean, __pyx_n_s_m2); if (unlikely(!__pyx_tuple__29)) __PYX_ERR(0, 190, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__29);
   __Pyx_GIVEREF(__pyx_tuple__29);
-  __pyx_codeobj__30 = (PyObject*)__Pyx_PyCode_New(3, 0, 0, 3, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__29, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_train_py, __pyx_n_s_reset, 190, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__30)) __PYX_ERR(0, 190, __pyx_L1_error)
+  __pyx_codeobj__30 = (PyObject*)__Pyx_PyCode_New(3, 0, 0, 3, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__29, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_continual_py, __pyx_n_s_reset, 190, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__30)) __PYX_ERR(0, 190, __pyx_L1_error)
   __pyx_tuple__31 = PyTuple_Pack(2, ((PyObject *)__pyx_int_0), ((PyObject *)__pyx_int_0)); if (unlikely(!__pyx_tuple__31)) __PYX_ERR(0, 190, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__31);
   __Pyx_GIVEREF(__pyx_tuple__31);
 
-  /* "celltrip/utility/train.py":195
+  /* "celltrip/utility/continual.py":195
  *         self.n = 0
  * 
  *     def update(self, x):             # <<<<<<<<<<<<<<
@@ -8093,18 +8093,18 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __pyx_tuple__32 = PyTuple_Pack(4, __pyx_n_s_self, __pyx_n_s_x, __pyx_n_s_n, __pyx_n_s_delta); if (unlikely(!__pyx_tuple__32)) __PYX_ERR(0, 195, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__32);
   __Pyx_GIVEREF(__pyx_tuple__32);
-  __pyx_codeobj__33 = (PyObject*)__Pyx_PyCode_New(2, 0, 0, 4, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__32, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_train_py, __pyx_n_s_update, 195, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__33)) __PYX_ERR(0, 195, __pyx_L1_error)
+  __pyx_codeobj__33 = (PyObject*)__Pyx_PyCode_New(2, 0, 0, 4, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__32, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_continual_py, __pyx_n_s_update, 195, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__33)) __PYX_ERR(0, 195, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":203
+  /* "celltrip/utility/continual.py":203
  *         self.m2 += delta * (x - self.mean_x)
  * 
  *     def mean(self):             # <<<<<<<<<<<<<<
  *         return self.mean_x
  * 
  */
-  __pyx_codeobj__34 = (PyObject*)__Pyx_PyCode_New(1, 0, 0, 1, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__22, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_train_py, __pyx_n_s_mean, 203, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__34)) __PYX_ERR(0, 203, __pyx_L1_error)
+  __pyx_codeobj__34 = (PyObject*)__Pyx_PyCode_New(1, 0, 0, 1, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__22, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_continual_py, __pyx_n_s_mean, 203, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__34)) __PYX_ERR(0, 203, __pyx_L1_error)
 
-  /* "celltrip/utility/train.py":206
+  /* "celltrip/utility/continual.py":206
  *         return self.mean_x
  * 
  *     def variance(self):             # <<<<<<<<<<<<<<
@@ -8114,7 +8114,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __pyx_tuple__35 = PyTuple_Pack(2, __pyx_n_s_self, __pyx_n_s_n); if (unlikely(!__pyx_tuple__35)) __PYX_ERR(0, 206, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__35);
   __Pyx_GIVEREF(__pyx_tuple__35);
-  __pyx_codeobj__36 = (PyObject*)__Pyx_PyCode_New(1, 0, 0, 2, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__35, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_train_py, __pyx_n_s_variance, 206, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__36)) __PYX_ERR(0, 206, __pyx_L1_error)
+  __pyx_codeobj__36 = (PyObject*)__Pyx_PyCode_New(1, 0, 0, 2, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__35, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_continual_py, __pyx_n_s_variance, 206, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__36)) __PYX_ERR(0, 206, __pyx_L1_error)
   __Pyx_RefNannyFinishContext();
   return 0;
   __pyx_L1_error:;
@@ -8125,12 +8125,12 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
 
 static CYTHON_SMALL_CODE int __Pyx_InitConstants(void) {
   if (__Pyx_CreateStringTabAndInitStrings() < 0) __PYX_ERR(0, 1, __pyx_L1_error);
-  __pyx_float_1eneg_3 = PyFloat_FromDouble(1e-3); if (unlikely(!__pyx_float_1eneg_3)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_float_1eneg_2 = PyFloat_FromDouble(1e-2); if (unlikely(!__pyx_float_1eneg_2)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_0 = PyInt_FromLong(0); if (unlikely(!__pyx_int_0)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_1 = PyInt_FromLong(1); if (unlikely(!__pyx_int_1)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_2 = PyInt_FromLong(2); if (unlikely(!__pyx_int_2)) __PYX_ERR(0, 1, __pyx_L1_error)
-  __pyx_int_15 = PyInt_FromLong(15); if (unlikely(!__pyx_int_15)) __PYX_ERR(0, 1, __pyx_L1_error)
-  __pyx_int_30 = PyInt_FromLong(30); if (unlikely(!__pyx_int_30)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_int_3 = PyInt_FromLong(3); if (unlikely(!__pyx_int_3)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_int_6 = PyInt_FromLong(6); if (unlikely(!__pyx_int_6)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_neg_1 = PyInt_FromLong(-1); if (unlikely(!__pyx_int_neg_1)) __PYX_ERR(0, 1, __pyx_L1_error)
   return 0;
   __pyx_L1_error:;
@@ -8211,10 +8211,10 @@ static int __Pyx_modinit_function_import_code(void) {
 #if PY_MAJOR_VERSION >= 3
 #if CYTHON_PEP489_MULTI_PHASE_INIT
 static PyObject* __pyx_pymod_create(PyObject *spec, PyModuleDef *def); /*proto*/
-static int __pyx_pymod_exec_train(PyObject* module); /*proto*/
+static int __pyx_pymod_exec_continual(PyObject* module); /*proto*/
 static PyModuleDef_Slot __pyx_moduledef_slots[] = {
   {Py_mod_create, (void*)__pyx_pymod_create},
-  {Py_mod_exec, (void*)__pyx_pymod_exec_train},
+  {Py_mod_exec, (void*)__pyx_pymod_exec_continual},
   {0, NULL}
 };
 #endif
@@ -8227,7 +8227,7 @@ namespace {
   #endif
   {
       PyModuleDef_HEAD_INIT,
-      "train",
+      "continual",
       0, /* m_doc */
     #if CYTHON_PEP489_MULTI_PHASE_INIT
       0, /* m_size */
@@ -8275,11 +8275,11 @@ namespace {
 
 
 #if PY_MAJOR_VERSION < 3
-__Pyx_PyMODINIT_FUNC inittrain(void) CYTHON_SMALL_CODE; /*proto*/
-__Pyx_PyMODINIT_FUNC inittrain(void)
+__Pyx_PyMODINIT_FUNC initcontinual(void) CYTHON_SMALL_CODE; /*proto*/
+__Pyx_PyMODINIT_FUNC initcontinual(void)
 #else
-__Pyx_PyMODINIT_FUNC PyInit_train(void) CYTHON_SMALL_CODE; /*proto*/
-__Pyx_PyMODINIT_FUNC PyInit_train(void)
+__Pyx_PyMODINIT_FUNC PyInit_continual(void) CYTHON_SMALL_CODE; /*proto*/
+__Pyx_PyMODINIT_FUNC PyInit_continual(void)
 #if CYTHON_PEP489_MULTI_PHASE_INIT
 {
   return PyModuleDef_Init(&__pyx_moduledef);
@@ -8360,7 +8360,7 @@ bad:
 }
 
 
-static CYTHON_SMALL_CODE int __pyx_pymod_exec_train(PyObject *__pyx_pyinit_module)
+static CYTHON_SMALL_CODE int __pyx_pymod_exec_continual(PyObject *__pyx_pyinit_module)
 #endif
 #endif
 {
@@ -8378,7 +8378,7 @@ static CYTHON_SMALL_CODE int __pyx_pymod_exec_train(PyObject *__pyx_pyinit_modul
   #if CYTHON_PEP489_MULTI_PHASE_INIT
   if (__pyx_m) {
     if (__pyx_m == __pyx_pyinit_module) return 0;
-    PyErr_SetString(PyExc_RuntimeError, "Module 'train' has already been imported. Re-initialisation is not supported.");
+    PyErr_SetString(PyExc_RuntimeError, "Module 'continual' has already been imported. Re-initialisation is not supported.");
     return -1;
   }
   #elif PY_MAJOR_VERSION >= 3
@@ -8390,13 +8390,13 @@ static CYTHON_SMALL_CODE int __pyx_pymod_exec_train(PyObject *__pyx_pyinit_modul
   Py_INCREF(__pyx_m);
   #else
   #if PY_MAJOR_VERSION < 3
-  __pyx_m = Py_InitModule4("train", __pyx_methods, 0, 0, PYTHON_API_VERSION); Py_XINCREF(__pyx_m);
+  __pyx_m = Py_InitModule4("continual", __pyx_methods, 0, 0, PYTHON_API_VERSION); Py_XINCREF(__pyx_m);
   if (unlikely(!__pyx_m)) __PYX_ERR(0, 1, __pyx_L1_error)
   #elif CYTHON_USE_MODULE_STATE
   __pyx_t_1 = PyModule_Create(&__pyx_moduledef); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 1, __pyx_L1_error)
   {
     int add_module_result = PyState_AddModule(__pyx_t_1, &__pyx_moduledef);
-    __pyx_t_1 = 0; /* transfer ownership from __pyx_t_1 to "train" pseudovariable */
+    __pyx_t_1 = 0; /* transfer ownership from __pyx_t_1 to "continual" pseudovariable */
     if (unlikely((add_module_result < 0))) __PYX_ERR(0, 1, __pyx_L1_error)
     pystate_addmodule_run = 1;
   }
@@ -8420,7 +8420,7 @@ if (!__Pyx_RefNanny) {
       Py_FatalError("failed to import 'refnanny' module");
 }
 #endif
-  __Pyx_RefNannySetupContext("__Pyx_PyMODINIT_FUNC PyInit_train(void)", 0);
+  __Pyx_RefNannySetupContext("__Pyx_PyMODINIT_FUNC PyInit_continual(void)", 0);
   if (__Pyx_check_binary_version(__PYX_LIMITED_VERSION_HEX, __Pyx_get_runtime_version(), CYTHON_COMPILING_IN_LIMITED_API) < 0) __PYX_ERR(0, 1, __pyx_L1_error)
   #ifdef __Pxy_PyFrame_Initialize_Offsets
   __Pxy_PyFrame_Initialize_Offsets();
@@ -8458,14 +8458,14 @@ if (!__Pyx_RefNanny) {
   #if PY_MAJOR_VERSION < 3 && (__PYX_DEFAULT_STRING_ENCODING_IS_ASCII || __PYX_DEFAULT_STRING_ENCODING_IS_DEFAULT)
   if (__Pyx_init_sys_getdefaultencoding_params() < 0) __PYX_ERR(0, 1, __pyx_L1_error)
   #endif
-  if (__pyx_module_is_main_celltrip__utility__train) {
+  if (__pyx_module_is_main_celltrip__utility__continual) {
     if (PyObject_SetAttr(__pyx_m, __pyx_n_s_name, __pyx_n_s_main) < 0) __PYX_ERR(0, 1, __pyx_L1_error)
   }
   #if PY_MAJOR_VERSION >= 3
   {
     PyObject *modules = PyImport_GetModuleDict(); if (unlikely(!modules)) __PYX_ERR(0, 1, __pyx_L1_error)
-    if (!PyDict_GetItemString(modules, "celltrip.utility.train")) {
-      if (unlikely((PyDict_SetItemString(modules, "celltrip.utility.train", __pyx_m) < 0))) __PYX_ERR(0, 1, __pyx_L1_error)
+    if (!PyDict_GetItemString(modules, "celltrip.utility.continual")) {
+      if (unlikely((PyDict_SetItemString(modules, "celltrip.utility.continual", __pyx_m) < 0))) __PYX_ERR(0, 1, __pyx_L1_error)
     }
   }
   #endif
@@ -8486,7 +8486,7 @@ if (!__Pyx_RefNanny) {
   if (__Pyx_patch_abc() < 0) __PYX_ERR(0, 1, __pyx_L1_error)
   #endif
 
-  /* "celltrip/utility/train.py":1
+  /* "celltrip/utility/continual.py":1
  * from collections import deque             # <<<<<<<<<<<<<<
  * from time import perf_counter
  * import tracemalloc
@@ -8505,7 +8505,7 @@ if (!__Pyx_RefNanny) {
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":2
+  /* "celltrip/utility/continual.py":2
  * from collections import deque
  * from time import perf_counter             # <<<<<<<<<<<<<<
  * import tracemalloc
@@ -8525,7 +8525,7 @@ if (!__Pyx_RefNanny) {
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "celltrip/utility/train.py":3
+  /* "celltrip/utility/continual.py":3
  * from collections import deque
  * from time import perf_counter
  * import tracemalloc             # <<<<<<<<<<<<<<
@@ -8537,7 +8537,7 @@ if (!__Pyx_RefNanny) {
   if (PyDict_SetItem(__pyx_d, __pyx_n_s_tracemalloc, __pyx_t_2) < 0) __PYX_ERR(0, 3, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "celltrip/utility/train.py":5
+  /* "celltrip/utility/continual.py":5
  * import tracemalloc
  * 
  * import numpy as np             # <<<<<<<<<<<<<<
@@ -8549,56 +8549,56 @@ if (!__Pyx_RefNanny) {
   if (PyDict_SetItem(__pyx_d, __pyx_n_s_np, __pyx_t_2) < 0) __PYX_ERR(0, 5, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "celltrip/utility/train.py":8
+  /* "celltrip/utility/continual.py":8
  * 
  * 
  * class time_logger():             # <<<<<<<<<<<<<<
  *     """Class made for easy logging with toggleable verbosity"""
  *     def __init__(
  */
-  __pyx_t_2 = __Pyx_Py3MetaclassPrepare((PyObject *) NULL, __pyx_empty_tuple, __pyx_n_s_time_logger, __pyx_n_s_time_logger, (PyObject *) NULL, __pyx_n_s_celltrip_utility_train, __pyx_kp_s_Class_made_for_easy_logging_with); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 8, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_Py3MetaclassPrepare((PyObject *) NULL, __pyx_empty_tuple, __pyx_n_s_time_logger, __pyx_n_s_time_logger, (PyObject *) NULL, __pyx_n_s_celltrip_utility_continual, __pyx_kp_s_Class_made_for_easy_logging_with); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 8, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
 
-  /* "celltrip/utility/train.py":10
+  /* "celltrip/utility/continual.py":10
  * class time_logger():
  *     """Class made for easy logging with toggleable verbosity"""
  *     def __init__(             # <<<<<<<<<<<<<<
  *         self,
  *         discard_first_sample=False,
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_5train_11time_logger_1__init__, 0, __pyx_n_s_time_logger___init, NULL, __pyx_n_s_celltrip_utility_train, __pyx_d, ((PyObject *)__pyx_codeobj__8)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 10, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_9continual_11time_logger_1__init__, 0, __pyx_n_s_time_logger___init, NULL, __pyx_n_s_celltrip_utility_continual, __pyx_d, ((PyObject *)__pyx_codeobj__8)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 10, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_CyFunction_SetDefaultsTuple(__pyx_t_3, __pyx_tuple__9);
   if (__Pyx_SetNameInClass(__pyx_t_2, __pyx_n_s_init, __pyx_t_3) < 0) __PYX_ERR(0, 10, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":29
+  /* "celltrip/utility/continual.py":29
  *             tracemalloc.start()
  * 
  *     def log(self, str=''):             # <<<<<<<<<<<<<<
  *         """Print with message ``str`` if verbose.  Otherwise, skip"""
  *         if not (self.verbose or self.record):
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_5train_11time_logger_3log, 0, __pyx_n_s_time_logger_log, NULL, __pyx_n_s_celltrip_utility_train, __pyx_d, ((PyObject *)__pyx_codeobj__11)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 29, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_9continual_11time_logger_3log, 0, __pyx_n_s_time_logger_log, NULL, __pyx_n_s_celltrip_utility_continual, __pyx_d, ((PyObject *)__pyx_codeobj__11)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 29, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_CyFunction_SetDefaultsTuple(__pyx_t_3, __pyx_tuple__12);
   if (__Pyx_SetNameInClass(__pyx_t_2, __pyx_n_s_log, __pyx_t_3) < 0) __PYX_ERR(0, 29, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":60
+  /* "celltrip/utility/continual.py":60
  *             tracemalloc.start()
  * 
  *     def aggregate(self, method='mean'):             # <<<<<<<<<<<<<<
  *         """Print mean times for all keys in ``self.history``"""
  *         running_total = 0
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_5train_11time_logger_5aggregate, 0, __pyx_n_s_time_logger_aggregate, NULL, __pyx_n_s_celltrip_utility_train, __pyx_d, ((PyObject *)__pyx_codeobj__14)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 60, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_9continual_11time_logger_5aggregate, 0, __pyx_n_s_time_logger_aggregate, NULL, __pyx_n_s_celltrip_utility_continual, __pyx_d, ((PyObject *)__pyx_codeobj__14)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 60, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_CyFunction_SetDefaultsTuple(__pyx_t_3, __pyx_tuple__15);
   if (__Pyx_SetNameInClass(__pyx_t_2, __pyx_n_s_aggregate, __pyx_t_3) < 0) __PYX_ERR(0, 60, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":8
+  /* "celltrip/utility/continual.py":8
  * 
  * 
  * class time_logger():             # <<<<<<<<<<<<<<
@@ -8611,90 +8611,90 @@ if (!__Pyx_RefNanny) {
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "celltrip/utility/train.py":85
+  /* "celltrip/utility/continual.py":85
  * 
  * 
  * class EarlyStopping:             # <<<<<<<<<<<<<<
  *     """
  *     Early stopping class with a few trigger methods
  */
-  __pyx_t_2 = __Pyx_Py3MetaclassPrepare((PyObject *) NULL, __pyx_empty_tuple, __pyx_n_s_EarlyStopping, __pyx_n_s_EarlyStopping, (PyObject *) NULL, __pyx_n_s_celltrip_utility_train, __pyx_kp_s_Early_stopping_class_with_a_few); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 85, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_Py3MetaclassPrepare((PyObject *) NULL, __pyx_empty_tuple, __pyx_n_s_EarlyStopping, __pyx_n_s_EarlyStopping, (PyObject *) NULL, __pyx_n_s_celltrip_utility_continual, __pyx_kp_s_Early_stopping_class_with_a_few); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 85, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
 
-  /* "celltrip/utility/train.py":94
+  /* "celltrip/utility/continual.py":94
  *     'average': Takes average values over a sliding window
  *     """
  *     def __init__(             # <<<<<<<<<<<<<<
  *         self,
  *         # Global parameters
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_5train_13EarlyStopping_1__init__, 0, __pyx_n_s_EarlyStopping___init, NULL, __pyx_n_s_celltrip_utility_train, __pyx_d, ((PyObject *)__pyx_codeobj__17)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 94, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_9continual_13EarlyStopping_1__init__, 0, __pyx_n_s_EarlyStopping___init, NULL, __pyx_n_s_celltrip_utility_continual, __pyx_d, ((PyObject *)__pyx_codeobj__17)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 94, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_CyFunction_SetDefaultsTuple(__pyx_t_3, __pyx_tuple__18);
   if (__Pyx_SetNameInClass(__pyx_t_2, __pyx_n_s_init, __pyx_t_3) < 0) __PYX_ERR(0, 94, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":128
+  /* "celltrip/utility/continual.py":128
  *         self.reset()
  * 
  *     def __call__(self, objective):             # <<<<<<<<<<<<<<
  *         """Return `True` if stop, else `False`."""
  *         # Record observation
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_5train_13EarlyStopping_3__call__, 0, __pyx_n_s_EarlyStopping___call, NULL, __pyx_n_s_celltrip_utility_train, __pyx_d, ((PyObject *)__pyx_codeobj__20)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 128, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_9continual_13EarlyStopping_3__call__, 0, __pyx_n_s_EarlyStopping___call, NULL, __pyx_n_s_celltrip_utility_continual, __pyx_d, ((PyObject *)__pyx_codeobj__20)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 128, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   if (__Pyx_SetNameInClass(__pyx_t_2, __pyx_n_s_call, __pyx_t_3) < 0) __PYX_ERR(0, 128, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":149
+  /* "celltrip/utility/continual.py":149
  *         return False
  * 
  *     def record_observation(self, objective):             # <<<<<<<<<<<<<<
  *         "Record observation into internal `current` var based on method"
  *         if self.method == 'absolute':
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_5train_13EarlyStopping_5record_observation, 0, __pyx_n_s_EarlyStopping_record_observation, NULL, __pyx_n_s_celltrip_utility_train, __pyx_d, ((PyObject *)__pyx_codeobj__21)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 149, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_9continual_13EarlyStopping_5record_observation, 0, __pyx_n_s_EarlyStopping_record_observation, NULL, __pyx_n_s_celltrip_utility_continual, __pyx_d, ((PyObject *)__pyx_codeobj__21)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 149, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   if (__Pyx_SetNameInClass(__pyx_t_2, __pyx_n_s_record_observation, __pyx_t_3) < 0) __PYX_ERR(0, 149, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":161
+  /* "celltrip/utility/continual.py":161
  *         else: raise ValueError(f'`{self.method}` not found in methods')
  * 
  *     def reset(self):             # <<<<<<<<<<<<<<
  *         "Reset class to default state"
  *         # State variables
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_5train_13EarlyStopping_7reset, 0, __pyx_n_s_EarlyStopping_reset, NULL, __pyx_n_s_celltrip_utility_train, __pyx_d, ((PyObject *)__pyx_codeobj__23)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 161, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_9continual_13EarlyStopping_7reset, 0, __pyx_n_s_EarlyStopping_reset, NULL, __pyx_n_s_celltrip_utility_continual, __pyx_d, ((PyObject *)__pyx_codeobj__23)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 161, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   if (__Pyx_SetNameInClass(__pyx_t_2, __pyx_n_s_reset, __pyx_t_3) < 0) __PYX_ERR(0, 161, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":170
+  /* "celltrip/utility/continual.py":170
  *         self.lapses = 0
  * 
  *     def set_best(self, objective):             # <<<<<<<<<<<<<<
  *         "Set current best"
  *         self.best = objective
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_5train_13EarlyStopping_9set_best, 0, __pyx_n_s_EarlyStopping_set_best, NULL, __pyx_n_s_celltrip_utility_train, __pyx_d, ((PyObject *)__pyx_codeobj__24)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 170, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_9continual_13EarlyStopping_9set_best, 0, __pyx_n_s_EarlyStopping_set_best, NULL, __pyx_n_s_celltrip_utility_continual, __pyx_d, ((PyObject *)__pyx_codeobj__24)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 170, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   if (__Pyx_SetNameInClass(__pyx_t_2, __pyx_n_s_set_best, __pyx_t_3) < 0) __PYX_ERR(0, 170, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":176
+  /* "celltrip/utility/continual.py":176
  *         self.lapses = 0
  * 
  *     def calculate_threshold(self):             # <<<<<<<<<<<<<<
  *         "Calculate threshold for improvement"
  *         self.threshold = self.best + (-1 if self.decreasing else 1) * self.delta
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_5train_13EarlyStopping_11calculate_threshold, 0, __pyx_n_s_EarlyStopping_calculate_threshol, NULL, __pyx_n_s_celltrip_utility_train, __pyx_d, ((PyObject *)__pyx_codeobj__25)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 176, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_9continual_13EarlyStopping_11calculate_threshold, 0, __pyx_n_s_EarlyStopping_calculate_threshol, NULL, __pyx_n_s_celltrip_utility_continual, __pyx_d, ((PyObject *)__pyx_codeobj__25)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 176, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   if (__Pyx_SetNameInClass(__pyx_t_2, __pyx_n_s_calculate_threshold, __pyx_t_3) < 0) __PYX_ERR(0, 176, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":85
+  /* "celltrip/utility/continual.py":85
  * 
  * 
  * class EarlyStopping:             # <<<<<<<<<<<<<<
@@ -8707,79 +8707,79 @@ if (!__Pyx_RefNanny) {
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "celltrip/utility/train.py":181
+  /* "celltrip/utility/continual.py":181
  * 
  * 
  * class RunningStatistics:             # <<<<<<<<<<<<<<
  *     # https://github.com/fredlarochelle/RunningStats/blob/main/src/RunningStats.cpp
  *     def __init__(self, n_set=None, **kwargs):
  */
-  __pyx_t_2 = __Pyx_Py3MetaclassPrepare((PyObject *) NULL, __pyx_empty_tuple, __pyx_n_s_RunningStatistics, __pyx_n_s_RunningStatistics, (PyObject *) NULL, __pyx_n_s_celltrip_utility_train, (PyObject *) NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 181, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_Py3MetaclassPrepare((PyObject *) NULL, __pyx_empty_tuple, __pyx_n_s_RunningStatistics, __pyx_n_s_RunningStatistics, (PyObject *) NULL, __pyx_n_s_celltrip_utility_continual, (PyObject *) NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 181, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
 
-  /* "celltrip/utility/train.py":183
+  /* "celltrip/utility/continual.py":183
  * class RunningStatistics:
  *     # https://github.com/fredlarochelle/RunningStats/blob/main/src/RunningStats.cpp
  *     def __init__(self, n_set=None, **kwargs):             # <<<<<<<<<<<<<<
  *         # Defaults
  *         self.reset(**kwargs)
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_5train_17RunningStatistics_1__init__, 0, __pyx_n_s_RunningStatistics___init, NULL, __pyx_n_s_celltrip_utility_train, __pyx_d, ((PyObject *)__pyx_codeobj__27)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 183, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_9continual_17RunningStatistics_1__init__, 0, __pyx_n_s_RunningStatistics___init, NULL, __pyx_n_s_celltrip_utility_continual, __pyx_d, ((PyObject *)__pyx_codeobj__27)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 183, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_CyFunction_SetDefaultsTuple(__pyx_t_3, __pyx_tuple__28);
   if (__Pyx_SetNameInClass(__pyx_t_2, __pyx_n_s_init, __pyx_t_3) < 0) __PYX_ERR(0, 183, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":190
+  /* "celltrip/utility/continual.py":190
  *         self.n_set = n_set
  * 
  *     def reset(self, mean=0, m2=0):             # <<<<<<<<<<<<<<
  *         self.mean_x = mean
  *         self.m2 = m2
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_5train_17RunningStatistics_3reset, 0, __pyx_n_s_RunningStatistics_reset, NULL, __pyx_n_s_celltrip_utility_train, __pyx_d, ((PyObject *)__pyx_codeobj__30)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 190, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_9continual_17RunningStatistics_3reset, 0, __pyx_n_s_RunningStatistics_reset, NULL, __pyx_n_s_celltrip_utility_continual, __pyx_d, ((PyObject *)__pyx_codeobj__30)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 190, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_CyFunction_SetDefaultsTuple(__pyx_t_3, __pyx_tuple__31);
   if (__Pyx_SetNameInClass(__pyx_t_2, __pyx_n_s_reset, __pyx_t_3) < 0) __PYX_ERR(0, 190, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":195
+  /* "celltrip/utility/continual.py":195
  *         self.n = 0
  * 
  *     def update(self, x):             # <<<<<<<<<<<<<<
  *         self.n += 1
  *         n = self.n_set if self.n_set is not None else self.n
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_5train_17RunningStatistics_5update, 0, __pyx_n_s_RunningStatistics_update, NULL, __pyx_n_s_celltrip_utility_train, __pyx_d, ((PyObject *)__pyx_codeobj__33)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 195, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_9continual_17RunningStatistics_5update, 0, __pyx_n_s_RunningStatistics_update, NULL, __pyx_n_s_celltrip_utility_continual, __pyx_d, ((PyObject *)__pyx_codeobj__33)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 195, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   if (__Pyx_SetNameInClass(__pyx_t_2, __pyx_n_s_update, __pyx_t_3) < 0) __PYX_ERR(0, 195, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":203
+  /* "celltrip/utility/continual.py":203
  *         self.m2 += delta * (x - self.mean_x)
  * 
  *     def mean(self):             # <<<<<<<<<<<<<<
  *         return self.mean_x
  * 
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_5train_17RunningStatistics_7mean, 0, __pyx_n_s_RunningStatistics_mean, NULL, __pyx_n_s_celltrip_utility_train, __pyx_d, ((PyObject *)__pyx_codeobj__34)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 203, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_9continual_17RunningStatistics_7mean, 0, __pyx_n_s_RunningStatistics_mean, NULL, __pyx_n_s_celltrip_utility_continual, __pyx_d, ((PyObject *)__pyx_codeobj__34)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 203, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   if (__Pyx_SetNameInClass(__pyx_t_2, __pyx_n_s_mean, __pyx_t_3) < 0) __PYX_ERR(0, 203, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":206
+  /* "celltrip/utility/continual.py":206
  *         return self.mean_x
  * 
  *     def variance(self):             # <<<<<<<<<<<<<<
  *         n = self.n_set if self.n_set is not None else self.n
  *         if n < 2: return 0
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_5train_17RunningStatistics_9variance, 0, __pyx_n_s_RunningStatistics_variance, NULL, __pyx_n_s_celltrip_utility_train, __pyx_d, ((PyObject *)__pyx_codeobj__36)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 206, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_9continual_17RunningStatistics_9variance, 0, __pyx_n_s_RunningStatistics_variance, NULL, __pyx_n_s_celltrip_utility_continual, __pyx_d, ((PyObject *)__pyx_codeobj__36)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 206, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   if (__Pyx_SetNameInClass(__pyx_t_2, __pyx_n_s_variance, __pyx_t_3) < 0) __PYX_ERR(0, 206, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/train.py":181
+  /* "celltrip/utility/continual.py":181
  * 
  * 
  * class RunningStatistics:             # <<<<<<<<<<<<<<
@@ -8792,7 +8792,7 @@ if (!__Pyx_RefNanny) {
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "celltrip/utility/train.py":1
+  /* "celltrip/utility/continual.py":1
  * from collections import deque             # <<<<<<<<<<<<<<
  * from time import perf_counter
  * import tracemalloc
@@ -8810,7 +8810,7 @@ if (!__Pyx_RefNanny) {
   __Pyx_XDECREF(__pyx_t_3);
   if (__pyx_m) {
     if (__pyx_d && stringtab_initialized) {
-      __Pyx_AddTraceback("init celltrip.utility.train", __pyx_clineno, __pyx_lineno, __pyx_filename);
+      __Pyx_AddTraceback("init celltrip.utility.continual", __pyx_clineno, __pyx_lineno, __pyx_filename);
     }
     #if !CYTHON_USE_MODULE_STATE
     Py_CLEAR(__pyx_m);
@@ -8824,7 +8824,7 @@ if (!__Pyx_RefNanny) {
     }
     #endif
   } else if (!PyErr_Occurred()) {
-    PyErr_SetString(PyExc_ImportError, "init celltrip.utility.train");
+    PyErr_SetString(PyExc_ImportError, "init celltrip.utility.continual");
   }
   __pyx_L0:;
   __Pyx_RefNannyFinishContext();

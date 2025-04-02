@@ -285,15 +285,14 @@ class EnvironmentBase:
         assert all(m.shape[0] == self.modalities[0].shape[0] for m in self.modalities)
         self.num_nodes = self.modalities[0].shape[0]
 
-    def set_rewards(self, new_reward_scales):
+    def set_rewards(self, **new_reward_scales):
         # Check that all rewards are valid
         for k, v in new_reward_scales.items():
             if k not in self.reward_scales:
                 raise LookupError(f'`{k}` not found in rewards')
 
         # Set new rewards
-        for k, v in new_reward_scales.items():
-            self.reward_scales[k] = v
+        self.reward_scales.update(new_reward_scales)
 
     def set_positions(self, pos):
         self.pos = pos

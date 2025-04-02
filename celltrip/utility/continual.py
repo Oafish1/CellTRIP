@@ -95,12 +95,12 @@ class EarlyStopping:
         self,
         # Global parameters
         method='average',
-        buffer=30,
-        delta=1e-3,
+        buffer=6,
+        delta=1e-2,
         decreasing=False,
 
         # `average` method parameters
-        window_size=15,
+        window_size=3,
 
         # `absolute` method parameters
         # ...

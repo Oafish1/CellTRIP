@@ -13,7 +13,7 @@ class ResidualSA(nn.Module):
         self,
         embed_dim,
         num_heads,
-        activation=F.tanh,
+        activation=nn.ReLU(),
         num_mlps=1,
         batch_first=True,
         **kwargs
@@ -30,25 +30,39 @@ class ResidualSA(nn.Module):
         # Attention
         self.attention = nn.MultiheadAttention(self.embed_dim, self.num_heads, batch_first=self.batch_first, **kwargs)
 
+        # Layer norms
+        self.layer_norms = nn.ModuleList([ nn.LayerNorm(self.embed_dim) for _ in range(2+self.num_mlps) ])
+
         # MLP
-        self.mlps = nn.ModuleList([ nn.Linear(self.embed_dim, self.embed_dim) for _ in range(self.num_mlps) ])
+        self.mlps = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(self.embed_dim, self.embed_dim),
+                self.activation,
+                nn.Linear(self.embed_dim, self.embed_dim))
+            for _ in range(self.num_mlps)])
 
     def forward(self, x):
-        # Apply self attention
-        attention, _ = self.attention(x, x, x)
-        if self.num_mlps == 0: return attention
+        # Parameters
+        x1 = x
+        layer_norm_idx = 0
 
-        # Apply first residual mlp
-        activations = self.mlps[0](attention)
-        activations = self.activation(activations)
-        x = x + activations
+        # Apply residual self attention
+        x2 = self.layer_norms[layer_norm_idx](x1)
+        layer_norm_idx += 1
+        x3, _ = self.attention(x2, x2, x2)
+        x1 = x1 + x3
 
-        # Apply further residual mlps
-        for i in range(1, self.num_mlps):
-            activations = self.activation(self.mlps[i](x))
-            x = x + activations
+        # Apply residual mlps
+        for mlp in self.mlps:
+            x2 = self.layer_norms[layer_norm_idx](x1)
+            layer_norm_idx += 1
+            x3 = mlp(x2)
+            x1 = x1 + x3
 
-        return x
+        # Final layer norm
+        xf = self.layer_norms[layer_norm_idx](x1)
+
+        return xf
 
 
 ### Policy classes
@@ -62,8 +76,10 @@ class EntitySelfAttention(nn.Module):
         embed_dim=64,
         num_heads=4,
         action_std_init=.6,
-        activation=F.tanh,
+        activation=nn.ReLU(),
+        final_activation=nn.Tanh(),
         num_mlps=1,
+        critic=False,
         **kwargs,
     ):
         super().__init__()
@@ -76,35 +92,47 @@ class EntitySelfAttention(nn.Module):
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.activation = activation
+        self.final_activation = final_activation
         self.num_mlps = num_mlps
+        self.critic = critic
 
         # Set action std
         self.action_var = nn.Parameter(torch.full((self.output_dim,), 0.), requires_grad=False)
         self.scale_tril = nn.Parameter(torch.zeros((self.output_dim, self.output_dim)), requires_grad=False)
         self.set_action_std(action_std_init)
 
-        # Layer normalization
-        self.layer_norm = nn.ModuleDict({
-            'self embedding': nn.LayerNorm(self.embed_dim),
-            'node embedding': nn.LayerNorm(self.embed_dim),  # Not across entities
-            'residual self attention': nn.LayerNorm(self.embed_dim),
-        })
-
         # Feature embedding
-        self.feature_embed = nn.ModuleList([ nn.Linear(self.modal_dims[i], self.feature_embed_dim) for i in range(len(self.modal_dims)) ])
+        self.feature_embed = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(self.modal_dims[i], self.feature_embed_dim),
+                self.activation,
+                nn.Linear(self.feature_embed_dim, self.feature_embed_dim),
+                nn.LayerNorm(self.feature_embed_dim))
+            for i in range(len(self.modal_dims))])
 
         # Embedding
         solo_features_len = self.feature_embed_dim * len(self.modal_dims) + self.positional_dim
-        self.self_embed = nn.Linear(solo_features_len, self.embed_dim)
+        self.self_embed = nn.Sequential(
+            nn.Linear(solo_features_len, self.embed_dim),
+            self.activation,
+            nn.Linear(self.embed_dim, self.embed_dim),
+            nn.LayerNorm(self.embed_dim))
         # This could be wrong, but I couldn't think of another interpretation.
         # Also backed by https://glouppe.github.io/info8004-advanced-machine-learning/pdf/pleroy-hide-and-seek.pdf
-        self.node_embed = nn.Linear(self.embed_dim + solo_features_len, self.embed_dim)
+        self.node_embed = nn.Sequential(
+            nn.Linear(self.embed_dim + solo_features_len, self.embed_dim),
+            self.activation,
+            nn.Linear(self.embed_dim, self.embed_dim),
+            nn.LayerNorm(self.embed_dim))  # Not across entities
 
         # Self attention
         self.residual_self_attention = ResidualSA(self.embed_dim, self.num_heads, activation=self.activation, num_mlps=self.num_mlps)
 
         # Decision
-        self.decider = nn.Linear(2*self.embed_dim, self.output_dim)
+        self.decider = nn.Sequential(
+            nn.Linear(2*self.embed_dim, 2*self.embed_dim),
+            self.activation,
+            nn.Linear(2*self.embed_dim, self.output_dim))
 
     ### Training functions
     def set_action_std(self, new_action_std):
@@ -114,17 +142,20 @@ class EntitySelfAttention(nn.Module):
 
     ### Calculation functions
     def embed_features(self, entities):
+        # TODO: Maybe there's a more efficient way to do this with masking
         running_idx = self.positional_dim
         ret = [entities[..., :running_idx]]
-        for ms, fe in zip(self.modal_dims, self.feature_embed):
+        for ms, fe in zip(
+            self.modal_dims,
+            self.feature_embed):
             # Record embedded features
+            # Maybe pre-ln if we don't care about magnitude
             val = fe(entities[..., running_idx:(running_idx + ms)])
             val = self.activation(val)
-            # val = entities[..., running_idx:(running_idx + ms)][..., :self.feature_embed_dim]  # TEST
-            ret.append(val)
 
-            # Increment start idx
-            running_idx += ms
+            # Record
+            ret.append(val)
+            running_idx += ms # Increment start idx
 
         # Check shape
         assert running_idx == entities.shape[-1]
@@ -144,26 +175,20 @@ class EntitySelfAttention(nn.Module):
 
         # Self embedding
         self_embed = self.self_embed(self_entity).unsqueeze(-2)  # This has blown up with multi-gpu backward
-        self_embed = self.layer_norm['self embedding'](self_embed)
-        self_embed = self.activation(self_embed)
 
         # Node embeddings
         node_embeds = self.node_embed(torch.concat((self_embed.expand(*node_entities.shape[:-1], self_embed.shape[-1]), node_entities), dim=-1))
-        node_embeds = self.layer_norm['node embedding'](node_embeds)
-        node_embeds = self.activation(node_embeds)
 
         # Self attention across entities
         embeddings = torch.concat((self_embed, node_embeds), dim=-2)
         attentions = self.residual_self_attention(embeddings)
-        attentions = self.layer_norm['residual self attention'](attentions)
         attentions_pool = attentions.mean(dim=-2)  # Average across entities
         embedding = torch.concat((self_embed.squeeze(-2), attentions_pool), dim=-1)  # Concatenate self embedding to pooled embedding (pg. 24)
 
         # Decision
-        actions = self.decider(embedding)
         # TODO (Minor): Should layer norm be added here and for feature embedding?
-        # TODO (Major): Maybe remove activation here for critic?
-        actions = self.activation(actions)
+        actions = self.decider(embedding)
+        if self.final_activation is not None: actions = self.final_activation(actions)
 
         return actions
 
@@ -226,6 +251,7 @@ class PPO(nn.Module):
             reproducible_strategy='mean',
             # Backward
             update_iterations=80,  # Can also be 'auto'
+            sync_iterations=1,
             pool_size=None,
             epoch_size=None,
             batch_size=int(1e4),
@@ -259,6 +285,7 @@ class PPO(nn.Module):
             'sample_dim': sample_dim,
         }
         self.update_iterations = update_iterations
+        self.sync_iterations = sync_iterations
         self.pool_size = pool_size
         self.epoch_size = epoch_size
         self.batch_size = batch_size
@@ -269,14 +296,14 @@ class PPO(nn.Module):
 
         # New policy
         self.actor = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=output_dim, action_std_init=action_std_init, **kwargs)
-        self.critic = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=1, **kwargs)
+        self.critic = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=1, action_std_init=action_std_init, final_activation=None, **kwargs)
 
         # Old policy
         # self.actor_old = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=output_dim, action_std_init=action_std_init, **kwargs)
         # self.critic_old = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=1, **kwargs)
 
         # Optimizer
-        self.optimizer = torch.optim.Adam([
+        self.optimizer = torch.optim.AdamW([
             {'params': self.actor.parameters(), 'lr': actor_lr},
             {'params': self.critic.parameters(), 'lr': critic_lr},
         ])
@@ -304,7 +331,10 @@ class PPO(nn.Module):
     def decay_action_std(self):
         self.action_std = max(self.action_std - self.action_std_decay, self.action_std_min)
         self.actor.set_action_std(self.action_std)
+        self.critic.set_action_std(self.action_std)
         # self.actor_old.set_action_std(self.action_std)
+
+        return self.action_std
 
     ### Running functions
     def act(self, *state, return_all=False):
@@ -381,16 +411,16 @@ class PPO(nn.Module):
         update_iterations=None,
         verbose=False,
         # Collective args
-        sync_epochs=5,
+        sync_iterations=None,
     ):
         # NOTE: The number of epochs is spread across `world_size` workers
         # NOTE: Assumes col.init_collective_group has already been called if world_size > 1
         # Parameters
         if update_iterations is None: update_iterations = self.update_iterations
+        if sync_iterations is None: sync_iterations = self.sync_iterations
 
         # Collective operations
         use_collective = col.is_group_initialized('default')
-        world_size = 1 if not use_collective else col.get_collective_group_size()
 
         # Batch parameters
         level_dict = {'pool': 0, 'epoch': 1, 'batch': 2, 'minibatch': 3}
@@ -411,6 +441,7 @@ class PPO(nn.Module):
 
         # Get number of iterations
         if update_iterations == 'auto': update_iterations = .5 * memory.get_new_len() // batch_size  # Scale by memory size
+        # world_size = 1 if not use_collective else col.get_collective_group_size()
         # update_iterations = np.ceil(update_iterations/world_size).astype(int)  # Scale by num workers
 
         # Cap at max size to reduce redundancy for sequential samples
@@ -453,7 +484,7 @@ class PPO(nn.Module):
                     actions = minibatch_data['actions']
                     action_logs = minibatch_data['action_logs']
                     state_vals = minibatch_data['state_vals']
-                    rewards = minibatch_data['normalized_rewards']
+                    rewards = minibatch_data['propagated_rewards']  # NEW
 
                     # Perform backward
                     loss, loss_PPO, loss_critic, loss_entropy = self.backward(
@@ -478,7 +509,7 @@ class PPO(nn.Module):
                 iterations += 1
                     
                 # Synchronize GPU policies
-                sync_loop = (iterations) % sync_epochs == 0
+                sync_loop = (iterations) % sync_iterations == 0
                 last_epoch = iterations == update_iterations
                 if use_collective and (sync_loop or last_epoch):
                     self.synchronize()
@@ -525,12 +556,16 @@ class PPO(nn.Module):
     ):
         # Get subset rewards
         advantages = rewards - state_vals
+        advantages = (advantages - advantages.mean()) / advantages.std()  # NEW
 
         # Evaluate actions
         action_logs_new, dist_entropy = self.actor.evaluate_action(states, actions)
 
         # Evaluate states
         state_vals_new = self.critic.evaluate_state(states)
+        # print(rewards)
+        # print(state_vals_new)
+        # print()
 
         # Ratio between new and old probabilities
         ratios = torch.exp(action_logs_new - action_logs)
@@ -545,7 +580,7 @@ class PPO(nn.Module):
 
         # Calculate entropy loss
         # TODO (Minor): Figure out purpose
-        # NOTE: Found out, not even in the computation graph and does nothing, delete?
+        # NOTE: Not included in training if action_std is constant
         loss_entropy = -.01 * dist_entropy
 
         # Construct final loss

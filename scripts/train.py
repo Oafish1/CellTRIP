@@ -11,6 +11,13 @@ import ray
 import celltrip
 
 
+# %% [markdown]
+# Critic loss explodes with or without pruning
+# 
+# Try generalized advantage estimation - https://nn.labml.ai/rl/ppo/gae.html
+# 
+# Might need to use non-normalized rewards for critic prediction, maybe switch to advantage normalization?
+
 # %%
 ray.shutdown()
 ray.init(
@@ -43,16 +50,18 @@ def env_init(parent_dir=False):
         pca_dim=128, seed=42)
     # modalities, adata_obs, adata_vars = dataloader.sample()
     # Return env
-    return celltrip.environment.EnvironmentBase(dataloader, dim=3)  # , penalty_bound=1, reward_origin=1
+    return celltrip.environment.EnvironmentBase(
+        dataloader, dim=3,
+        penalty_bound=1, reward_origin=1)
 
 # Default 25Gb Forward, 14Gb Update, at max capacity
 policy_init = lambda env: celltrip.policy.PPO(
     2*env.dim, env.dataloader.modal_dims, env.dim)  # update_iterations=2, minibatch_size=3e3,
 
 memory_init = lambda policy: celltrip.memory.AdvancedMemoryBuffer(
-    sum(policy.modal_dims), split_args=policy.split_args)
+    sum(policy.modal_dims), split_args=policy.split_args)  # prune=100
 
-initializers = (policy_init, env_init, memory_init)
+initializers = (env_init, policy_init, memory_init)
 
 
 # %%
@@ -70,13 +79,19 @@ print(time.perf_counter() - start)
 # env = env_init(parent_dir=True).to('cuda')
 # policy = policy_init(env).to('cuda')
 # memory = memory_init(policy)
-# celltrip.train.simulate_until_completion(policy, env, memory)
+# celltrip.train.simulate_until_completion(env, policy, memory)
 # memory.propagate_rewards()
 # memory.normalize_rewards()
-# # for _ in range(5):
-# #     memory.append_memory(memory)
-# len(memory)
 # # memory.fast_sample(10_000, shuffle=False)
+# len(memory)
+
+
+# %%
+# memory.mark_sampled()
+# env.reset()
+# celltrip.train.simulate_until_completion(env, policy, memory)
+# memory.propagate_rewards()
+# memory.adjust_rewards()
 
 
 

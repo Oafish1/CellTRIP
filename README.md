@@ -264,6 +264,9 @@ rsync -v ~/repos/inept/celltrip/* precision:~/repos/INEPT/celltrip && \
 rsync -v ~/repos/inept/celltrip/utility/* precision:~/repos/INEPT/celltrip/utility && \
 rsync -v ~/repos/inept/scripts/!(*.gzip) precision:~/repos/INEPT/scripts
 
+Delete C
+ssh precision "cd ~/repos/INEPT/scripts; bash remove_c.bash"
+
 Profiling
 watch -d -n 0.5 nvidia-smi
 

@@ -1,3 +1,21 @@
+### 1.0.0+2025.4.1
+- Add advantage normalization
+- Add early stopping to `train_celltrip` function
+- Add layer normalization to feature embeddings
+- Add remote execution macro function to `Worker`
+- Adjust replay reward mean to match new upon environment reward update
+- Change `Adam` optimizer to `AdamW` with weight decay
+- Change init argument order in `train_celltrip` function
+- Change policy to use ReLU and pre-ln residual attention
+- Clean some environment code
+- Convert all networks to have one hidden layer and activation
+- Fix `action_std` not updating on critic
+- Move `sync_iterations` argument (formerly `sync_epochs`) to `PPO` initialization
+- Move layer normalization and activations into policy modules
+- Remove final activation function for critic
+- Rename `utility.train` to `utility.continual`
+- Tuning to avoid critic collapse
+
 ### 1.0.0+2025.3.31.2
 - Add ready function to worker, indicating the instance is initialized and waiting
 - Change environment, policy, memory argument ordering

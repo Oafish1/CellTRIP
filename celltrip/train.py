@@ -6,6 +6,7 @@ import ray.util.collective as col
 import torch
 
 from . import decorator as _decorator
+from . import utility as _utility
 
 
 def get_policy_state(policy):
@@ -124,8 +125,9 @@ class Worker:
         self.policy_iteration = 0
         self.sync_policy(iterate_if_exclusive_runner=False)  # Works because non-heads will wait for head init
 
-        # Memory parameters
-        self.memory_buffer = []
+        # Flags
+        self.flags = {
+            'adjust_rewards_next_update': False}
 
     def is_ready(self):
         "This method is required to make initialization waitable in Ray"
@@ -172,6 +174,9 @@ class Worker:
     # @_decorator.profile(time_annotation=True)
     def update(self, **kwargs):
         # Perform update
+        if self.flags['adjust_rewards_next_update']:
+            self.memory.adjust_rewards()
+            self.flags['adjust_rewards_next_update'] = False
         self.memory.normalize_rewards()
         self.policy.update(self.memory, **kwargs, verbose=True)
 
@@ -192,6 +197,11 @@ class Worker:
             'Replay Memories': num_replay_memories,
             'Total Memories': len(self.memory)}
         return ret
+    
+    def set_flags(self, **new_flag_values):
+        assert np.array([k in self.flags for k in new_flag_values]).all(), (
+            'Unknown flag found in `set_flag`.')
+        self.flags.update(new_flag_values)
 
     @_decorator.metrics(append_to_dict=True, dict_index=1)
     def send_memory(self, **kwargs):
@@ -250,6 +260,10 @@ class Worker:
             'Rank': self.rank,
             'Inherited': self.parent is not None}
         return ret
+    
+    def execute(self, func):
+        "Remote execution macro"
+        return func(self)
 
     def destroy(self):
         col.destroy_collective_group()
@@ -266,13 +280,14 @@ def train_celltrip(
     updates=50,
     steps=int(5e3),
     rollout_kwargs={},
-    update_kwargs={}):
+    update_kwargs={},
+    early_stopping_kwargs={}):
     """
     Train CellTRIP model to completion with given parameters and
     cluster layout.
     """
     # Parameters
-    policy_init, env_init, memory_init = initializers
+    env_init, policy_init, memory_init = initializers
 
     # Make placement group for GPUs
     pg_gpu = ray.util.placement_group(num_gpus*[{'CPU': 1, 'GPU': 1}])
@@ -309,10 +324,16 @@ def train_celltrip(
     heads = workers[:num_head_workers]
     non_heads = workers[num_head_workers:]
 
+    # Create early stopping class
+    early_stopping = _utility.continual.EarlyStopping(**early_stopping_kwargs)
+
     # Run policy updates
     # TODO: Maybe add/try async updates
     records = []
     for policy_iteration in range(updates):
+        # Early stopping
+        num_start_records = len(records)
+
         # Rollouts
         num_records = len(records)
         if policy_iteration==0:
@@ -342,6 +363,7 @@ def train_celltrip(
             future = w1.recv_memories.remote(new_memories=new_memories_w1)
             new_records.append(future)
         new_records = ray.get(new_records)
+        del new_memories, new_memories_w1
         records += new_records
         for record in records[-(len(records)-num_records):]: print(record)
 
@@ -358,6 +380,29 @@ def train_celltrip(
         new_records += ray.get([w.sync_policy.remote() for w in non_heads])
         records += new_records
         for record in records[-(len(records)-num_records):]: print(record)
+
+        # Early stopping
+        # TODO: Observe how this interacts with the memory buffer when advancing stages
+        # TODO: Maybe will need to normalize only on new memories
+        mean_rollout_reward = np.mean([record['Reward'] for record in records[-(len(records)-num_start_records):] if record['Event Type'] == 'Rollout'])
+        if early_stopping(mean_rollout_reward):
+            # Reset
+            early_stopping.reset()
+
+            # Advance stage
+            # TODO
+            if True:  # Still more stages
+                print('Advancing Stage')
+                ray.get([w.set_flags.remote(adjust_rewards_next_update=True) for w in learners])  # Recalibrate replay rewards next update
+                update_env_rewards = lambda w: w.env.set_rewards(penalty_action=1, penalty_velocity=1)
+                ray.get([w.execute.remote(func=update_env_rewards) for w in workers])
+            else:
+                # Reduce action_std
+                reduce_action_std = lambda w: w.policy.decay_action_std()
+                ray.get([w.execute.remote(func=reduce_action_std) for w in workers])
+
+            # Escape
+            # break
 
     # Destroy
     # workers[0].destroy.remote()

@@ -308,6 +308,17 @@ class AdvancedMemoryBuffer:
         except: raise RuntimeError(
             'Ran into error while normalizing rewards, make sure `prune` is not set too high'
             ' and `self.propagate_rewards()` has been run.')
+        
+    def adjust_rewards(self):
+        "Adjust replay rewards from previous reward structure to fit with current new"
+        # Get new memory mean
+        new_mean = torch.concat(
+            [s for s, n in zip(self.storage['propagated_rewards'], self.storage['new_memories']) if n]).mean()
+        replay_mean = torch.concat(
+            [s for s, n in zip(self.storage['propagated_rewards'], self.storage['new_memories']) if not n]).mean()
+        diff_mean = new_mean - replay_mean
+        for rew, new in zip(self.storage['propagated_rewards'], self.storage['new_memories']):
+            if not new: rew += diff_mean
 
     def __len__(self):
         if 'len' not in self.variable_storage:
