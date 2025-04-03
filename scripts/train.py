@@ -12,11 +12,7 @@ import celltrip
 
 
 # %% [markdown]
-# Critic loss explodes with or without pruning
-# 
-# Try generalized advantage estimation - https://nn.labml.ai/rl/ppo/gae.html
-# 
-# Might need to use non-normalized rewards for critic prediction, maybe switch to advantage normalization?
+# Maybe autostop based on action_std, also return history/values from update
 
 # %%
 ray.shutdown()
@@ -52,7 +48,7 @@ def env_init(parent_dir=False):
     # Return env
     return celltrip.environment.EnvironmentBase(
         dataloader, dim=3,
-        penalty_bound=1, reward_origin=1)
+        reward_distance=1, reward_origin=0, penalty_bound=1, penalty_velocity=1, penalty_action=1)
 
 # Default 25Gb Forward, 14Gb Update, at max capacity
 policy_init = lambda env: celltrip.policy.PPO(

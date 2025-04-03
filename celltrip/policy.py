@@ -97,9 +97,7 @@ class EntitySelfAttention(nn.Module):
         self.critic = critic
 
         # Set action std
-        self.action_var = nn.Parameter(torch.full((self.output_dim,), 0.), requires_grad=False)
-        self.scale_tril = nn.Parameter(torch.zeros((self.output_dim, self.output_dim)), requires_grad=False)
-        self.set_action_std(action_std_init)
+        self.action_std = nn.Parameter(torch.tensor(action_std_init), requires_grad=True)
 
         # Feature embedding
         self.feature_embed = nn.ModuleList([
@@ -133,12 +131,6 @@ class EntitySelfAttention(nn.Module):
             nn.Linear(2*self.embed_dim, 2*self.embed_dim),
             self.activation,
             nn.Linear(2*self.embed_dim, self.output_dim))
-
-    ### Training functions
-    def set_action_std(self, new_action_std):
-        self.action_var.fill_(new_action_std**2)  # Spent like a day+.5 trying to debug, realized I forgot **2
-        covariance = torch.diag(self.action_var).unsqueeze(dim=0)
-        self.scale_tril.data = torch.linalg.cholesky(covariance)  # Generally faster on CPU
 
     ### Calculation functions
     def embed_features(self, entities):
@@ -202,8 +194,8 @@ class EntitySelfAttention(nn.Module):
         # Select continuous action
         dist = MultivariateNormal(
             loc=actions,
-            # covariance_matrix=torch.diag(self.action_var).unsqueeze(dim=0),
-            scale_tril=self.scale_tril,  # Speeds up computation compared to using cov matrix
+            covariance_matrix=torch.diag(self.action_std.square().expand((self.output_dim,))).unsqueeze(dim=0),
+            # scale_tril=torch.linalg.cholesky(covariance_matrix),  # Speeds up computation compared to using cov matrix
             validate_args=False,  # Speeds up computation
         )
 
@@ -236,13 +228,14 @@ class PPO(nn.Module):
             output_dim,
             # Model Parameters
             model=EntitySelfAttention,
-            action_std_init=.6,
-            action_std_decay=.05,
-            action_std_min=.15,
-            epsilon_clip=.2,
+            action_std=.6,
+            epsilon_ppo=.2,
             actor_lr=3e-4,
+            epsilon_critic=.1,
             critic_lr=1e-3,
+            critic_weight=.5,
             lr_gamma=.99,
+            entropy_weight=.01,
             # Forward
             forward_batch_size=int(5e4),
             vision_size=int(1e2),
@@ -269,10 +262,8 @@ class PPO(nn.Module):
         self.output_dim = output_dim
 
         # Variables
-        self.action_std = action_std_init
-        self.action_std_decay = action_std_decay
-        self.action_std_min = action_std_min
-        self.epsilon_clip = epsilon_clip
+        self.epsilon_ppo = epsilon_ppo
+        self.epsilon_critic = epsilon_critic
 
         # Runtime management
         self.forward_batch_size = forward_batch_size
@@ -295,12 +286,8 @@ class PPO(nn.Module):
         self.device = device
 
         # New policy
-        self.actor = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=output_dim, action_std_init=action_std_init, **kwargs)
-        self.critic = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=1, action_std_init=action_std_init, final_activation=None, **kwargs)
-
-        # Old policy
-        # self.actor_old = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=output_dim, action_std_init=action_std_init, **kwargs)
-        # self.critic_old = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=1, **kwargs)
+        self.actor = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=output_dim, action_std=action_std, **kwargs)
+        self.critic = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=1, final_activation=None, **kwargs)
 
         # Optimizer
         self.optimizer = torch.optim.AdamW([
@@ -309,11 +296,9 @@ class PPO(nn.Module):
         ])
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
 
-        # Memory
-        # self.memory = AdvancedMemoryBuffer(sum(modal_dims), rs_nset=rs_nset, split_args=self.split_args)
-
-        # Copy current weights
-        # self.update_old_policy()
+        # Weights
+        self.critic_weight = critic_weight
+        self.entropy_weight = entropy_weight
 
         # To device
         self.to(self.device)
@@ -322,19 +307,10 @@ class PPO(nn.Module):
     def to(self, device):
         self.device = device
         return super().to(device)
-
-    ### Utility functions
-    # def update_old_policy(self):
-    #     self.actor_old.load_state_dict(self.actor.state_dict())
-    #     self.critic_old.load_state_dict(self.critic.state_dict())
-
-    def decay_action_std(self):
-        self.action_std = max(self.action_std - self.action_std_decay, self.action_std_min)
-        self.actor.set_action_std(self.action_std)
-        self.critic.set_action_std(self.action_std)
-        # self.actor_old.set_action_std(self.action_std)
-
-        return self.action_std
+    
+    ### Useful functions
+    def get_action_std(self):
+        return self.actor.action_std.detach().item()
 
     ### Running functions
     def act(self, *state, return_all=False):
@@ -466,7 +442,7 @@ class PPO(nn.Module):
             batches = np.ceil(epoch_size/batch_size).astype(int) if epoch_data is not None else 1
             for batch_num in range(batches):
                 # Load batch
-                batch_loss = batch_ppo = batch_critic = batch_entropy = 0
+                batch_ppo = batch_critic = batch_entropy = 0
                 batch_data = _utility.processing.sample_and_cast(
                     memory, epoch_data, epoch_size, batch_size,
                     current_level=2, load_level=load_level, cast_level=cast_level,
@@ -484,20 +460,19 @@ class PPO(nn.Module):
                     actions = minibatch_data['actions']
                     action_logs = minibatch_data['action_logs']
                     state_vals = minibatch_data['state_vals']
-                    rewards = minibatch_data['propagated_rewards']  # NEW
+                    advantages = minibatch_data['advantages']  # NEW
 
                     # Perform backward
-                    loss, loss_PPO, loss_critic, loss_entropy = self.backward(
-                        states, actions, action_logs, state_vals, rewards)
+                    loss, loss_ppo, loss_critic, loss_entropy = self.backward(
+                        states, actions, action_logs, state_vals, advantages)
 
                     # Scale and calculate gradient
-                    accumulation_frac = rewards.shape[0] / batch_size
+                    accumulation_frac = states[0].shape[0] / batch_size
                     loss = loss * accumulation_frac
                     loss.backward()  # Longest computation
 
                     # Scale and record
-                    batch_loss += loss.detach().mean()
-                    batch_ppo += loss_PPO.detach().mean() * accumulation_frac
+                    batch_ppo += loss_ppo.detach().mean() * accumulation_frac
                     batch_critic += loss_critic.detach().mean() * accumulation_frac
                     batch_entropy += loss_entropy.detach().mean() * accumulation_frac
 
@@ -512,17 +487,18 @@ class PPO(nn.Module):
                 sync_loop = (iterations) % sync_iterations == 0
                 last_epoch = iterations == update_iterations
                 if use_collective and (sync_loop or last_epoch):
-                    self.synchronize()
+                    self.synchronize('learners')
                 # if epoch_num == 9: print(self.state_dict())  # Check that weights are the same across nodes
 
                 # CLI
                 if verbose and ((iterations) % 10 == 0 or iterations in (1, 5)):
                     print(
-                        f'Iteration {iterations:02}'
-                        f' - Loss ({batch_loss.item():.3f}) ='
+                        f'Iteration {iterations:02} -'
+                        # f' Loss ({(batch_ppo+batch_critic+batch_entropy).item():.3f}) ='
                         f' PPO ({batch_ppo.item():.3f}) +'
                         f' Critic ({batch_critic.item():.3f}) +'
-                        f' Entropy ({batch_entropy.item():.3f})')
+                        f' Entropy ({batch_entropy.item():.3f}) ::'
+                        f' Action STD ({self.actor.action_std.item():.3f})')
                     
                 # Break
                 if iterations >= update_iterations: break
@@ -534,17 +510,28 @@ class PPO(nn.Module):
         # Return self
         return self
 
-    def synchronize(self, group='learners'):
+    def synchronize(self, group='default', broadcast=None, receive=None, allreduce=None):
         # TODO: Maybe call scheduler twice if two updates are aggregated?
+        # Defaults
+        if broadcast is None: broadcast = False
+        if receive is None: receive = False
+        if allreduce is None:
+            allreduce = False if (broadcast or receive) else True
+
         # Collective operations
-        use_collective = col.is_group_initialized('default')
-        world_size = 1 if not use_collective else col.get_collective_group_size()
+        world_size = col.get_collective_group_size(group)
+        rank = col.get_rank(group)
 
         # Sync
         # NOTE: Optimizer momentum not synced
         for k, w in self.state_dict().items():
-            col.allreduce(w, group)
-            w /= world_size
+            if broadcast:
+                col.broadcast(w, 0, group)  # Will always be rank 0
+            if receive:
+                col.recv(w, 0, group)
+            if allreduce:
+                col.allreduce(w, group)
+                w /= world_size
 
     def backward(
         self,
@@ -552,39 +539,34 @@ class PPO(nn.Module):
         actions,
         action_logs,
         state_vals,
-        rewards,
+        advantages,
     ):
-        # Get subset rewards
-        advantages = rewards - state_vals
-        advantages = (advantages - advantages.mean()) / advantages.std()  # NEW
+        # Get normalized rewards and inferred rewards
+        normalized_advantages = (advantages - advantages.mean()) / advantages.std()  # NEW
+        inferred_rewards = advantages + state_vals
 
-        # Evaluate actions
+        # Evaluate actions and states
         action_logs_new, dist_entropy = self.actor.evaluate_action(states, actions)
-
-        # Evaluate states
         state_vals_new = self.critic.evaluate_state(states)
-        # print(rewards)
-        # print(state_vals_new)
-        # print()
-
-        # Ratio between new and old probabilities
-        ratios = torch.exp(action_logs_new - action_logs)
-
+        
         # Calculate PPO loss
-        unclipped = ratios * advantages
-        clipped = torch.clamp(ratios, 1-self.epsilon_clip, 1+self.epsilon_clip) * advantages
-        loss_PPO = -torch.min(unclipped, clipped)
+        ratios = torch.exp(action_logs_new - action_logs)
+        unclipped_ppo = ratios * normalized_advantages
+        clipped_ppo = torch.clamp(ratios, 1-self.epsilon_ppo, 1+self.epsilon_ppo) * normalized_advantages
+        loss_ppo = -torch.min(unclipped_ppo, clipped_ppo)
 
         # Calculate critic loss
-        loss_critic = .5 * F.mse_loss(state_vals_new, rewards)
+        unclipped_critic = (state_vals_new - inferred_rewards).square()
+        clipped_state_vals_new = torch.clamp(state_vals_new, state_vals-self.epsilon_critic, state_vals+self.epsilon_critic)
+        clipped_critic = (clipped_state_vals_new - inferred_rewards).square()
+        loss_critic = self.critic_weight * torch.max(unclipped_critic, clipped_critic)  # TODO: Figure out max meaning
 
         # Calculate entropy loss
-        # TODO (Minor): Figure out purpose
-        # NOTE: Not included in training if action_std is constant
-        loss_entropy = -.01 * dist_entropy
+        # NOTE: Not included in training grad if action_std is constant
+        loss_entropy = -self.entropy_weight * dist_entropy
 
         # Construct final loss
-        loss = loss_PPO + loss_critic + loss_entropy
+        loss = loss_ppo + loss_critic + loss_entropy
         loss = loss.mean()
 
-        return loss, loss_PPO, loss_critic, loss_entropy
+        return loss, loss_ppo, loss_critic, loss_entropy

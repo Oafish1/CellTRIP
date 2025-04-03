@@ -16,8 +16,9 @@ class AdvancedMemoryBuffer:
         max_memories=int(2*2**30*8/32/32),  # ~2Gb at 16 dimensions
         cache_suffix=True,  # Fastest if True, but should be cleared regularly
         # Propagate
-        gamma=.95,
-        prune=0,  # Used to be 100 with non-terminal episodes
+        gae_lambda=.99,
+        gae_gamma=.95,
+        # prune=0,  # Used to be 100 with non-terminal episodes
         # Sampling
         replay_frac=.25,
         max_samples_per_state=100,
@@ -30,8 +31,9 @@ class AdvancedMemoryBuffer:
         self.suffix_len = suffix_len
         self.max_memories = max_memories
         self.cache_suffix = cache_suffix
-        self.gamma = gamma
-        self.prune = prune
+        self.gae_lambda = gae_lambda
+        self.gae_gamma = gae_gamma
+        # self.prune = prune
         self.replay_frac = replay_frac
         self.max_samples_per_state = max_samples_per_state
         self.shuffle = shuffle
@@ -48,9 +50,7 @@ class AdvancedMemoryBuffer:
             'rewards',              # Rewards, list of lists (1D List)
             'is_terminals')         # Booleans indicating if the terminal state has been reached (Bool)
         storage_outcomes = (
-            'prunes',               # Booleans indicating if the result is valid under pruning (Bool)
-            'propagated_rewards',   # List of lists containing all propagated rewards (1D List)
-            'normalized_rewards',   # List of lists containing all normalized rewards (1D List)
+            'advantages',           # Advantages, list of lists (1D List)
             'new_memories')         # Booleans indicating if the memory is new (Bool)
         self.storage = {k: [] for k in storage_keys+storage_outcomes}
         persistent_storage_keys = (
@@ -104,9 +104,7 @@ class AdvancedMemoryBuffer:
             self.storage['states'][-1] = self.storage['states'][-1][..., :-self.suffix_len].clone()
 
             # Additional entries
-            self.storage['prunes'].append(None)
-            self.storage['propagated_rewards'].append(None)
-            self.storage['normalized_rewards'].append(None)
+            self.storage['advantages'].append(None)
             self.storage['new_memories'].append(True)
 
             # Set all variables as unrecorded
@@ -208,7 +206,7 @@ class AdvancedMemoryBuffer:
             # Get values
             for k in self.storage:
                 # Skip certain keys
-                if k in ('keys', 'rewards', 'is_terminals', 'prunes', 'new_memories'): continue
+                if k in ('keys', 'rewards', 'is_terminals', 'prunes', 'new_memories', 'propagated_rewards', 'normalized_rewards'): continue
 
                 # Special cases
                 if k == 'states':
@@ -223,6 +221,8 @@ class AdvancedMemoryBuffer:
                 else: 
                     if k in ('propagated_rewards', 'normalized_rewards') and self.storage[k][list_num] is None:
                         raise ValueError('Make sure to run `self.propagate_rewards(); self.normalize_rewards()` before sampling.')
+                    if k in ('advantages',) and self.storage[k][list_num] is None:
+                        raise ValueError('Make sure to run `self.compute_advantages()` before sampling.')
                     val = self.storage[k][list_num][self_idx]
 
                 # Record
@@ -261,64 +261,42 @@ class AdvancedMemoryBuffer:
 
         # Return
         return dict(ret)  # memory_indices
-    
-    def propagate_rewards(self, gamma=None, prune=None, normalize=True, force_running=False, clean=True):
-        "Propagate rewards with decay"
-        # Parameters
-        if gamma is None: gamma = self.gamma
-        if prune is None: prune = self.prune
-
-        # Calculate rewards
-        new_idx = []
-        running_rewards = defaultdict(lambda: 0)
-        running_list_prune = 0
-        for i, (keys, rewards, is_terminal, keep) in enumerate(zip(
-            self.storage['keys'][::-1],
+        
+    def compute_advantages(self):
+        # NOTE: Assumes keys stay the same throughout any single eposide, can be adjusted, however
+        for i, (rewards, is_terminal, state_vals, advantages) in enumerate(zip(
             self.storage['rewards'][::-1],
             self.storage['is_terminals'][::-1],
-            self.storage['prunes'][::-1]
-        )):
-            # Skip previously calculated
-            if keep is not None: continue  
-            i = -(i+1); new_idx.append(i)
+            self.storage['state_vals'][::-1],
+            self.storage['advantages'][::-1])):
+            # Skip if already calculated
+            if advantages is not None: continue
 
-            # Propagate
-            self.storage['propagated_rewards'][i] = []
-            for key, reward in zip(keys, _utility.general.gen_tolist(rewards)):
-                if is_terminal:
-                    # Reset at terminal state
-                    running_list_prune = 0
-                    running_rewards[key] = 0
-                running_rewards[key] = reward + gamma * running_rewards[key]
-                self.storage['propagated_rewards'][i].append(running_rewards[key])
-            running_list_prune += 1
-            self.storage['prunes'][i] = running_list_prune > prune
+            # Reconfigure index
+            i = self.get_steps()-i-1
 
-            # Cast
-            self.storage['propagated_rewards'][i] = torch.tensor(
-                self.storage['propagated_rewards'][i], dtype=torch.float32)
+            # Reset values and advantages if terminal
+            if is_terminal:
+                running_advantages = previous_state_vals = 0
 
-    def normalize_rewards(self):
-        try:
-            concat = torch.concat(self.storage['propagated_rewards'])
-            mean, std = concat.mean(), concat.std()
-            for i, rew in enumerate(self.storage['propagated_rewards']):
-                self.storage['normalized_rewards'][i] = (
-                    (rew - mean) / std)
-        except: raise RuntimeError(
-            'Ran into error while normalizing rewards, make sure `prune` is not set too high'
-            ' and `self.propagate_rewards()` has been run.')
+            # Compute advantage
+            deltas = rewards + self.gae_gamma * previous_state_vals - state_vals
+            running_advantages = deltas + self.gae_gamma * self.gae_lambda * running_advantages
+
+            # Record
+            self.storage['advantages'][i] = running_advantages.clone()
         
-    def adjust_rewards(self):
-        "Adjust replay rewards from previous reward structure to fit with current new"
-        # Get new memory mean
-        new_mean = torch.concat(
-            [s for s, n in zip(self.storage['propagated_rewards'], self.storage['new_memories']) if n]).mean()
-        replay_mean = torch.concat(
-            [s for s, n in zip(self.storage['propagated_rewards'], self.storage['new_memories']) if not n]).mean()
-        diff_mean = new_mean - replay_mean
-        for rew, new in zip(self.storage['propagated_rewards'], self.storage['new_memories']):
-            if not new: rew += diff_mean
+    # def adjust_rewards(self):
+    #     "Adjust replay rewards from previous reward structure to fit with current new"
+    #     # Get new memory mean
+    #     # TODO: Try with and without
+    #     new_mean = torch.concat(
+    #         [s for s, n in zip(self.storage['advantages'], self.storage['new_memories']) if n]).mean()
+    #     replay_mean = torch.concat(
+    #         [s for s, n in zip(self.storage['advantages'], self.storage['new_memories']) if not n]).mean()
+    #     diff_mean = new_mean - replay_mean
+    #     for rew, new in zip(self.storage['advantages'], self.storage['new_memories']):
+    #         if not new: rew += diff_mean
 
     def __len__(self):
         if 'len' not in self.variable_storage:
@@ -417,80 +395,13 @@ class AdvancedMemoryBuffer:
         for k in self.storage:
             for i in idx:
                 v = self.storage[k].pop(i)
-                if k == 'propagated_rewards' and v is None:
+                if k == 'advantages' and v is None:
                     raise ValueError(
-                        '`None` value found for `propagated_rewards` while culling.'
-                        ' Make sure to propagate rewards before cleaning.')
+                        '`None` value found for `advantages` while culling.'
+                        ' Make sure to call `self.compute_advantages()` before cleaning.')
 
         # Clear computed vars
         if len(idx) > 0: self.clear_var_cache()
-
-        # # Cull
-        # while len(self) > max_memories:
-        #     # Find memory to remove
-        #     invert_new_memories = ~np.array(self.storage['new_memories'])
-        #     if invert_new_memories.sum() == 0:
-        #         warnings.warn(
-        #             'Insufficient replay memories found to cull, removing new memories instead. Make sure to'
-        #             ' mark memories after sampling or try raising `max_memories`.')
-        #         population = self.get_steps()
-        #     else: population = np.argwhere(invert_new_memories).flatten()
-        #     idx = np.random.choice(population, 1)[0]
-        #     # Remove memory
-        #     for k in self.storage:
-        #         v = self.storage[k].pop(idx)
-        #         if k == 'propagated_rewards':
-        #             if v is None:
-        #                 raise ValueError(
-        #                     '`None` value found for `propagated_rewards` while culling.'
-        #                     ' Make sure to propagate rewards before cleaning.')
-
-        #     # Clear computed vars
-        #     self.clear_var_cache()
-
-        # # Cull
-        # num_memories_to_remove = len(self) - max_memories
-        # if num_memories_to_remove > 0:
-        #     # Find memories to remove
-        #     new_memories = np.array(self.storage['new_memories'])
-        #     invert_new_memories = ~new_memories
-        #     num_replay_memories = invert_new_memories.sum()
-        #     num_new_memories_to_remove = num_memories_to_remove - num_replay_memories
-        #     if num_new_memories_to_remove > 0:
-        #         warnings.warn(
-        #             'Insufficient replay memories found to cull, removing new memories instead. Make sure to'
-        #             ' mark memories after sampling or try raising `max_memories`.')
-        #         replay_memories_to_remove = np.argwhere(invert_new_memories).flatten()
-        #         print(new_memories.sum())
-        #         print(num_new_memories_to_remove)
-        #         new_memories_to_remove = np.random.choice(np.argwhere(new_memories).flatten(), num_new_memories_to_remove, replace=False)
-        #         idx = np.concatenate((replay_memories_to_remove, new_memories_to_remove))
-        #     else:
-        #         # Maybe do one at a time if memory-inefficient
-        #         idx = np.random.choice(np.argwhere(invert_new_memories).flatten(), num_memories_to_remove, replace=False)
-        #     idx.sort()
-        #     # Remove memory
-        #     for k in self.storage:
-        #         for i in idx[::-1]:
-        #             v = self.storage[k].pop(i)
-        #             if k == 'propagated_rewards' and v is None:
-        #                 raise ValueError(
-        #                     '`None` value found for `propagated_rewards` while culling.'
-        #                     ' Make sure to propagate rewards before cleaning.')
-
-        #     # Clear computed vars
-        #     self.clear_var_cache()
-    
-    def clean_records(self):
-        "Remove all pruned records"
-        to_pop = []
-        for i, keep in enumerate(self.storage['prunes']):
-            if not keep and keep is not None: to_pop.append(i-len(self.storage['prunes']))
-        for i in to_pop:
-            for k in self.storage: self.storage[k].pop(i)
-
-        # Clear computed vars
-        self.clear_var_cache()
 
     def clean_keys(self):
         "Clean all unused keys from suffixes"
@@ -518,7 +429,7 @@ class AdvancedMemoryBuffer:
     def cleanup(self):
         "Clean memory"
         self.cull_records()
-        self.clean_records()
+        # self.clean_records()
         self.clean_keys()
         self.clear_suffix_cache()
     
@@ -533,7 +444,7 @@ class AdvancedMemoryBuffer:
             torch.concat([
                 s[i]
                 if i == 0 or np.ceil(max_nodes/s[i].shape[1]) == 1 else
-                s[i].repeat(
+                s[i].repeat(  # TODO: Maybe do NAN instead? Make sure policy can handle it
                     1, int(np.ceil(max_nodes/s[i].shape[1])), 1)[:, :max_nodes]
                 for s in states],
             dim=0) for i in range(2)]

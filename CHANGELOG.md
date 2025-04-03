@@ -1,3 +1,13 @@
+### 1.0.0+2025.4.2
+- Add clipped value loss
+- Add generalized advantage estimation
+- Additional debug CLI output for policy update
+- Fix bug with head synchronization averaging across all heads
+- Fix bug with world size detection multiplying model weights unilaterally
+- Make `action_std` a trainable parameter
+- Make critic and entropy weights `PPO` initialization arguments
+- Remove critic `action_std` update as it now does nothing
+
 ### 1.0.0+2025.4.1
 - Add advantage normalization
 - Add early stopping to `train_celltrip` function

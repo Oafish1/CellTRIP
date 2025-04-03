@@ -98,8 +98,8 @@ class Worker:
         env_init,
         policy_init,
         memory_init,
-        learner_world_size=1,
-        head_world_size=1,
+        num_learners=1,
+        num_heads=1,
         rank=0,
         learner=True,
         parent=None,  # Policy parent worker ref
@@ -111,15 +111,16 @@ class Worker:
         self.env = env_init().to(device)
         self.policy = policy_init(self.env).to(device)
         self.memory = memory_init(self.policy)
-        self.learner_world_size = learner_world_size
-        self.head_world_size = head_world_size
+        self.num_learners = num_learners
+        self.num_heads = num_heads
         self.rank = rank
         self.learner = learner
         self.parent = parent
 
         # World initialization
-        if learner: col.init_collective_group(learner_world_size, rank, 'nccl', 'learners')
-        if parent is None: col.init_collective_group(head_world_size, rank, 'nccl', 'heads')
+        if learner: col.init_collective_group(num_learners, rank, 'nccl', 'learners')
+        if (parent is None) and not (learner and rank!=0): col.init_collective_group(
+            num_heads-num_learners+1, rank-num_learners+1 if rank !=0 else rank, 'nccl', 'heads')
 
         # Policy parameters
         self.policy_iteration = 0
@@ -139,11 +140,11 @@ class Worker:
         # Perform rollout
         result = simulate_until_completion(
             self.env, self.policy, self.memory, **kwargs)
-        self.memory.propagate_rewards()
         env_nodes = self.env.num_nodes
+        
+        # Reset and propagate
         self.env.reset()
-
-        # Clean memory
+        self.memory.compute_advantages()
         self.memory.cleanup()
 
         # Record
@@ -174,18 +175,15 @@ class Worker:
     # @_decorator.profile(time_annotation=True)
     def update(self, **kwargs):
         # Perform update
-        if self.flags['adjust_rewards_next_update']:
+        if self.flags['adjust_rewards_next_update'] and False:  # TODO: Reevaluate
             self.memory.adjust_rewards()
             self.flags['adjust_rewards_next_update'] = False
-        self.memory.normalize_rewards()
         self.policy.update(self.memory, **kwargs, verbose=True)
 
-        # Annotate
+        # Annotate and clean
         self.policy_iteration += 1
         num_new_memories = self.memory.get_new_len()
         num_replay_memories = self.memory.get_replay_len()
-
-        # Clean
         self.memory.mark_sampled()
 
         # Record
@@ -219,14 +217,12 @@ class Worker:
     @_decorator.metrics(append_to_dict=True)
     # @_decorator.profile(time_annotation=True)
     def recv_memories(self, new_memories):
-        # Append memories
+        # Append and clean memories
         num_memories = 0
         for new_memory in new_memories:
             new_memory = ray.get(new_memory)
             self.memory.append_memory(*new_memory)
             num_memories += sum([s.shape[0] for s in new_memory[0]['states']])
-
-        # Clean memory
         self.memory.cleanup()
 
         # Record
@@ -246,7 +242,14 @@ class Worker:
             policy_state = ray.get(self.parent.get_policy_state.remote())
             set_policy_state(self.policy, policy_state)
         else:
-            self.policy.synchronize('heads')
+            # Synchronize learners
+            if self.learner: self.policy.synchronize('learners')
+
+            # Synchronize head learner and heads
+            if self.learner and self.rank == 0:
+                self.policy.synchronize('heads', broadcast=True)
+            elif not self.learner:
+                self.policy.synchronize('heads', receive=True)
 
         # Iterate policy
         if not self.learner and iterate_if_exclusive_runner:
@@ -277,7 +280,7 @@ def train_celltrip(
     num_runners,
     learners_can_be_runners=True,
     sync_across_nodes=True,
-    updates=50,
+    updates=200,
     steps=int(5e3),
     rollout_kwargs={},
     update_kwargs={},
@@ -298,16 +301,16 @@ def train_celltrip(
     num_exclusive_learners = num_learners - num_learner_runners if learners_can_be_runners else num_learners
     num_exclusive_runners = num_runners - num_learner_runners
     num_workers = num_exclusive_learners + num_learner_runners + num_exclusive_runners
-    num_head_workers = min(num_gpus, num_workers)
+    num_heads = min(num_gpus, num_workers)
     assert num_learners <= num_gpus, '`num_learners` cannot be greater than `num_gpus`.'
 
     # Create workers
     workers = []
     for i in range(num_workers):
-        bundle_idx = i % num_head_workers
-        child_num = i // num_head_workers
-        rank = float(bundle_idx + child_num * 10**-(np.floor(np.log10((num_workers-1)//num_head_workers))+1))
-        parent = workers[bundle_idx] if i >= num_head_workers else None
+        bundle_idx = i % num_heads
+        child_num = i // num_heads
+        rank = float(bundle_idx + child_num * 10**-(np.floor(np.log10((num_workers-1)//num_heads))+1))
+        parent = workers[bundle_idx] if i >= num_heads else None
         w = (
             Worker
                 .options(
@@ -315,14 +318,14 @@ def train_celltrip(
                         placement_group=pg_gpu, placement_group_bundle_index=bundle_idx))
                 .remote(
                     env_init=env_init, policy_init=policy_init, memory_init=memory_init,
-                    learner_world_size=num_learners, head_world_size=num_head_workers, rank=rank,
+                    num_learners=num_learners, num_heads=num_heads, rank=rank,
                     learner=i<num_learners, parent=parent))
         workers.append(w)
     ray.get([w.is_ready.remote() for w in workers])  # Wait for initialization
     learners = workers[:-num_exclusive_runners]
     runners = workers[num_exclusive_learners:]
-    heads = workers[:num_head_workers]
-    non_heads = workers[num_head_workers:]
+    heads = workers[:num_heads]
+    non_heads = workers[num_heads:]
 
     # Create early stopping class
     early_stopping = _utility.continual.EarlyStopping(**early_stopping_kwargs)
@@ -359,7 +362,7 @@ def train_celltrip(
             if sync_across_nodes:
                 new_memories_w1 = [ref for w2, ref in zip(runners, new_memories) if w1!=w2]
             else:
-                new_memories_w1 = new_memories[num_head_workers+i::num_head_workers]
+                new_memories_w1 = new_memories[num_heads+i::num_heads]
             future = w1.recv_memories.remote(new_memories=new_memories_w1)
             new_records.append(future)
         new_records = ray.get(new_records)
@@ -396,10 +399,6 @@ def train_celltrip(
                 ray.get([w.set_flags.remote(adjust_rewards_next_update=True) for w in learners])  # Recalibrate replay rewards next update
                 update_env_rewards = lambda w: w.env.set_rewards(penalty_action=1, penalty_velocity=1)
                 ray.get([w.execute.remote(func=update_env_rewards) for w in workers])
-            else:
-                # Reduce action_std
-                reduce_action_std = lambda w: w.policy.decay_action_std()
-                ray.get([w.execute.remote(func=reduce_action_std) for w in workers])
 
             # Escape
             # break
