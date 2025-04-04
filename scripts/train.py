@@ -11,9 +11,6 @@ import ray
 import celltrip
 
 
-# %% [markdown]
-# Maybe autostop based on action_std, also return history/values from update
-
 # %%
 ray.shutdown()
 ray.init(
@@ -48,7 +45,7 @@ def env_init(parent_dir=False):
     # Return env
     return celltrip.environment.EnvironmentBase(
         dataloader, dim=3,
-        reward_distance=1, reward_origin=0, penalty_bound=1, penalty_velocity=1, penalty_action=1)
+        reward_distance=0, reward_origin=0, penalty_bound=1, penalty_velocity=1, penalty_action=1)
 
 # Default 25Gb Forward, 14Gb Update, at max capacity
 policy_init = lambda env: celltrip.policy.PPO(
@@ -59,6 +56,12 @@ memory_init = lambda policy: celltrip.memory.AdvancedMemoryBuffer(
 
 initializers = (env_init, policy_init, memory_init)
 
+stage_functions = [
+    lambda w: w.env.set_rewards(penalty_velocity=1, penalty_action=1),
+    lambda w: w.env.set_rewards(reward_origin=1),
+    lambda w: w.env.set_rewards(reward_origin=0, reward_distance=1),
+]
+
 
 # %%
 start = time.perf_counter()
@@ -67,7 +70,8 @@ workers = ray.get(celltrip.train.train_celltrip.remote(
     initializers=initializers,
     num_gpus=2,
     num_learners=2,
-    num_runners=4))
+    num_runners=4,
+    stage_functions=stage_functions))
 print(time.perf_counter() - start)
 
 

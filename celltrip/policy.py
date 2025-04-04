@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import numpy as np
 import ray.util.collective as col  # Maybe conditional import?
 import torch
@@ -426,6 +428,7 @@ class PPO(nn.Module):
         epoch_size = min(epoch_size, max_unique_memories)
 
         # Load pool
+        pool_losses = defaultdict(lambda: 0)
         pool_data = _utility.processing.sample_and_cast(
             memory, None, None, pool_size,
             current_level=0, load_level=load_level, cast_level=cast_level,
@@ -435,6 +438,7 @@ class PPO(nn.Module):
         iterations = 0
         while True:
             # Load epoch
+            epoch_losses = defaultdict(lambda: 0)
             epoch_data = _utility.processing.sample_and_cast(
                 memory, pool_data, pool_size, epoch_size,
                 current_level=1, load_level=load_level, cast_level=cast_level,
@@ -442,7 +446,7 @@ class PPO(nn.Module):
             batches = np.ceil(epoch_size/batch_size).astype(int) if epoch_data is not None else 1
             for batch_num in range(batches):
                 # Load batch
-                batch_ppo = batch_critic = batch_entropy = 0
+                batch_losses = defaultdict(lambda: 0)
                 batch_data = _utility.processing.sample_and_cast(
                     memory, epoch_data, epoch_size, batch_size,
                     current_level=2, load_level=load_level, cast_level=cast_level,
@@ -472,9 +476,9 @@ class PPO(nn.Module):
                     loss.backward()  # Longest computation
 
                     # Scale and record
-                    batch_ppo += loss_ppo.detach().mean() * accumulation_frac
-                    batch_critic += loss_critic.detach().mean() * accumulation_frac
-                    batch_entropy += loss_entropy.detach().mean() * accumulation_frac
+                    batch_losses['PPO'] += (loss_ppo.detach().mean() * accumulation_frac).item()
+                    batch_losses['critic'] += (loss_critic.detach().mean() * accumulation_frac).item()
+                    batch_losses['entropy'] += (loss_entropy.detach().mean() * accumulation_frac).item()
 
                 # Step
                 self.optimizer.step()
@@ -493,22 +497,28 @@ class PPO(nn.Module):
                 # CLI
                 if verbose and ((iterations) % 10 == 0 or iterations in (1, 5)):
                     print(
-                        f'Iteration {iterations:02} -'
-                        # f' Loss ({(batch_ppo+batch_critic+batch_entropy).item():.3f}) ='
-                        f' PPO ({batch_ppo.item():.3f}) +'
-                        f' Critic ({batch_critic.item():.3f}) +'
-                        f' Entropy ({batch_entropy.item():.3f}) ::'
-                        f' Action STD ({self.actor.action_std.item():.3f})')
+                        f'Iteration {iterations:02} - '
+                        ' + '.join([f'{k} ({v:.3f})' for k, v in batch_losses.items()]),
+                        f' :: Action STD ({self.get_action_std():.3f})')
+                    
+                # Record
+                for k, v in batch_losses.items(): epoch_losses[k] += v / batches
                     
                 # Break
                 if iterations >= update_iterations: break
+
+            # Record
+            # NOTE: Assumes that batches/epochs/pools are multiples
+            for k, v in epoch_losses.items(): pool_losses[k] += v * batches / update_iterations
+
+            # Break
             if iterations >= update_iterations: break
 
         # Update scheduler
         self.scheduler.step()
 
         # Return self
-        return self
+        return dict(pool_losses)
 
     def synchronize(self, group='default', broadcast=None, receive=None, allreduce=None):
         # TODO: Maybe call scheduler twice if two updates are aggregated?

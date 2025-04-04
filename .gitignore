@@ -40,3 +40,6 @@ frame_*.png
 **/hidden_*
 **/*_old.*
 **/*_old_*
+
+# Testing configs
+example*.yaml

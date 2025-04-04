@@ -80,6 +80,7 @@ setup(
     extras_require={
         # NOTE: Currently requires all to run
         # Additional requirements:
+        #   `boto3` for AWS
         #   `cupy` for parallel update
         #   `docker` for containers
         #   `ffmpeg` for video

@@ -128,7 +128,8 @@ class Worker:
 
         # Flags
         self.flags = {
-            'adjust_rewards_next_update': False}
+            # 'adjust_rewards_next_update': False,
+        }
 
     def is_ready(self):
         "This method is required to make initialization waitable in Ray"
@@ -175,10 +176,10 @@ class Worker:
     # @_decorator.profile(time_annotation=True)
     def update(self, **kwargs):
         # Perform update
-        if self.flags['adjust_rewards_next_update'] and False:  # TODO: Reevaluate
-            self.memory.adjust_rewards()
-            self.flags['adjust_rewards_next_update'] = False
-        self.policy.update(self.memory, **kwargs, verbose=True)
+        # if self.flags['adjust_rewards_next_update'] and False:  # TODO: Reevaluate
+        #     self.memory.adjust_rewards()
+        #     self.flags['adjust_rewards_next_update'] = False
+        losses = self.policy.update(self.memory, **kwargs)
 
         # Annotate and clean
         self.policy_iteration += 1
@@ -193,7 +194,9 @@ class Worker:
             'Rank': self.rank,
             'New Memories': num_new_memories,
             'Replay Memories': num_replay_memories,
-            'Total Memories': len(self.memory)}
+            'Total Memories': len(self.memory),
+            'Mean Losses': losses,
+            'Action STD': self.policy.get_action_std()}
         return ret
     
     def set_flags(self, **new_flag_values):
@@ -282,6 +285,7 @@ def train_celltrip(
     sync_across_nodes=True,
     updates=200,
     steps=int(5e3),
+    stage_functions=[],
     rollout_kwargs={},
     update_kwargs={},
     early_stopping_kwargs={}):
@@ -291,6 +295,9 @@ def train_celltrip(
     """
     # Parameters
     env_init, policy_init, memory_init = initializers
+
+    # Stage functions
+    curr_stage = 0
 
     # Make placement group for GPUs
     pg_gpu = ray.util.placement_group(num_gpus*[{'CPU': 1, 'GPU': 1}])
@@ -392,16 +399,22 @@ def train_celltrip(
             # Reset
             early_stopping.reset()
 
-            # Advance stage
-            # TODO
-            if True:  # Still more stages
-                print('Advancing Stage')
-                ray.get([w.set_flags.remote(adjust_rewards_next_update=True) for w in learners])  # Recalibrate replay rewards next update
-                update_env_rewards = lambda w: w.env.set_rewards(penalty_action=1, penalty_velocity=1)
-                ray.get([w.execute.remote(func=update_env_rewards) for w in workers])
+            # Escape if no more stages
+            # TODO: Maybe do this based on action_std
+            # if len(stage_functions) == curr_stage: break
+            if len(stage_functions) == curr_stage: continue
 
-            # Escape
-            # break
+            # Advance stage
+            # ray.get([w.set_flags.remote(adjust_rewards_next_update=True) for w in learners])  # Recalibrate replay rewards next update
+            ray.get([w.execute.remote(func=stage_functions[curr_stage]) for w in workers])
+            curr_stage += 1
+
+            # Add record
+            ret = {
+                'Event Type': 'Advance Stage',
+                'Policy Iteration': ray.get([w.execute.remote(func=lambda w: w.policy_iteration) for w in workers])[0],
+                'Stage': curr_stage}
+            print(records[-1])
 
     # Destroy
     # workers[0].destroy.remote()

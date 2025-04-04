@@ -1,3 +1,9 @@
+### 1.0.0+2025.4.3
+- Change default worker update verbosity
+- Clean CLI code and more returns for policy update
+- More returns for worker update event log
+- Readd full stages to training with argument for `train_celltrip`
+
 ### 1.0.0+2025.4.2
 - Add clipped value loss
 - Add generalized advantage estimation

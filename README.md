@@ -270,6 +270,12 @@ ssh precision "cd ~/repos/INEPT/scripts; bash remove_c.bash"
 Profiling
 watch -d -n 0.5 nvidia-smi
 
+AWS Profile
+export AWS_PROFILE=waisman-admin
+
+Ray cluster
+AWS_PROFILE=waisman-admin ray up example-full.yaml 
+
 TODO
 Find https://raw.githubusercontent.com/Oafish1/CellTRIP/refs/heads/main/plots, Replace ./plots to test images
 -->
