@@ -1,3 +1,4 @@
+aiobotocore[boto3]
 cupy-cuda12x  # Dependency of anndata, for compatibility with base docker image
 Cython
 adjustText
@@ -13,6 +14,7 @@ pandas
 pip-tools
 ray[client,default]
 rds2py
+s3fs
 scanpy
 scikit-learn>=1.4.2
 scipy>=1.13.0

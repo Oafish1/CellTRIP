@@ -4,7 +4,10 @@ from setuptools import find_packages, setup
 from distutils.extension import Extension
 
 # TODO: Fix this and don't autorun on install
-USE_CYTHON = True
+try:
+    import Cython
+    USE_CYTHON = True
+except: USE_CYTHON = False
 CYTHON_COMPILED = os.path.exists('celltrip/environment.c')
 
 
@@ -63,7 +66,10 @@ elif CYTHON_COMPILED: ext_modules += compiled(cython_extensions)
 setup(
     name='celltrip',
     author='Noah Cohen Kalafut',
-    description='CellTRIP, a Multi-Agent Reinforcement Learning Approach for Cell Trajectory Recovery, Cross-Modal Imputation, and Perturbation in Time and Space',
+    description=
+        'CellTRIP, a Multi-Agent Reinforcement Learning Approach '
+        'for Cell Trajectory Recovery, Cross-Modal Imputation, '
+        'and Perturbation in Time and Space',
     long_description=readme,
     long_description_content_type="text/markdown",
     version=__version__,
@@ -71,7 +77,7 @@ setup(
     cmdclass=cmdclass,
     ext_modules=ext_modules,
     install_requires=[
-        # Python >=3.11 if Cython is used with Ray, otherwise 3.10 works
+        # Python 3.10.16 normally
         'numpy',
         'ray[client,default]',
         'scipy>=1.13.0',  # For sparse, ~1.13.0
@@ -80,7 +86,7 @@ setup(
     extras_require={
         # NOTE: Currently requires all to run
         # Additional requirements:
-        #   `boto3` for AWS
+        #   `boto3` for s3
         #   `cupy` for parallel update
         #   `docker` for containers
         #   `ffmpeg` for video
@@ -92,8 +98,9 @@ setup(
             'memray',
             'pip-tools',
             'snakeviz'],
-        'examples': [
+        'extras': [
             'adjustText',
+            'aiobotocore[boto3]',  # Compatibility with boto3 and s3fs
             'anndata',
             'h5py',
             'ipympl',
@@ -101,6 +108,7 @@ setup(
             'nbconvert',
             'pandas',
             'rds2py',
+            's3fs',
             'scanpy',
             'scikit-learn>=1.4.2',  # Needs ~1.4.2
             'seaborn',

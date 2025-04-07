@@ -247,13 +247,14 @@ this script will generate...
 <!--
 DEV NOTES
 Compiling requirements
-python -m pip freeze -r requirements.in | sed '/@/d' > requirements.txt
+Make sure Ray is 2.43.0!
+python -m pip freeze -r requirements.in | sed -e '/@/d' -e 's/+.*//' -e '/nvidia-.*/d' > requirements.txt
 
 Run local
-python scripts/start_node.py --node-ip-address 100.64.246.20 --timeout -1 --cpu
+ray start --disable-usage-stats --node-ip-address 100.85.187.118 --head --port=6379 --dashboard-host=0.0.0.0
 
 Run remote
-python scripts/start_node.py --address 100.64.246.20:6379 --node-ip-address 100.85.187.118 --gpus 1
+ray start --disable-usage-stats --address 100.64.246.20:6379 --node-ip-address 100.85.187.118 --head --dashboard-host=0.0.0.0
 
 Run train script
 python -u train.py &> train_log.txt
@@ -264,9 +265,6 @@ rsync -v ~/repos/inept/celltrip/* precision:~/repos/INEPT/celltrip && \
 rsync -v ~/repos/inept/celltrip/utility/* precision:~/repos/INEPT/celltrip/utility && \
 rsync -v ~/repos/inept/scripts/!(*.gzip) precision:~/repos/INEPT/scripts
 
-Delete C
-ssh precision "cd ~/repos/INEPT/scripts; bash remove_c.bash"
-
 Profiling
 watch -d -n 0.5 nvidia-smi
 
@@ -274,7 +272,8 @@ AWS Profile
 export AWS_PROFILE=waisman-admin
 
 Ray cluster
-AWS_PROFILE=waisman-admin ray up example-full.yaml 
+ray up aws_config.yaml
+ray down aws_config.yaml
 
 TODO
 Find https://raw.githubusercontent.com/Oafish1/CellTRIP/refs/heads/main/plots, Replace ./plots to test images

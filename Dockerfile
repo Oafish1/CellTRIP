@@ -1,6 +1,6 @@
 # Make sure to set build context to CellTRIP main folder
 # NOTE: Must be python version 3.10.16 to interface with containers
-FROM rayproject/ray:2.44.0.f468b3-py310-gpu
+FROM rayproject/ray:2.43.0-py310-gpu
 USER root
 WORKDIR /run
 

@@ -1,4 +1,6 @@
 from collections import defaultdict
+import datetime
+import warnings
 
 import numpy as np
 import ray
@@ -151,6 +153,7 @@ class Worker:
         # Record
         timestep, reward, itemized_reward = result
         ret = {
+            'Timestamp': str(datetime.datetime.now()),
             'Event Type': 'Rollout',
             'Policy Iteration': self.policy_iteration,
             'Rank': self.rank,
@@ -189,6 +192,7 @@ class Worker:
 
         # Record
         ret = {
+            'Timestamp': str(datetime.datetime.now()),
             'Event Type': 'Update',
             'Policy Iteration': self.policy_iteration,
             'Rank': self.rank,
@@ -212,6 +216,7 @@ class Worker:
 
         # Record
         ret = {
+            'Timestamp': str(datetime.datetime.now()),
             'Event Type': 'Send Memory',
             'Rank': self.rank,
             'Memories': sum([s.shape[0] for s in mem[0]['states']])}
@@ -230,6 +235,7 @@ class Worker:
 
         # Record
         ret = {
+            'Timestamp': str(datetime.datetime.now()),
             'Event Type': 'Receive Memories',
             'Rank': self.rank,
             'Memories': num_memories}
@@ -261,6 +267,7 @@ class Worker:
 
         # Record
         ret = {
+            'Timestamp': str(datetime.datetime.now()),
             'Event Type': 'Synchronize Policy',
             'Policy Iteration': self.policy_iteration,
             'Rank': self.rank,
@@ -276,6 +283,58 @@ class Worker:
 
 
 @ray.remote(num_cpus=1e-4)
+class RecordBuffer:
+    def __init__(self, logfile='cli', flush_on_record=True):
+        # Defaults
+        self.flush_on_record = flush_on_record
+
+        # Initialize
+        self.buffer = []
+
+        # Choose writing function
+        self.logfile = logfile
+        if logfile is None:
+            self.write = lambda _: None
+        elif logfile == 'cli':
+            self.write = self._write_cli
+        elif logfile.startswith('s3://'):
+            import s3fs
+            try:
+                self.s3 = s3fs.S3FileSystem()
+            except:
+                warnings.warn('No suitable credentials found for s3 '
+                              'access, using anonymous mode')  # TODO: Correct this and use for input data as well
+                self.s3 = s3fs.S3FileSystem(anon=True)
+            self.s3.open(self.logfile, 'w').close()  # Create/erase
+            self.write = self._write_s3
+        else:
+            open(self.logfile, 'w').close()  # Create/erase
+            self.write = self._write_disk
+
+    def _write_cli(self):
+        for record in self.buffer:
+            print(record)
+
+    def _write_s3(self):
+        with self.s3.open(self.logfile, 'a') as f:
+            for record in self.buffer:
+                f.write(str(record) + '\n')
+
+    def _write_disk(self):
+        with open(self.logfile, 'a') as f:
+            for record in self.buffer:
+                f.write(str(record) + '\n')
+
+    def record(self, *records):
+        self.buffer += records
+        print(self.buffer)
+        if self.flush_on_record: self.flush()
+
+    def flush(self):
+        self.write()
+        self.buffer.clear()
+
+
 def train_celltrip(
     initializers,
     num_gpus,
@@ -286,6 +345,7 @@ def train_celltrip(
     updates=200,
     steps=int(5e3),
     stage_functions=[],
+    logfile='cli',
     rollout_kwargs={},
     update_kwargs={},
     early_stopping_kwargs={}):
@@ -334,87 +394,96 @@ def train_celltrip(
     heads = workers[:num_heads]
     non_heads = workers[num_heads:]
 
+    # Create record buffer
+    record_buffer = RecordBuffer.remote(logfile=logfile)
+
     # Create early stopping class
     early_stopping = _utility.continual.EarlyStopping(**early_stopping_kwargs)
 
+    # Record start
+    record_buffer.record.remote({
+        'Timestamp': str(datetime.datetime.now()),
+        'Event Type': 'Finish Training',
+        'Policy Iteration': ray.get([w.execute.remote(func=lambda w: w.policy_iteration) for w in workers])[0],
+        'Stage': curr_stage})
+
     # Run policy updates
     # TODO: Maybe add/try async updates
-    records = []
     for policy_iteration in range(updates):
-        # Early stopping
-        num_start_records = len(records)
-
         # Rollouts
-        num_records = len(records)
+        rewards = []
         if policy_iteration==0:
             new_records = ray.get([w.rollout.remote(**rollout_kwargs, return_metrics=True) for w in runners])
-            records += new_records
-            for record in records[-(len(records)-num_records):]: print(record)
-        num_records = len(records)
-        new_records = ray.get([w.rollout_until_new.remote(num_new=steps/num_workers, **rollout_kwargs) for w in runners])
-        records += sum(new_records, [])
-        for record in records[-(len(records)-num_records):]: print(record)
+            rewards += [record['Reward'] for record in new_records if record['Event Type'] == 'Rollout']
+            record_buffer.record.remote(*new_records)
+        new_records = sum(ray.get([w.rollout_until_new.remote(num_new=steps/num_workers, **rollout_kwargs) for w in runners]), [])
+        rewards += [record['Reward'] for record in new_records if record['Event Type'] == 'Rollout']
+        record_buffer.record.remote(*new_records)
+        mean_rollout_reward = np.mean(rewards)
 
         # Collect memories
-        num_records = len(records)
         ret = ray.get([w.send_memory.remote(new=True) for w in runners])
         new_memories, new_records = [[r[i] for r in ret] for i in range(2)]
-        records += new_records
-        for record in records[-(len(records)-num_records):]: print(record)
+        record_buffer.record.remote(*new_records)
 
         # Broadcast memories
-        num_records = len(records)
-        new_records = []
+        futures = []
         for i, w1 in enumerate(learners):
             if sync_across_nodes:
                 new_memories_w1 = [ref for w2, ref in zip(runners, new_memories) if w1!=w2]
             else:
                 new_memories_w1 = new_memories[num_heads+i::num_heads]
             future = w1.recv_memories.remote(new_memories=new_memories_w1)
-            new_records.append(future)
-        new_records = ray.get(new_records)
+            futures.append(future)
         del new_memories, new_memories_w1
-        records += new_records
-        for record in records[-(len(records)-num_records):]: print(record)
+        record_buffer.record.remote(*ray.get(futures))
 
         # Updates
-        num_records = len(records)
-        new_records = ray.get([w.update.remote(
-            **update_kwargs, return_metrics=policy_iteration==0) for w in learners])
-        records += new_records
-        for record in records[-(len(records)-num_records):]: print(record)
+        record_buffer.record.remote(*ray.get([w.update.remote(
+            **update_kwargs, return_metrics=policy_iteration==0) for w in learners]))
 
         # Synchronize policies
-        num_records = len(records)
-        new_records = ray.get([w.sync_policy.remote() for w in heads])
-        new_records += ray.get([w.sync_policy.remote() for w in non_heads])
-        records += new_records
-        for record in records[-(len(records)-num_records):]: print(record)
+        record_buffer.record.remote(*ray.get([w.sync_policy.remote() for w in heads]))
+        record_buffer.record.remote(*ray.get([w.sync_policy.remote() for w in non_heads]))
+
+        # Flush records
+        record_buffer.flush.remote()
 
         # Early stopping
         # TODO: Observe how this interacts with the memory buffer when advancing stages
         # TODO: Maybe will need to normalize only on new memories
-        mean_rollout_reward = np.mean([record['Reward'] for record in records[-(len(records)-num_start_records):] if record['Event Type'] == 'Rollout'])
         if early_stopping(mean_rollout_reward):
             # Reset
             early_stopping.reset()
 
             # Escape if no more stages
             # TODO: Maybe do this based on action_std
-            # if len(stage_functions) == curr_stage: break
-            if len(stage_functions) == curr_stage: continue
+            if len(stage_functions) == curr_stage:
+                # Add record
+                record_buffer.record.remote({
+                    'Timestamp': str(datetime.datetime.now()),
+                    'Event Type': 'Finish Training',
+                    'Policy Iteration': ray.get([w.execute.remote(func=lambda w: w.policy_iteration) for w in workers])[0],
+                    'Stage': curr_stage})
+
+                # Escape
+                continue  # break
 
             # Advance stage
-            # ray.get([w.set_flags.remote(adjust_rewards_next_update=True) for w in learners])  # Recalibrate replay rewards next update
-            ray.get([w.execute.remote(func=stage_functions[curr_stage]) for w in workers])
-            curr_stage += 1
+            else:
+                # ray.get([w.set_flags.remote(adjust_rewards_next_update=True) for w in learners])  # Recalibrate replay rewards next update
+                ray.get([w.execute.remote(func=stage_functions[curr_stage]) for w in workers])
+                curr_stage += 1
 
-            # Add record
-            ret = {
-                'Event Type': 'Advance Stage',
-                'Policy Iteration': ray.get([w.execute.remote(func=lambda w: w.policy_iteration) for w in workers])[0],
-                'Stage': curr_stage}
-            print(records[-1])
+                # Add record
+                record_buffer.record.remote({
+                    'Timestamp': str(datetime.datetime.now()),
+                    'Event Type': 'Advance Stage',
+                    'Policy Iteration': ray.get([w.execute.remote(func=lambda w: w.policy_iteration) for w in workers])[0],
+                    'Stage': curr_stage})
+
+    # Flush buffer
+    record_buffer.flush.remote()
 
     # Destroy
     # workers[0].destroy.remote()

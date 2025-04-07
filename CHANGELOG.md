@@ -1,3 +1,17 @@
+### 1.0.0+2025.4.6
+- Add `merge_adatas` utility function and add capability to training script
+- Add `RecordBuffer` class for storing records from training
+- Add s3 access framework for logfiles
+- Begin adding arguments to training script
+- Bugfixes for improper on-disk index ordering
+- Change node subsample behavior for `obs` in `Preprocessing` to not allow repeats
+- Change ray image version for Docker and Ray Cluster
+- Flexible Cython usage
+
+### 1.0.0+2025.4.4
+- Ray cluster config for AWS
+- Remove stages for now
+
 ### 1.0.0+2025.4.3
 - Change default worker update verbosity
 - Clean CLI code and more returns for policy update

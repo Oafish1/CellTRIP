@@ -228,7 +228,7 @@ class Preprocessing:
         adata_obs=None,
         partition_cols=None,
         return_partition=False,
-        **kwargs
+        **kwargs,
     ):
         # Defaults
         assert not np.array([v is None for v in (modalities, adata_obs)]).all(), (
@@ -285,7 +285,7 @@ class Preprocessing:
             if adata_obs is not None:
                 # Get all sample ids and choose some
                 sample_ids = np.unique(sum([adata_ob.index.to_list() for adata_ob in adata_obs], []))
-                choice = self.subsample_rng.choice(sample_ids, self.num_nodes)
+                choice = self.subsample_rng.choice(sample_ids, self.num_nodes, replace=False)
                 # Get numerical index
                 # There has to be a better way, right?
                 series = [pd.Series(np.arange(adata_ob.shape[0]), adata_ob.index) for adata_ob in adata_obs]
@@ -297,6 +297,9 @@ class Preprocessing:
                     '`num_samples` is not `None`')
                 node_idx = self.subsample_rng.choice(modal_sizes[0], self.num_nodes, replace=False)
                 node_idxs = [node_idx for _ in range(len(modal_sizes))]
+
+            # Sort (required for on-disk AnnData objects)
+            node_idxs = [np.sort(node_idx) for node_idx in node_idxs]
 
             # Apply random selection
             if modalities is not None: modalities = [m[node_idx] for m, node_idx in zip(modalities, node_idxs)]
@@ -326,6 +329,16 @@ def read_adatas(*fnames, on_disk=False):
     backed = 'r' if on_disk else None
     adatas = [sc.read_h5ad(fname, backed=backed) for fname in fnames]
 
+    return adatas
+
+
+def merge_adatas(*adatas, on_disk=False):
+    if not on_disk:
+        adatas = ad.concat(adatas)  # TODO: Test
+    else:
+        adatas = [ad.experimental.AnnCollection(adatas)]
+        adatas[0].var = adatas[0].adatas[0].var
+        
     return adatas
 
 
@@ -450,7 +463,7 @@ class PreprocessFromAnnData:
             partition_cols=self.partition_cols,
             return_partition=return_partition)
         if return_partition: sampled_adata_obs, partition = sampled_adata_obs
-        sampled_modalities = [adata[adata_ob.index].X for adata, adata_ob in zip(self.adatas, sampled_adata_obs)]
+        sampled_modalities = [adata[adata_ob.index.to_numpy()].X for adata, adata_ob in zip(self.adatas, sampled_adata_obs)]
         processed_adata_obs = sampled_adata_obs
         processed_modalities, processed_adata_vars = self.preprocessing.transform(
             sampled_modalities, adata_vars, force_filter=True)
