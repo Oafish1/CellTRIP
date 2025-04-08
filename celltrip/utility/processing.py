@@ -1,4 +1,5 @@
 import functools as ft
+import os
 import warnings
 
 import anndata as ad
@@ -325,9 +326,34 @@ class LazyComputation:
         return self.func(x)
     
 
-def read_adatas(*fnames, on_disk=False):
+def read_adatas(*fnames, on_disk=False, download_dir='./downloads'):
+    # Params
     backed = 'r' if on_disk else None
-    adatas = [sc.read_h5ad(fname, backed=backed) for fname in fnames]
+
+    # Read adatas
+    adatas = []
+    for fname in fnames:
+        # File handle
+        if fname.startswith('s3://'):
+            # Get file handle
+            import s3fs
+            s3 = s3fs.S3FileSystem()
+
+            # Download if on_disk
+            # NOTE: Would be better to use something like this: https://anndata.readthedocs.io/en/latest/tutorials/notebooks/%7Bread%2Cwrite%7D_dispatched.html
+            # TODO: Test, try except
+            if on_disk:
+                fname_local = os.path.join(download_dir, fname.split('/')[-1])
+                if not os.path.exists(fname_local):
+                    s3.download(fname, fname_local)
+                handle = fname_local
+            else:
+                handle = s3.open(fname, 'rb')  # NOTE: Never closed
+
+        else: handle = fname
+
+        # Read data
+        adatas = [sc.read_h5ad(handle, backed=backed) for fname in fnames]
 
     return adatas
 

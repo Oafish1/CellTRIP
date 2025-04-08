@@ -301,11 +301,12 @@ class RecordBuffer:
             import s3fs
             try:
                 self.s3 = s3fs.S3FileSystem()
+                self.s3.open(self.logfile, 'w').close()  # Create/erase
             except:
                 warnings.warn('No suitable credentials found for s3 '
-                              'access, using anonymous mode')  # TODO: Correct this and use for input data as well
+                              'access, using anonymous mode')
                 self.s3 = s3fs.S3FileSystem(anon=True)
-            self.s3.open(self.logfile, 'w').close()  # Create/erase
+                self.s3.open(self.logfile, 'w').close()  # Create/erase
             self.write = self._write_s3
         else:
             open(self.logfile, 'w').close()  # Create/erase

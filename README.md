@@ -270,6 +270,7 @@ watch -d -n 0.5 nvidia-smi
 
 AWS Profile
 export AWS_PROFILE=waisman-admin
+aws sso login --profile waisman-admin
 
 Ray cluster
 ray up aws_config.yaml

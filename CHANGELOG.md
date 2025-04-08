@@ -1,3 +1,10 @@
+### 1.0.0+2025.4.7
+- Automatic download/streaming from s3 for `read_adatas`
+- Correct AWS credential fallback
+- Logfile write testing
+- Reconfigure AWS credentials
+- Revise AWS cluster configuration
+
 ### 1.0.0+2025.4.6
 - Add `merge_adatas` utility function and add capability to training script
 - Add `RecordBuffer` class for storing records from training
