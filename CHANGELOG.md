@@ -1,3 +1,7 @@
+### 1.0.0+2025.4.8.3
+- Fix bug with deleting empty memory array before instantiation
+- Wait for `RecordBuffer` flush before exiting `train_celltrip`
+
 ### 1.0.0+2025.4.8.2
 - Fix parser requirements
 

@@ -438,7 +438,7 @@ def train_celltrip(
         record_buffer.record.remote(*new_records)
 
         # Broadcast memories
-        futures = []
+        futures = []; new_memories_w1 = []
         for i, w1 in enumerate(learners):
             if sync_across_nodes:
                 new_memories_w1 = [ref for w2, ref in zip(runners, new_memories) if w1!=w2]
@@ -494,7 +494,7 @@ def train_celltrip(
         'Stage': curr_stage})
 
     # Flush buffer
-    record_buffer.flush.remote()
+    ray.get(record_buffer.flush.remote())
 
     # Destroy
     # workers[0].destroy.remote()

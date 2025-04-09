@@ -121,9 +121,9 @@ def train(config):
     # rollout_kwargs={'dummy': True}, update_kwargs={'update_iterations': 5}, sync_across_nodes=False
     celltrip.train.train_celltrip(
         initializers=initializers,
-        num_gpus=5,
-        num_learners=5,
-        num_runners=5,
+        num_gpus=3,
+        num_learners=3,
+        num_runners=3,
         updates=10,
         stage_functions=stage_functions,
         logfile=config.logfile)
