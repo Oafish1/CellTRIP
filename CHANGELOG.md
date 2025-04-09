@@ -1,3 +1,12 @@
+### 1.0.0+2025.4.8.1
+- Add log reading notebook `runtime`
+- Fix broadcast behavior for head worker policy sync
+- Fix rank number calculation log contingency
+- Rearrange `train` module
+- Relax input file requirements to allow only merge files
+- Revise `train_celltrip` native record keeping
+- Update VRAM estimates
+
 ### 1.0.0+2025.4.8
 - Add launcher and s3 policies
 - Additional command reference

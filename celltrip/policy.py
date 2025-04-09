@@ -520,25 +520,21 @@ class PPO(nn.Module):
         # Return self
         return dict(pool_losses)
 
-    def synchronize(self, group='default', broadcast=None, receive=None, allreduce=None):
+    def synchronize(self, group='default', broadcast=None, allreduce=None):
         # TODO: Maybe call scheduler twice if two updates are aggregated?
         # Defaults
         if broadcast is None: broadcast = False
-        if receive is None: receive = False
-        if allreduce is None:
-            allreduce = False if (broadcast or receive) else True
+        if allreduce is None: allreduce = not broadcast
 
         # Collective operations
         world_size = col.get_collective_group_size(group)
-        rank = col.get_rank(group)
+        # rank = col.get_rank(group)
 
         # Sync
         # NOTE: Optimizer momentum not synced
         for k, w in self.state_dict().items():
             if broadcast:
-                col.broadcast(w, 0, group)  # Will always be rank 0
-            if receive:
-                col.recv(w, 0, group)
+                col.broadcast(w, 0, group)
             if allreduce:
                 col.allreduce(w, group)
                 w /= world_size

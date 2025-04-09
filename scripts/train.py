@@ -41,6 +41,7 @@ parser.add_argument('--logfile', type=str, default='cli', help='Location for log
 if not celltrip.utility.notebook.is_notebook():
     config = parser.parse_args()
 else:
+    # python train.py s3://nkalafut-celltrip/MERFISH/expression.h5ad s3://nkalafut-celltrip/MERFISH/spatial.h5ad --logfile s3://nkalafut-celltrip/log.txt
     config = parser.parse_args((
         's3://nkalafut-celltrip/MERFISH/expression.h5ad s3://nkalafut-celltrip/MERFISH/spatial.h5ad '
         '--logfile s3://nkalafut-celltrip/log.txt'
@@ -121,9 +122,9 @@ def train(config):
     # rollout_kwargs={'dummy': True}, update_kwargs={'update_iterations': 5}, sync_across_nodes=False
     celltrip.train.train_celltrip(
         initializers=initializers,
-        num_gpus=2,
+        num_gpus=3,
         num_learners=2,
-        num_runners=4,
+        num_runners=3,
         updates=10,
         stage_functions=stage_functions,
         logfile=config.logfile)
@@ -155,3 +156,6 @@ ray.get(train.remote(config))
 # celltrip.train.simulate_until_completion(env, policy, memory)
 # memory.propagate_rewards()
 # memory.adjust_rewards()
+
+
+

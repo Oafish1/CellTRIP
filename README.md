@@ -273,10 +273,10 @@ export AWS_PROFILE=waisman-admin
 aws sso login --profile waisman-admin
 
 Ray cluster
-ray up aws_config.yaml
+ray up -y aws_config.yaml
 ray attach aws_config.yaml -p 10001
 ray dashboard aws_config.yaml
-ray down aws_config.yaml
+ray down -y aws_config.yaml
 
 Ray cluster status
 ray attach aws_config.yaml

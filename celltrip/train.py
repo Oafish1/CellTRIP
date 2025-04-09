@@ -88,6 +88,60 @@ def simulate_until_completion(env, policy, memory=None, keys=None, dummy=False, 
     return ep_timestep, ep_reward, ep_itemized_reward
 
 
+@ray.remote(num_cpus=1e-4)
+class RecordBuffer:
+    def __init__(self, logfile='cli', flush_on_record=True):
+        # Defaults
+        self.flush_on_record = flush_on_record
+
+        # Initialize
+        self.buffer = []
+
+        # Choose writing function
+        self.logfile = logfile
+        if self.logfile is None:
+            self.write = lambda _: None
+        elif self.logfile == 'cli':
+            self.write = self._write_cli
+        elif self.logfile.startswith('s3://'):
+            import s3fs
+            try:
+                self.s3 = s3fs.S3FileSystem()
+                self.s3.ls(self.logfile.split('/')[2])
+            except:
+                warnings.warn('No suitable credentials found for s3 '
+                              'access, using anonymous mode')
+                self.s3 = s3fs.S3FileSystem(anon=True)
+                self.s3.ls(self.logfile.split('/')[2])
+            self.s3.open(self.logfile, 'w').close()  # Create/erase
+            self.write = self._write_s3
+        else:
+            open(self.logfile, 'w').close()  # Create/erase
+            self.write = self._write_disk
+
+    def _write_cli(self):
+        for record in self.buffer:
+            print(record)
+
+    def _write_s3(self):
+        with self.s3.open(self.logfile, 'a') as f:
+            for record in self.buffer:
+                f.write(str(record) + '\n')
+
+    def _write_disk(self):
+        with open(self.logfile, 'a') as f:
+            for record in self.buffer:
+                f.write(str(record) + '\n')
+
+    def record(self, *records):
+        self.buffer += records
+        if self.flush_on_record: self.flush()
+
+    def flush(self):
+        self.write()
+        self.buffer.clear()
+
+
 @ray.remote(num_cpus=1e-4, num_gpus=1e-4)
 class Worker:
     """
@@ -255,10 +309,8 @@ class Worker:
             if self.learner: self.policy.synchronize('learners')
 
             # Synchronize head learner and heads
-            if self.learner and self.rank == 0:
+            if not self.learner or (self.learner and self.rank == 0):
                 self.policy.synchronize('heads', broadcast=True)
-            elif not self.learner:
-                self.policy.synchronize('heads', receive=True)
 
         # Iterate policy
         if not self.learner and iterate_if_exclusive_runner:
@@ -280,60 +332,6 @@ class Worker:
 
     def destroy(self):
         col.destroy_collective_group()
-
-
-@ray.remote(num_cpus=1e-4)
-class RecordBuffer:
-    def __init__(self, logfile='cli', flush_on_record=True):
-        # Defaults
-        self.flush_on_record = flush_on_record
-
-        # Initialize
-        self.buffer = []
-
-        # Choose writing function
-        self.logfile = logfile
-        if self.logfile is None:
-            self.write = lambda _: None
-        elif self.logfile == 'cli':
-            self.write = self._write_cli
-        elif self.logfile.startswith('s3://'):
-            import s3fs
-            try:
-                self.s3 = s3fs.S3FileSystem()
-                self.s3.ls(self.logfile.split('/')[2])
-            except:
-                warnings.warn('No suitable credentials found for s3 '
-                              'access, using anonymous mode')
-                self.s3 = s3fs.S3FileSystem(anon=True)
-                self.s3.ls(self.logfile.split('/')[2])
-            self.s3.open(self.logfile, 'w').close()  # Create/erase
-            self.write = self._write_s3
-        else:
-            open(self.logfile, 'w').close()  # Create/erase
-            self.write = self._write_disk
-
-    def _write_cli(self):
-        for record in self.buffer:
-            print(record)
-
-    def _write_s3(self):
-        with self.s3.open(self.logfile, 'a') as f:
-            for record in self.buffer:
-                f.write(str(record) + '\n')
-
-    def _write_disk(self):
-        with open(self.logfile, 'a') as f:
-            for record in self.buffer:
-                f.write(str(record) + '\n')
-
-    def record(self, *records):
-        self.buffer += records
-        if self.flush_on_record: self.flush()
-
-    def flush(self):
-        self.write()
-        self.buffer.clear()
 
 
 def train_celltrip(
@@ -391,7 +389,8 @@ def train_celltrip(
     for i in range(num_workers):
         bundle_idx = i % num_heads
         child_num = i // num_heads
-        rank = float(bundle_idx + child_num * 10**-(np.floor(np.log10((num_workers-1)//num_heads))+1))
+        rank_decimal = 10**-(np.floor(np.log10((num_workers-1)//num_heads))+1) if num_workers > num_heads else 0
+        rank = float(bundle_idx + child_num * rank_decimal)
         parent = workers[bundle_idx] if i >= num_heads else None
         w = (
             Worker
@@ -471,13 +470,6 @@ def train_celltrip(
             # Escape if no more stages
             # TODO: Maybe do this based on action_std
             if len(stage_functions) == curr_stage:
-                # Add record
-                record_buffer.record.remote({
-                    'Timestamp': str(datetime.datetime.now()),
-                    'Event Type': 'Finish Training',
-                    'Policy Iteration': ray.get([w.execute.remote(func=lambda w: w.policy_iteration) for w in workers])[0],
-                    'Stage': curr_stage})
-
                 # Escape
                 continue  # break
 
@@ -487,12 +479,19 @@ def train_celltrip(
                 ray.get([w.execute.remote(func=stage_functions[curr_stage]) for w in workers])
                 curr_stage += 1
 
-                # Add record
+                # Record
                 record_buffer.record.remote({
                     'Timestamp': str(datetime.datetime.now()),
                     'Event Type': 'Advance Stage',
                     'Policy Iteration': ray.get([w.execute.remote(func=lambda w: w.policy_iteration) for w in workers])[0],
                     'Stage': curr_stage})
+                
+    # Record
+    record_buffer.record.remote({
+        'Timestamp': str(datetime.datetime.now()),
+        'Event Type': 'Finish Training',
+        'Policy Iteration': ray.get([w.execute.remote(func=lambda w: w.policy_iteration) for w in workers])[0],
+        'Stage': curr_stage})
 
     # Flush buffer
     record_buffer.flush.remote()
