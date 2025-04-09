@@ -1,6 +1,5 @@
 # %%
-# %load_ext autoreload
-# %autoreload 2
+
 
 
 # %% [markdown]
@@ -103,12 +102,12 @@ def train(config):
         return celltrip.environment.EnvironmentBase(
             dataloader, dim=3)
 
-    # Default 25Gb Forward, 14Gb Update, at max capacity
+    # Default ~25Gb Forward, ~16Gb Update, at max capacity
     policy_init = lambda env: celltrip.policy.PPO(
         2*env.dim, env.dataloader.modal_dims, env.dim)  # update_iterations=2, minibatch_size=3e3,
 
     memory_init = lambda policy: celltrip.memory.AdvancedMemoryBuffer(
-        sum(policy.modal_dims), split_args=policy.split_args)  # prune=100
+        sum(policy.modal_dims), split_args=policy.split_args)
 
     initializers = (env_init, policy_init, memory_init)
 
@@ -122,9 +121,9 @@ def train(config):
     # rollout_kwargs={'dummy': True}, update_kwargs={'update_iterations': 5}, sync_across_nodes=False
     celltrip.train.train_celltrip(
         initializers=initializers,
-        num_gpus=3,
-        num_learners=2,
-        num_runners=3,
+        num_gpus=5,
+        num_learners=5,
+        num_runners=5,
         updates=10,
         stage_functions=stage_functions,
         logfile=config.logfile)

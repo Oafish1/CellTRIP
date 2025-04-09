@@ -1,3 +1,6 @@
+### 1.0.0+2025.4.8.2
+- Fix parser requirements
+
 ### 1.0.0+2025.4.8.1
 - Add log reading notebook `runtime`
 - Fix broadcast behavior for head worker policy sync
