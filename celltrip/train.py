@@ -293,20 +293,21 @@ class RecordBuffer:
 
         # Choose writing function
         self.logfile = logfile
-        if logfile is None:
+        if self.logfile is None:
             self.write = lambda _: None
-        elif logfile == 'cli':
+        elif self.logfile == 'cli':
             self.write = self._write_cli
-        elif logfile.startswith('s3://'):
+        elif self.logfile.startswith('s3://'):
             import s3fs
             try:
                 self.s3 = s3fs.S3FileSystem()
-                self.s3.open(self.logfile, 'w').close()  # Create/erase
+                self.s3.ls(self.logfile.split('/')[2])
             except:
                 warnings.warn('No suitable credentials found for s3 '
                               'access, using anonymous mode')
                 self.s3 = s3fs.S3FileSystem(anon=True)
-                self.s3.open(self.logfile, 'w').close()  # Create/erase
+                self.s3.ls(self.logfile.split('/')[2])
+            self.s3.open(self.logfile, 'w').close()  # Create/erase
             self.write = self._write_s3
         else:
             open(self.logfile, 'w').close()  # Create/erase
@@ -328,7 +329,6 @@ class RecordBuffer:
 
     def record(self, *records):
         self.buffer += records
-        print(self.buffer)
         if self.flush_on_record: self.flush()
 
     def flush(self):
@@ -357,12 +357,26 @@ def train_celltrip(
     # Parameters
     env_init, policy_init, memory_init = initializers
 
+    # Create record buffer
+    record_buffer = RecordBuffer.remote(logfile=logfile)
+
+    # Record
+    record_buffer.record.remote({
+        'Timestamp': str(datetime.datetime.now()),
+        'Event Type': 'Begin Training'})
+
     # Stage functions
     curr_stage = 0
 
     # Make placement group for GPUs
+    # TODO: Maybe tighten the placement group CPU requirements
     pg_gpu = ray.util.placement_group(num_gpus*[{'CPU': 1, 'GPU': 1}])
     ray.get(pg_gpu.ready())
+
+    # Record
+    record_buffer.record.remote({
+        'Timestamp': str(datetime.datetime.now()),
+        'Event Type': 'Register Placement Groups'})
 
     # Assign workers
     num_learner_runners = min(num_learners, num_runners) if learners_can_be_runners else 0
@@ -395,16 +409,13 @@ def train_celltrip(
     heads = workers[:num_heads]
     non_heads = workers[num_heads:]
 
-    # Create record buffer
-    record_buffer = RecordBuffer.remote(logfile=logfile)
-
     # Create early stopping class
     early_stopping = _utility.continual.EarlyStopping(**early_stopping_kwargs)
 
-    # Record start
+    # Record
     record_buffer.record.remote({
         'Timestamp': str(datetime.datetime.now()),
-        'Event Type': 'Finish Training',
+        'Event Type': 'Register Workers',
         'Policy Iteration': ray.get([w.execute.remote(func=lambda w: w.policy_iteration) for w in workers])[0],
         'Stage': curr_stage})
 

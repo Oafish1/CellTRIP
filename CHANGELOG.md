@@ -1,3 +1,14 @@
+### 1.0.0+2025.4.8
+- Add launcher and s3 policies
+- Additional command reference
+- Additional records for `train_celltrip`
+- AWS IAM, policy, role configuration
+- Change s3 cred detection method
+- Cluster revisions and testing
+- Fix `read_adatas` multiple concurrent read bug
+- Ray cluster working on AWS
+- Temporary credential generation for s3 testing
+
 ### 1.0.0+2025.4.7
 - Automatic download/streaming from s3 for `read_adatas`
 - Correct AWS credential fallback

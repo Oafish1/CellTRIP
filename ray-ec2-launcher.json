@@ -1,0 +1,50 @@
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Effect": "Allow",
+			"Action": "ec2:RunInstances",
+			"Resource": "arn:aws:ec2:us-east-2::image/ami-*"
+		},
+		{
+			"Effect": "Allow",
+			"Action": "ec2:RunInstances",
+			"Resource": [
+				"arn:aws:ec2:us-east-2:245432013314:instance/*",
+				"arn:aws:ec2:us-east-2:245432013314:network-interface/*",
+				"arn:aws:ec2:us-east-2:245432013314:subnet/*",
+				"arn:aws:ec2:us-east-2:245432013314:key-pair/*",
+				"arn:aws:ec2:us-east-2:245432013314:volume/*",
+				"arn:aws:ec2:us-east-2:245432013314:security-group/*"
+			]
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"ec2:TerminateInstances",
+				"ec2:DeleteTags",
+				"ec2:StartInstances",
+				"ec2:CreateTags",
+				"ec2:StopInstances"
+			],
+			"Resource": "arn:aws:ec2:us-east-2:245432013314:instance/*"
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"ec2:Describe*"
+			],
+			"Resource": "*"
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"iam:PassRole"
+			],
+			"Resource": [
+				"arn:aws:iam::245432013314:role/ray-head-v1",
+				"arn:aws:iam::245432013314:role/ray-worker-v1"
+			]
+		}
+	]
+}

@@ -274,7 +274,13 @@ aws sso login --profile waisman-admin
 
 Ray cluster
 ray up aws_config.yaml
+ray attach aws_config.yaml -p 10001
+ray dashboard aws_config.yaml
 ray down aws_config.yaml
+
+Ray cluster status
+ray attach aws_config.yaml
+ray status
 
 TODO
 Find https://raw.githubusercontent.com/Oafish1/CellTRIP/refs/heads/main/plots, Replace ./plots to test images
