@@ -1,7 +1,7 @@
 # Cluster config
 cluster_name: celltrip
 max_workers: 6
-upscaling_speed: 1.0
+upscaling_speed: 0.1  # Try to do one at a time
 docker:
     head_image: "rayproject/ray:2.43.0-py310"
     worker_image: "rayproject/ray:2.43.0-py310-gpu"

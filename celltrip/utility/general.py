@@ -1,3 +1,5 @@
+import warnings
+
 import h5py
 import torch
 
@@ -115,3 +117,45 @@ def overwrite_dict(original, modification, copy=True):
         new[k] = v
 
     return new
+
+
+def get_policy_state(policy):
+    return {
+        'policy': policy.state_dict(),
+        'optimizer': policy.optimizer.state_dict(),
+        'scheduler': policy.scheduler.state_dict(),
+    }
+
+
+def set_policy_state(policy, state_dicts):
+    policy.load_state_dict(state_dicts['policy'])
+    policy.optimizer.load_state_dict(state_dicts['optimizer'])
+    policy.scheduler.load_state_dict(state_dicts['scheduler'])
+
+
+def set_device_recursive(state_dict, device):
+    # https://github.com/pytorch/pytorch/issues/1442#issue-225795077
+    for key in state_dict:
+        if isinstance(state_dict[key], dict):
+            state_dict[key] = set_device_recursive(state_dict[key], device)
+        else:
+            try:
+                state_dict[key] = state_dict[key].to(device)
+            except:
+                pass
+    return state_dict
+
+
+def get_s3_handler_with_access(fname):
+    # Get s3 handler
+    import s3fs
+    try:
+        s3 = s3fs.S3FileSystem()
+        s3.ls(fname.split('/')[2])
+    except:
+        warnings.warn('No suitable credentials found for s3 '
+                      'access, using anonymous mode')
+        s3 = s3fs.S3FileSystem(anon=True)
+        s3.ls(fname.split('/')[2])
+
+    return s3

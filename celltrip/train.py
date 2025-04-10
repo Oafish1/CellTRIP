@@ -1,5 +1,6 @@
 from collections import defaultdict
-import datetime
+from datetime import datetime
+import json
 import warnings
 
 import numpy as np
@@ -8,34 +9,10 @@ import ray.util.collective as col
 import torch
 
 from . import decorator as _decorator
+from . import environment as _environment
+from . import memory as _memory
+from . import policy as _policy
 from . import utility as _utility
-
-
-def get_policy_state(policy):
-    return {
-        'policy': policy.state_dict(),
-        'optimizer': policy.optimizer.state_dict(),
-        'scheduler': policy.scheduler.state_dict(),
-    }
-
-
-def set_policy_state(policy, state_dicts):
-    policy.load_state_dict(state_dicts['policy'])
-    policy.optimizer.load_state_dict(state_dicts['optimizer'])
-    policy.scheduler.load_state_dict(state_dicts['scheduler'])
-
-
-def set_device_recursive(state_dict, device):
-    # https://github.com/pytorch/pytorch/issues/1442#issue-225795077
-    for key in state_dict:
-        if isinstance(state_dict[key], dict):
-            state_dict[key] = set_device_recursive(state_dict[key], device)
-        else:
-            try:
-                state_dict[key] = state_dict[key].to(device)
-            except:
-                pass
-    return state_dict
 
 
 def simulate_until_completion(env, policy, memory=None, keys=None, dummy=False, verbose=False):
@@ -90,9 +67,10 @@ def simulate_until_completion(env, policy, memory=None, keys=None, dummy=False, 
 
 @ray.remote(num_cpus=1e-4)
 class RecordBuffer:
-    def __init__(self, logfile='cli', flush_on_record=True):
+    def __init__(self, logfile='cli', hooks=[], flush_on_record=None):
         # Defaults
-        self.flush_on_record = flush_on_record
+        self.flush_on_record = (logfile=='cli') if flush_on_record is None else flush_on_record
+        self.hooks = hooks
 
         # Initialize
         self.buffer = []
@@ -104,15 +82,8 @@ class RecordBuffer:
         elif self.logfile == 'cli':
             self.write = self._write_cli
         elif self.logfile.startswith('s3://'):
-            import s3fs
-            try:
-                self.s3 = s3fs.S3FileSystem()
-                self.s3.ls(self.logfile.split('/')[2])
-            except:
-                warnings.warn('No suitable credentials found for s3 '
-                              'access, using anonymous mode')
-                self.s3 = s3fs.S3FileSystem(anon=True)
-                self.s3.ls(self.logfile.split('/')[2])
+            # Get s3 handle and generate logfile
+            self.s3 = _utility.general.get_s3_handler_with_access(self.logfile)
             self.s3.open(self.logfile, 'w').close()  # Create/erase
             self.write = self._write_s3
         else:
@@ -121,17 +92,20 @@ class RecordBuffer:
 
     def _write_cli(self):
         for record in self.buffer:
-            print(record)
+            print(json.dumps(record))
 
     def _write_s3(self):
         with self.s3.open(self.logfile, 'a') as f:
             for record in self.buffer:
-                f.write(str(record) + '\n')
+                f.write(json.dumps(record) + '\n')
 
     def _write_disk(self):
         with open(self.logfile, 'a') as f:
             for record in self.buffer:
-                f.write(str(record) + '\n')
+                f.write(json.dumps(record) + '\n')
+
+    def _execute_hooks(self):
+        for f in self.hooks: f(self.buffer)
 
     def record(self, *records):
         self.buffer += records
@@ -139,6 +113,7 @@ class RecordBuffer:
 
     def flush(self):
         self.write()
+        self._execute_hooks()
         self.buffer.clear()
 
 
@@ -179,13 +154,10 @@ class Worker:
             num_heads-num_learners+1, rank-num_learners+1 if rank !=0 else rank, 'nccl', 'heads')
 
         # Policy parameters
-        self.policy_iteration = 0
-        self.sync_policy(iterate_if_exclusive_runner=False)  # Works because non-heads will wait for head init
+        self.sync_policy()  # Works because non-heads will wait for head sync
 
         # Flags
-        self.flags = {
-            # 'adjust_rewards_next_update': False,
-        }
+        self.flags = {}
 
     def is_ready(self):
         "This method is required to make initialization waitable in Ray"
@@ -207,9 +179,9 @@ class Worker:
         # Record
         timestep, reward, itemized_reward = result
         ret = {
-            'Timestamp': str(datetime.datetime.now()),
+            'Timestamp': str(datetime.now()),
             'Event Type': 'Rollout',
-            'Policy Iteration': self.policy_iteration,
+            'Policy Iteration': self.policy.get_policy_iteration(),
             'Rank': self.rank,
             'Timesteps': timestep,
             'Memories': timestep*env_nodes,
@@ -239,16 +211,15 @@ class Worker:
         losses = self.policy.update(self.memory, **kwargs)
 
         # Annotate and clean
-        self.policy_iteration += 1
         num_new_memories = self.memory.get_new_len()
         num_replay_memories = self.memory.get_replay_len()
         self.memory.mark_sampled()
 
         # Record
         ret = {
-            'Timestamp': str(datetime.datetime.now()),
+            'Timestamp': str(datetime.now()),
             'Event Type': 'Update',
-            'Policy Iteration': self.policy_iteration,
+            'Policy Iteration': self.policy.get_policy_iteration(),
             'Rank': self.rank,
             'New Memories': num_new_memories,
             'Replay Memories': num_replay_memories,
@@ -270,7 +241,7 @@ class Worker:
 
         # Record
         ret = {
-            'Timestamp': str(datetime.datetime.now()),
+            'Timestamp': str(datetime.now()),
             'Event Type': 'Send Memory',
             'Rank': self.rank,
             'Memories': sum([s.shape[0] for s in mem[0]['states']])}
@@ -289,21 +260,24 @@ class Worker:
 
         # Record
         ret = {
-            'Timestamp': str(datetime.datetime.now()),
+            'Timestamp': str(datetime.now()),
             'Event Type': 'Receive Memories',
             'Rank': self.rank,
             'Memories': num_memories}
         return ret
     
     def get_policy_state(self):
-        return get_policy_state(self.policy)
+        return _utility.general.get_policy_state(self.policy)
+    
+    def get_policy_iteration(self):
+        return self.policy.get_policy_iteration()
     
     @_decorator.metrics(append_to_dict=True)
-    def sync_policy(self, iterate_if_exclusive_runner=True):
+    def sync_policy(self):
         # Copy policy
         if self.parent is not None:
             policy_state = ray.get(self.parent.get_policy_state.remote())
-            set_policy_state(self.policy, policy_state)
+            _utility.general.set_policy_state(self.policy, policy_state)
         else:
             # Synchronize learners
             if self.learner: self.policy.synchronize('learners')
@@ -312,18 +286,40 @@ class Worker:
             if not self.learner or (self.learner and self.rank == 0):
                 self.policy.synchronize('heads', broadcast=True)
 
-        # Iterate policy
-        if not self.learner and iterate_if_exclusive_runner:
-            self.policy_iteration += 1
-            self.memory.mark_sampled()
+        # Mark sampled
+        self.memory.mark_sampled()
 
         # Record
         ret = {
-            'Timestamp': str(datetime.datetime.now()),
+            'Timestamp': str(datetime.now()),
             'Event Type': 'Synchronize Policy',
-            'Policy Iteration': self.policy_iteration,
+            'Policy Iteration': self.policy.get_policy_iteration(),
             'Rank': self.rank,
             'Inherited': self.parent is not None}
+        return ret
+    
+    @_decorator.metrics(append_to_dict=True)
+    def save_checkpoint(self, directory, name=None):
+        self.policy.save_checkpoint(directory, name=name)
+
+        # Record
+        ret = {
+            'Timestamp': str(datetime.now()),
+            'Event Type': 'Save Checkpoint',
+            'Policy Iteration': self.policy.get_policy_iteration(),
+            'Rank': self.rank}
+        return ret
+    
+    @_decorator.metrics(append_to_dict=True)
+    def load_checkpoint(self, fname):
+        self.policy.save_checkpoint(fname)
+
+        # Record
+        ret = {
+            'Timestamp': str(datetime.now()),
+            'Event Type': 'Load Checkpoint',
+            'Policy Iteration': self.policy.get_policy_iteration(),
+            'Rank': self.rank}
         return ret
     
     def execute(self, func):
@@ -332,6 +328,48 @@ class Worker:
 
     def destroy(self):
         col.destroy_collective_group()
+
+
+def get_initializers(
+    # Environment
+    input_files=None,
+    merge_files=None,
+    data_on_disk=False,
+    download_dir='./downloads',
+    partition_cols=None,
+    dataloader_kwargs={},
+    environment_kwargs={},
+    policy_kwargs={},
+    memory_kwargs={},
+):
+    # Defaults
+    dataloader_kwargs_defaults = {'seed': 42}
+    dataloader_kwargs_defaults.update(dataloader_kwargs)
+    dataloader_kwargs = dataloader_kwargs_defaults
+
+    def env_init():
+        # Create dataloader
+        adatas = _utility.processing.read_adatas(*input_files, on_disk=data_on_disk, download_dir=download_dir)
+        if merge_files is not None:
+            for merge_files_rec in merge_files:
+                merge_adatas = _utility.processing.read_adatas(*merge_files_rec, on_disk=data_on_disk)
+                adatas += _utility.processing.merge_adatas(*merge_adatas, on_disk=data_on_disk)
+        _utility.processing.test_adatas(*adatas, partition_cols=partition_cols)
+        dataloader = _utility.processing.PreprocessFromAnnData(
+            *adatas, partition_cols=partition_cols, **dataloader_kwargs)
+        # modalities, adata_obs, adata_vars = dataloader.sample()
+        # Return env
+        return _environment.EnvironmentBase(
+            dataloader, **environment_kwargs)
+
+    # Default ~25Gb Forward, ~16Gb Update, at max capacity
+    policy_init = lambda env: _policy.PPO(
+        2*env.dim, env.dataloader.modal_dims, env.dim, **policy_kwargs)  # update_iterations=2, minibatch_size=3e3,
+
+    memory_init = lambda policy: _memory.AdvancedMemoryBuffer(
+        sum(policy.modal_dims), split_args=policy.split_args, **memory_kwargs)
+    
+    return (env_init, policy_init, memory_init)
 
 
 def train_celltrip(
@@ -343,11 +381,17 @@ def train_celltrip(
     sync_across_nodes=True,
     updates=200,
     steps=int(5e3),
+    flush_iterations=10,
+    checkpoint_iterations=50,
+    checkpoint_dir='./checkpoints',
+    checkpoint_name=None,
+    checkpoint=None,
     stage_functions=[],
     logfile='cli',
     rollout_kwargs={},
     update_kwargs={},
-    early_stopping_kwargs={}):
+    early_stopping_kwargs={},
+    record_hooks=[]):
     """
     Train CellTRIP model to completion with given parameters and
     cluster layout.
@@ -356,11 +400,11 @@ def train_celltrip(
     env_init, policy_init, memory_init = initializers
 
     # Create record buffer
-    record_buffer = RecordBuffer.remote(logfile=logfile)
+    record_buffer = RecordBuffer.remote(logfile=logfile, hooks=record_hooks)
 
     # Record
     record_buffer.record.remote({
-        'Timestamp': str(datetime.datetime.now()),
+        'Timestamp': str(datetime.now()),
         'Event Type': 'Begin Training'})
 
     # Stage functions
@@ -369,11 +413,11 @@ def train_celltrip(
     # Make placement group for GPUs
     # TODO: Maybe tighten the placement group CPU requirements
     pg_gpu = ray.util.placement_group(num_gpus*[{'CPU': 1, 'GPU': 1}])
-    ray.get(pg_gpu.ready())
+    ray.get(pg_gpu.ready())  # TODO: Why does reservation take so long?
 
     # Record
     record_buffer.record.remote({
-        'Timestamp': str(datetime.datetime.now()),
+        'Timestamp': str(datetime.now()),
         'Event Type': 'Register Placement Groups'})
 
     # Assign workers
@@ -403,23 +447,29 @@ def train_celltrip(
                     learner=i<num_learners, parent=parent))
         workers.append(w)
     ray.get([w.is_ready.remote() for w in workers])  # Wait for initialization
-    learners = workers[:-num_exclusive_runners]
+    learners = workers[:len(workers)-num_exclusive_runners]
     runners = workers[num_exclusive_learners:]
     heads = workers[:num_heads]
     non_heads = workers[num_heads:]
+
+    # Load checkpoint
+    if checkpoint is not None:
+        record_buffer.record.remote(*ray.get([w.load_checkpoint.remote(fname=checkpoint) for w in workers]))
+    policy_iteration = ray.get(workers[0].get_policy_iteration.remote())
 
     # Create early stopping class
     early_stopping = _utility.continual.EarlyStopping(**early_stopping_kwargs)
 
     # Record
     record_buffer.record.remote({
-        'Timestamp': str(datetime.datetime.now()),
+        'Timestamp': str(datetime.now()),
         'Event Type': 'Register Workers',
-        'Policy Iteration': ray.get([w.execute.remote(func=lambda w: w.policy_iteration) for w in workers])[0],
+        'Policy Iteration': policy_iteration,
         'Stage': curr_stage})
 
     # Run policy updates
     # TODO: Maybe add/try async updates
+    checkpoint_future = None
     for policy_iteration in range(updates):
         # Rollouts
         rewards = []
@@ -449,6 +499,12 @@ def train_celltrip(
         del new_memories, new_memories_w1
         record_buffer.record.remote(*ray.get(futures))
 
+        # Make sure checkpoint is finished
+        # NOTE: Technically could be moved back, but unlikely to make a difference
+        if checkpoint_future is not None:
+            record_buffer.record.remote(ray.get(checkpoint_future))
+            checkpoint_future = None
+
         # Updates
         record_buffer.record.remote(*ray.get([w.update.remote(
             **update_kwargs, return_metrics=policy_iteration==0) for w in learners]))
@@ -456,9 +512,13 @@ def train_celltrip(
         # Synchronize policies
         record_buffer.record.remote(*ray.get([w.sync_policy.remote() for w in heads]))
         record_buffer.record.remote(*ray.get([w.sync_policy.remote() for w in non_heads]))
+        policy_iteration = ray.get(workers[0].get_policy_iteration.remote())  # A little inefficient
 
-        # Flush records
-        record_buffer.flush.remote()
+        # Flush records and checkpoint
+        if (policy_iteration % checkpoint_iterations == 0) and (checkpoint_dir is not None):
+                checkpoint_future = workers[0].save_checkpoint.remote(
+                    directory=checkpoint_dir, name=checkpoint_name)
+        if policy_iteration % flush_iterations == 0: record_buffer.flush.remote()
 
         # Early stopping
         # TODO: Observe how this interacts with the memory buffer when advancing stages
@@ -481,19 +541,25 @@ def train_celltrip(
 
                 # Record
                 record_buffer.record.remote({
-                    'Timestamp': str(datetime.datetime.now()),
+                    'Timestamp': str(datetime.now()),
                     'Event Type': 'Advance Stage',
-                    'Policy Iteration': ray.get([w.execute.remote(func=lambda w: w.policy_iteration) for w in workers])[0],
+                    'Policy Iteration': policy_iteration,
                     'Stage': curr_stage})
                 
     # Record
     record_buffer.record.remote({
-        'Timestamp': str(datetime.datetime.now()),
+        'Timestamp': str(datetime.now()),
         'Event Type': 'Finish Training',
-        'Policy Iteration': ray.get([w.execute.remote(func=lambda w: w.policy_iteration) for w in workers])[0],
+        'Policy Iteration': policy_iteration,
         'Stage': curr_stage})
-
-    # Flush buffer
+    
+    # Final flush and checkpoint
+    if (checkpoint_dir is not None):
+        if checkpoint_future is None:
+            checkpoint_future = workers[0].save_checkpoint.remote(
+                directory=checkpoint_dir, name=checkpoint_name)
+        record_buffer.record.remote(ray.get(checkpoint_future))
+        checkpoint_future = None
     ray.get(record_buffer.flush.remote())
 
     # Destroy

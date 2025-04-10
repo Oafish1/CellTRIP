@@ -43,3 +43,7 @@ frame_*.png
 
 # Testing configs
 example*.yaml
+
+# Automatic generation
+**/downloads/*
+**/checkpoints/*

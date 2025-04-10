@@ -336,20 +336,14 @@ def read_adatas(*fnames, on_disk=False, download_dir='./downloads'):
         # File handle
         if fname.startswith('s3://'):
             # Get file handle
-            import s3fs
-            try:
-                s3 = s3fs.S3FileSystem()
-                s3.ls(fname.split('/')[2])
-            except:
-                s3 = s3fs.S3FileSystem(anon=True)
-                s3.ls(fname.split('/')[2])
+            s3 = _utility.general.get_s3_handler_with_access(fname)
 
             # Download if on_disk
             # NOTE: Would be better to use something like this: https://anndata.readthedocs.io/en/latest/tutorials/notebooks/%7Bread%2Cwrite%7D_dispatched.html
-            # TODO: Test, try except
             if on_disk:
                 fname_local = os.path.join(download_dir, fname.split('/')[-1])
                 if not os.path.exists(fname_local):
+                    # A bit redundant and not really thread-safe
                     s3.download(fname, fname_local)
                 handle = fname_local
             else:

@@ -1,3 +1,21 @@
+### 1.0.0+2025.4.9
+- Add Ray Job CLI call for `train` script
+- Add checkpoint saving and loading functionality
+- Add hooks to `RecordBuffer` and `train_celltrip`
+- Add policy iteration parameter for easier saving
+- Add separate function for generating initializers
+- Change `datetime` import to be more concise
+- Change default record flush behavior and frequency
+- Fix bug with `merge_files` logic in initializers
+- More log parsing functionality
+- Move utility functions from `train` to `utility.general`
+- Synchronize only gradient where possible, which also keeps optimizers synchronized
+
+### 1.0.0+2025.4.8.4
+- Additional log reading functionality
+- Fix learners array being empty when `num_exclusive_runners` is 0
+- JSON record formatting
+
 ### 1.0.0+2025.4.8.3
 - Fix bug with deleting empty memory array before instantiation
 - Wait for `RecordBuffer` flush before exiting `train_celltrip`

@@ -1,4 +1,6 @@
 from collections import defaultdict
+import io
+import os
 
 import numpy as np
 import ray.util.collective as col  # Maybe conditional import?
@@ -99,7 +101,7 @@ class EntitySelfAttention(nn.Module):
         self.critic = critic
 
         # Set action std
-        self.action_std = nn.Parameter(torch.tensor(action_std_init), requires_grad=True)
+        self.action_std = nn.Parameter(torch.tensor(action_std_init))
 
         # Feature embedding
         self.feature_embed = nn.ModuleList([
@@ -291,6 +293,9 @@ class PPO(nn.Module):
         self.actor = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=output_dim, action_std=action_std, **kwargs)
         self.critic = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=1, final_activation=None, **kwargs)
 
+        # Iteration tracking
+        self.policy_iteration = nn.Parameter(torch.tensor(0.), requires_grad=False)
+
         # Optimizer
         self.optimizer = torch.optim.AdamW([
             {'params': self.actor.parameters(), 'lr': actor_lr},
@@ -305,14 +310,58 @@ class PPO(nn.Module):
         # To device
         self.to(self.device)
 
-    ### Base overloads
+    ### Minor functions
     def to(self, device):
         self.device = device
         return super().to(device)
-    
-    ### Useful functions
+
     def get_action_std(self):
         return self.actor.action_std.detach().item()
+
+    def get_policy_iteration(self):
+        return int(self.policy_iteration.item())
+
+    ### Saving functions
+    def save_checkpoint(self, directory, name=None):
+        # Defaults
+        name = 'celltrip' if name is None else name
+
+        # Get all vars in order
+        fname = os.path.join(directory, f'{name}-{int(self.policy_iteration.item()):0>4}.weights')
+        policy_state = _utility.general.get_policy_state(self)
+
+        # Save
+        if fname.startswith('s3://'):
+            # Get s3 handler
+            s3 = _utility.general.get_s3_handler_with_access(fname)
+
+            # Get buffer
+            # buffer = io.BytesIO()
+            # torch.save(policy_state, buffer)
+
+            # Save
+            with s3.open(fname, 'wb') as f:
+                torch.save(policy_state, f)
+        else:
+            os.makedirs(directory, exist_ok=True)
+            torch.save(policy_state, fname)
+
+        return fname
+
+    def load_checkpoint(self, fname):
+        # Get from fname
+        if fname.startswith('s3://'):
+            # Get s3 handler
+            s3 = _utility.general.get_s3_handler_with_access(fname)
+
+            # Retrieve object from store
+            handle = s3.open(fname, 'rb')  # NOTE: Never closed
+            policy_state = torch.load(handle, map_location=self.device)
+        else:
+            policy_state = torch.load(fname, map_location=self.device)
+
+        # Load policy
+        _utility.general.set_policy_state(self, policy_state)
 
     ### Running functions
     def act(self, *state, return_all=False):
@@ -479,20 +528,26 @@ class PPO(nn.Module):
                     batch_losses['PPO'] += (loss_ppo.detach().mean() * accumulation_frac).item()
                     batch_losses['critic'] += (loss_critic.detach().mean() * accumulation_frac).item()
                     batch_losses['entropy'] += (loss_entropy.detach().mean() * accumulation_frac).item()
+                    
+                # Synchronize GPU policies
+                # NOTE: Synchronize gradients every batch if =1, else synchronize whole model
+                # NOTE: =1 keeps optimizers in sync without need for whole-model synchronization
+                if sync_iterations == 1: self.synchronize('learners', grad=True)  # Sync only grad
 
                 # Step
                 self.optimizer.step()
                 self.optimizer.zero_grad()
 
+                # Synchronize GPU policies
+                if sync_iterations != 1:
+                    sync_loop = (iterations) % sync_iterations == 0
+                    last_epoch = iterations == update_iterations
+                    if use_collective and (sync_loop or last_epoch):
+                        self.synchronize('learners')
+                # if iterations == 9: print(self.state_dict())  # Check that weights are the same across nodes
+
                 # Increment
                 iterations += 1
-                    
-                # Synchronize GPU policies
-                sync_loop = (iterations) % sync_iterations == 0
-                last_epoch = iterations == update_iterations
-                if use_collective and (sync_loop or last_epoch):
-                    self.synchronize('learners')
-                # if epoch_num == 9: print(self.state_dict())  # Check that weights are the same across nodes
 
                 # CLI
                 if verbose and ((iterations) % 10 == 0 or iterations in (1, 5)):
@@ -517,11 +572,13 @@ class PPO(nn.Module):
         # Update scheduler
         self.scheduler.step()
 
+        # Update iteration
+        self.policy_iteration += 1
+
         # Return self
         return dict(pool_losses)
 
-    def synchronize(self, group='default', broadcast=None, allreduce=None):
-        # TODO: Maybe call scheduler twice if two updates are aggregated?
+    def synchronize(self, group='default', grad=False, broadcast=None, allreduce=None):
         # Defaults
         if broadcast is None: broadcast = False
         if allreduce is None: allreduce = not broadcast
@@ -531,13 +588,16 @@ class PPO(nn.Module):
         # rank = col.get_rank(group)
 
         # Sync
-        # NOTE: Optimizer momentum not synced
-        for k, w in self.state_dict().items():
-            if broadcast:
-                col.broadcast(w, 0, group)
-            if allreduce:
-                col.allreduce(w, group)
-                w /= world_size
+        with torch.no_grad():
+            for k, w in zip(self.state_dict(), self.parameters()):
+                if k == 'critic.decider.2.bias': print(w)
+                if grad: w = w.grad  # No in-place modification here
+                if w is None: continue
+                if broadcast: col.broadcast(w, 0, group)
+                if allreduce:
+                    col.allreduce(w, group)
+                    w /= world_size
+                if k == 'critic.decider.2.bias': print(w)
 
     def backward(
         self,
