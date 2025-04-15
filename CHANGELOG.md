@@ -1,3 +1,24 @@
+### 1.0.0+2025.4.14
+- AWS cluster config optimizations
+- Add KL divergence target and rollback to policy for update early stopping
+- Add s3-backed AnnData reads
+- Adjust default record flush behavior
+- Better runtime visualization and processing
+- Comment cleanup
+- Enhanced capability for `PPO.synchronize` function to act on tensor lists
+- Enhanced logging for worker updates
+- Find workaround for egregious worker initialization times when timeout hadn't been reached
+- More arguments for training script
+- Rearrange policy arguments
+- Tweak policy hyperparameters
+
+### 1.0.0+2025.4.13
+- Minor changes
+
+### 1.0.0+2025.4.10
+- Comment cleanup
+- Remove errant debugging CLI
+
 ### 1.0.0+2025.4.9
 - Add Ray Job CLI call for `train` script
 - Add checkpoint saving and loading functionality

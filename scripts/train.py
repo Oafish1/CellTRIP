@@ -6,7 +6,9 @@
 # %% [markdown]
 # TODO
 # 
-# On-disk reads from s3 (?)
+# Train/test
+# 
+# Save preprocessing
 # 
 # Look into g4dn.12xlarge if quota not approved
 # 
@@ -15,6 +17,7 @@
 # [EFS on clusters maybe](https://docs.ray.io/en/latest/cluster/vms/user-guides/launching-clusters/aws.html#start-ray-with-the-ray-cluster-launcher)
 
 # %%
+import argparse
 import os
 import random
 
@@ -22,37 +25,50 @@ import ray
 
 import celltrip
 
-os.environ['AWS_PROFILE'] = 'waisman-admin'
-
+# Detect Cython
+CYTHON_ACTIVE = os.path.splitext(celltrip.utility.general.__file__)[1] in ('.c', '.so')
+print(f'Cython is{" not" if not CYTHON_ACTIVE else ""} active')
 
 # %%
 # Arguments
 # NOTE: It is not recommended to use s3 with credentials unless the creds are permanent, the bucket is public, or this is run on AWS
-import argparse
 parser = argparse.ArgumentParser(description='Train CellTRIP model', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 # Reading
-# group = parser.add_argument_group('Input Data')
-parser.add_argument('input_files', type=str, nargs='*', help='h5ad files to be used for input')
-parser.add_argument('--merge_files', type=str, action='append', nargs='+', help='h5ad files to merge as input')
-parser.add_argument('--partition_cols', type=str, action='append', nargs='+', help='Columns for data partitioning, found in `adata.obs` DataFrame')
-parser.add_argument('--data_on_disk', action='store_true', help='Read data from disk, saving memory')
+group = parser.add_argument_group('Input')
+group.add_argument('input_files', type=str, nargs='*', help='h5ad files to be used for input')
+group.add_argument('--merge_files', type=str, action='append', nargs='+', help='h5ad files to merge as input')
+group.add_argument('--partition_cols', type=str, action='append', nargs='+', help='Columns for data partitioning, found in `adata.obs` DataFrame')
+group.add_argument('--backed', action='store_true', help='Read data directly from disk or s3, saving memory at the cost of time')
+# Computation
+group = parser.add_argument_group('Computation')
+group.add_argument('--num_gpus', type=int, default=1, help='Number of GPUs to use during computation')
+group.add_argument('--num_learners', type=int, default=1, help='Number of learners used in backward computation, cannot exceed GPUs')
+group.add_argument('--num_runners', type=int, default=1, help='Number of workers for environment simulation')
+# Training
+group = parser.add_argument_group('Training')
+group.add_argument('--max_updates', type=int, default=200, help='Maximum number of policy updates to compute before exiting')
+group.add_argument('--steps', type=int, default=int(5e3), help='Number of steps recorded before each update')
 # File saves
-parser.add_argument('--download_dir', type=str, default='./downloads', help='Location for data download if needed')
-parser.add_argument('--logfile', type=str, default='cli', help='Location for log file, can be `cli`, `<local_file>`, or `<s3 location>`')
-parser.add_argument('--checkpoint', type=str, help='Checkpoint to use for initializing model')
-parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints', help='Directory for checkpoints')
-parser.add_argument('--checkpoint_name', type=str, help='Run name, for checkpointing')
+group = parser.add_argument_group('Logging')
+group.add_argument('--logfile', type=str, default='cli', help='Location for log file, can be `cli`, `<local_file>`, or `<s3 location>`')
+group.add_argument('--flush_iterations', type=int, help='Number of iterations to wait before flushing logs')
+group.add_argument('--checkpoint', type=str, help='Checkpoint to use for initializing model')
+group.add_argument('--checkpoint_iterations', type=int, default=50, help='Number of iterations to wait before recording checkpoints')
+group.add_argument('--checkpoint_dir', type=str, default='./checkpoints', help='Directory for checkpoints')
+group.add_argument('--checkpoint_name', type=str, help='Run name, for checkpointing')
 
 # Notebook defaults and script handling
 if not celltrip.utility.notebook.is_notebook():
     # ray job submit -- python train.py...
     config = parser.parse_args()
 else:
-    experiment_name = '3gpu-2learn-3run-20iter'
+    experiment_name = '3gpu-2learn-6run-20iter'
     command = (
         f's3://nkalafut-celltrip/MERFISH/expression.h5ad s3://nkalafut-celltrip/MERFISH/spatial.h5ad '
-        f'--data_on_disk '
+        f'--backed '
+        f'--num_gpus 3 --num_learners 2 --num_runners 6 '
+        f'--max_updates 20 '
         f'--logfile s3://nkalafut-celltrip/logs/{experiment_name}.log '
         f'--checkpoint_dir s3://nkalafut-celltrip/checkpoints '
         f'--checkpoint_name {experiment_name}')
@@ -67,33 +83,17 @@ if config.checkpoint_name is None:
 
 
 # %%
-# Get AWS keys
-# import boto3
-# session = boto3.Session()
-# creds = session.get_credentials()
-
-# Reset Ray
-ray.shutdown()
-
-
-# %%
 # Start Ray
-ray.init(
+ray.shutdown()
+a = ray.init(
     # address='ray://100.85.187.118:10001',
     address='ray://localhost:10001',
     runtime_env={
         'py_modules': [celltrip],
         'pip': '../requirements.txt',
-        'env_vars': {
-            # Logging
-            'RAY_DEDUP_LOGS': '0',
-            # Networking
-            # 'NCCL_SOCKET_IFNAME': 'tailscale',  # lo,en,wls,docker,tailscale
-            # Keys
-            # 'AWS_ACCESS_KEY_ID': creds.access_key,
-            # 'AWS_SECRET_ACCESS_KEY': creds.secret_key,
-            # 'AWS_DEFAULT_REGION': 'us-east-2'
-        }})
+        'env_vars': {'RAY_DEDUP_LOGS': '0'}},
+        # 'NCCL_SOCKET_IFNAME': 'tailscale',  # lo,en,wls,docker,tailscale
+    _system_config={'enable_worker_prestart': True})
 
 
 # %%
@@ -106,8 +106,8 @@ def train(config):
     environment_kwargs = {'dim': 3}
     initializers = celltrip.train.get_initializers(
         input_files=config.input_files, merge_files=config.merge_files,
-        data_on_disk=config.data_on_disk, download_dir=config.download_dir,
-        dataloader_kwargs=dataloader_kwargs, environment_kwargs=environment_kwargs)
+        backed=config.backed, dataloader_kwargs=dataloader_kwargs,
+        environment_kwargs=environment_kwargs)
 
     stage_functions = [
         # lambda w: w.env.set_rewards(penalty_velocity=1, penalty_action=1),
@@ -118,13 +118,24 @@ def train(config):
     # Run function
     celltrip.train.train_celltrip(
         initializers=initializers,
-        num_gpus=3, num_learners=2, num_runners=6,
-        updates=20, flush_iterations=5, checkpoint_iterations=10,
-        checkpoint_dir=config.checkpoint_dir, checkpoint=config.checkpoint,
-        checkpoint_name=config.checkpoint_name, stage_functions=stage_functions,
-        logfile=config.logfile)
+        num_gpus=config.num_gpus, num_learners=config.num_learners,
+        num_runners=config.num_runners, max_updates=config.max_updates,
+        checkpoint_iterations=config.checkpoint_iterations, checkpoint_dir=config.checkpoint_dir,
+        checkpoint=config.checkpoint, checkpoint_name=config.checkpoint_name,
+        stage_functions=stage_functions, logfile=config.logfile)
 
 ray.get(train.remote(config))
+
+
+# %%
+# # Get AWS keys
+# import boto3
+# session = boto3.Session()
+# creds = session.get_credentials()
+# access_keys = {
+#     'AWS_ACCESS_KEY_ID': creds.access_key,
+#     'AWS_SECRET_ACCESS_KEY': creds.secret_key,
+#     'AWS_DEFAULT_REGION': 'us-east-2'}
 
 
 # %%
@@ -146,22 +157,8 @@ ray.get(train.remote(config))
 # env = env_init().to('cuda')
 # policy = policy_init(env).to('cuda')
 # memory = memory_init(policy)
-
-# %%
-# env = env_init(parent_dir=True).to('cuda')
-# policy = policy_init(env).to('cuda')
-# memory = memory_init(policy)
 # celltrip.train.simulate_until_completion(env, policy, memory)
-# memory.propagate_rewards()
-# memory.normalize_rewards()
-# # memory.fast_sample(10_000, shuffle=False)
-# len(memory)
-
-# memory.mark_sampled()
-# env.reset()
-# celltrip.train.simulate_until_completion(env, policy, memory)
-# memory.propagate_rewards()
-# memory.adjust_rewards()
-
+# memory.compute_advantages()
+# policy.update(memory)
 
 

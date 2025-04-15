@@ -3,6 +3,7 @@ import os
 import warnings
 
 import anndata as ad
+import h5py
 import numpy as np
 import pandas as pd
 import scanpy as sc
@@ -326,39 +327,52 @@ class LazyComputation:
         return self.func(x)
     
 
-def read_adatas(*fnames, on_disk=False, download_dir='./downloads'):
+def read_adatas(*fnames, backed=False):
     # Params
-    backed = 'r' if on_disk else None
+    backed_arg = 'r' if backed else None
 
     # Read adatas
     adatas = []
     for fname in fnames:
-        # File handle
+        # s3 handling
         if fname.startswith('s3://'):
             # Get file handle
             s3 = _utility.general.get_s3_handler_with_access(fname)
+            f = s3.open(fname, 'rb')  # NOTE: Never closed
 
-            # Download if on_disk
-            # NOTE: Would be better to use something like this: https://anndata.readthedocs.io/en/latest/tutorials/notebooks/%7Bread%2Cwrite%7D_dispatched.html
-            if on_disk:
-                fname_local = os.path.join(download_dir, fname.split('/')[-1])
-                if not os.path.exists(fname_local):
-                    # A bit redundant and not really thread-safe
-                    s3.download(fname, fname_local)
-                handle = fname_local
+            # Read from s3
+            if backed:
+                # Download
+                # fname_local = os.path.join(download_dir, fname.split('/')[-1])
+                # if not os.path.exists(fname_local):
+                #     # A bit redundant and not really thread-safe
+                #     s3.download(fname, fname_local)
+                # handle = fname_local
+                # Backed with s3
+                file_h5 = h5py.File(f, 'r')
+                if file_h5['X'].attrs['encoding-type'] == 'array':  # Dense data
+                    X = file_h5['X']  # TODO
+                else: X = ad.io.sparse_dataset(file_h5['X'])  # Sparse data
+                adata = ad.AnnData(
+                    X=X, **{
+                        k: ad.io.read_elem(file_h5[k]) if k in file_h5 else {}
+                        for k in ['layers', 'obs', 'var', 'obsm', 'varm', 'uns', 'obsp', 'varp']})
+            
+            # Read into memory
             else:
-                handle = s3.open(fname, 'rb')  # NOTE: Never closed
+                adata = sc.read_h5ad(f, backed=backed_arg)
 
-        else: handle = fname
+        # Local handling
+        else: adata = sc.read_h5ad(fname, backed=backed_arg)
 
-        # Read data
-        adatas.append(sc.read_h5ad(handle, backed=backed))
+        # Append
+        adatas.append(adata)
 
     return adatas
 
 
-def merge_adatas(*adatas, on_disk=False):
-    if not on_disk:
+def merge_adatas(*adatas, backed=False):
+    if not backed:
         adatas = ad.concat(adatas)  # TODO: Test
     else:
         adatas = [ad.experimental.AnnCollection(adatas)]

@@ -208,7 +208,7 @@ class Worker:
         # if self.flags['adjust_rewards_next_update'] and False:  # TODO: Reevaluate
         #     self.memory.adjust_rewards()
         #     self.flags['adjust_rewards_next_update'] = False
-        losses = self.policy.update(self.memory, **kwargs)
+        iterations, losses = self.policy.update(self.memory, **kwargs)
 
         # Annotate and clean
         num_new_memories = self.memory.get_new_len()
@@ -224,7 +224,8 @@ class Worker:
             'New Memories': num_new_memories,
             'Replay Memories': num_replay_memories,
             'Total Memories': len(self.memory),
-            'Mean Losses': losses,
+            'Iterations': iterations,
+            'Losses': losses,
             'Action STD': self.policy.get_action_std()}
         return ret
     
@@ -334,8 +335,7 @@ def get_initializers(
     # Environment
     input_files=None,
     merge_files=None,
-    data_on_disk=False,
-    download_dir='./downloads',
+    backed=False,
     partition_cols=None,
     dataloader_kwargs={},
     environment_kwargs={},
@@ -349,11 +349,11 @@ def get_initializers(
 
     def env_init():
         # Create dataloader
-        adatas = _utility.processing.read_adatas(*input_files, on_disk=data_on_disk, download_dir=download_dir)
+        adatas = _utility.processing.read_adatas(*input_files, backed=backed)
         if merge_files is not None:
             for merge_files_rec in merge_files:
-                merge_adatas = _utility.processing.read_adatas(*merge_files_rec, on_disk=data_on_disk)
-                adatas += _utility.processing.merge_adatas(*merge_adatas, on_disk=data_on_disk)
+                merge_adatas = _utility.processing.read_adatas(*merge_files_rec, backed=backed)
+                adatas += _utility.processing.merge_adatas(*merge_adatas, backed=backed)
         _utility.processing.test_adatas(*adatas, partition_cols=partition_cols)
         dataloader = _utility.processing.PreprocessFromAnnData(
             *adatas, partition_cols=partition_cols, **dataloader_kwargs)
@@ -379,15 +379,16 @@ def train_celltrip(
     num_runners,
     learners_can_be_runners=True,
     sync_across_nodes=True,
-    updates=200,
+    max_updates=200,
     steps=int(5e3),
-    flush_iterations=10,
+    flush_iterations=None,
     checkpoint_iterations=50,
     checkpoint_dir='./checkpoints',
     checkpoint_name=None,
     checkpoint=None,
     stage_functions=[],
     logfile='cli',
+    record_kwargs={},
     rollout_kwargs={},
     update_kwargs={},
     early_stopping_kwargs={},
@@ -400,7 +401,9 @@ def train_celltrip(
     env_init, policy_init, memory_init = initializers
 
     # Create record buffer
-    record_buffer = RecordBuffer.remote(logfile=logfile, hooks=record_hooks)
+    record_buffer = RecordBuffer.remote(
+        logfile=logfile, hooks=record_hooks,
+        flush_on_record=(flush_iterations is None))
 
     # Record
     record_buffer.record.remote({
@@ -470,7 +473,7 @@ def train_celltrip(
     # Run policy updates
     # TODO: Maybe add/try async updates
     checkpoint_future = None
-    for policy_iteration in range(updates):
+    for policy_iteration in range(max_updates):
         # Rollouts
         rewards = []
         if policy_iteration==0:
@@ -518,7 +521,8 @@ def train_celltrip(
         if (policy_iteration % checkpoint_iterations == 0) and (checkpoint_dir is not None):
                 checkpoint_future = workers[0].save_checkpoint.remote(
                     directory=checkpoint_dir, name=checkpoint_name)
-        if policy_iteration % flush_iterations == 0: record_buffer.flush.remote()
+        if flush_iterations is not None and policy_iteration % flush_iterations == 0:
+            record_buffer.flush.remote()
 
         # Early stopping
         # TODO: Observe how this interacts with the memory buffer when advancing stages
@@ -528,7 +532,7 @@ def train_celltrip(
             early_stopping.reset()
 
             # Escape if no more stages
-            # TODO: Maybe do this based on action_std
+            # TODO: Maybe do this based on action_std or KL (or both)
             if len(stage_functions) == curr_stage:
                 # Escape
                 continue  # break

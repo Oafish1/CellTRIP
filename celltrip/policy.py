@@ -1,6 +1,7 @@
 from collections import defaultdict
 import io
 import os
+import warnings
 
 import numpy as np
 import ray.util.collective as col  # Maybe conditional import?
@@ -232,21 +233,22 @@ class PPO(nn.Module):
             output_dim,
             # Model Parameters
             model=EntitySelfAttention,
+            # Forward
             action_std=.6,
             epsilon_ppo=.2,
-            actor_lr=3e-4,
-            epsilon_critic=.1,
-            critic_lr=1e-3,
-            critic_weight=.5,
-            lr_gamma=.99,
-            entropy_weight=.01,
-            # Forward
             forward_batch_size=int(5e4),
             vision_size=int(1e2),
             sample_strategy='random-proximity',
             sample_dim=None,
             reproducible_strategy='mean',
             # Backward
+            actor_lr=6e-4,  # CHANGED
+            epsilon_critic=.1,
+            critic_lr=2e-3,  # CHANGED
+            critic_weight=.5,
+            lr_gamma=.99,
+            entropy_weight=.01,
+            kl_target=.03,
             update_iterations=80,  # Can also be 'auto'
             sync_iterations=1,
             pool_size=None,
@@ -268,6 +270,7 @@ class PPO(nn.Module):
         # Variables
         self.epsilon_ppo = epsilon_ppo
         self.epsilon_critic = epsilon_critic
+        self.kl_target = kl_target
 
         # Runtime management
         self.forward_batch_size = forward_batch_size
@@ -292,16 +295,21 @@ class PPO(nn.Module):
         # New policy
         self.actor = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=output_dim, action_std=action_std, **kwargs)
         self.critic = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=1, final_activation=None, **kwargs)
+        self.optimizer = torch.optim.AdamW([
+            {'params': self.actor.parameters(), 'lr': actor_lr},
+            {'params': self.critic.parameters(), 'lr': critic_lr}])
+        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
+
+        # Old policy
+        self.actor_old = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=output_dim, action_std=action_std, **kwargs)
+        self.critic_old = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=1, final_activation=None, **kwargs)
+        self.optimizer_old = torch.optim.AdamW([
+            {'params': self.actor_old.parameters(), 'lr': actor_lr},
+            {'params': self.critic_old.parameters(), 'lr': critic_lr}])
+        self.copy_policy()
 
         # Iteration tracking
         self.policy_iteration = nn.Parameter(torch.tensor(0.), requires_grad=False)
-
-        # Optimizer
-        self.optimizer = torch.optim.AdamW([
-            {'params': self.actor.parameters(), 'lr': actor_lr},
-            {'params': self.critic.parameters(), 'lr': critic_lr},
-        ])
-        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
 
         # Weights
         self.critic_weight = critic_weight
@@ -320,6 +328,19 @@ class PPO(nn.Module):
 
     def get_policy_iteration(self):
         return int(self.policy_iteration.item())
+    
+    def copy_policy(self, _invert=False):
+        "Copy new policy weights onto old policy"
+        sources, targets = (
+            (self.actor, self.critic, self.optimizer),
+            (self.actor_old, self.critic_old, self.optimizer_old))
+        if _invert: sources, targets = targets, sources
+        for source, target in zip(sources, targets):
+            target.load_state_dict(source.state_dict())
+
+    def revert_policy(self):
+        "Copy old policy weights onto new policy"
+        self.copy_policy(_invert=True)
 
     ### Saving functions
     def save_checkpoint(self, directory, name=None):
@@ -484,10 +505,9 @@ class PPO(nn.Module):
             device=self.device)
 
         # Train
-        iterations = 0
+        iterations = 0; synchronized = True; escape = False
         while True:
             # Load epoch
-            epoch_losses = defaultdict(lambda: 0)
             epoch_data = _utility.processing.sample_and_cast(
                 memory, pool_data, pool_size, epoch_size,
                 current_level=1, load_level=load_level, cast_level=cast_level,
@@ -513,10 +533,10 @@ class PPO(nn.Module):
                     actions = minibatch_data['actions']
                     action_logs = minibatch_data['action_logs']
                     state_vals = minibatch_data['state_vals']
-                    advantages = minibatch_data['advantages']  # NEW
+                    advantages = minibatch_data['advantages']
 
                     # Perform backward
-                    loss, loss_ppo, loss_critic, loss_entropy = self.backward(
+                    loss, loss_ppo, loss_critic, loss_entropy, kl_divergence = self.backward(
                         states, actions, action_logs, state_vals, advantages)
 
                     # Scale and calculate gradient
@@ -528,13 +548,31 @@ class PPO(nn.Module):
                     batch_losses['PPO'] += (loss_ppo.detach().mean() * accumulation_frac).item()
                     batch_losses['critic'] += (loss_critic.detach().mean() * accumulation_frac).item()
                     batch_losses['entropy'] += (loss_entropy.detach().mean() * accumulation_frac).item()
-                    
+                    batch_losses['KL'] += (kl_divergence.detach().mean() * accumulation_frac).item()
+
+                # Escape and roll back if KLD too high
+                kl_divergence = torch.tensor(batch_losses['KL'], device=self.device)
+                self.synchronize('learners', sync_list=[kl_divergence])
+                if kl_divergence.abs() >= self.kl_target:
+                    if iterations - sync_iterations > 0:
+                        # Revert to previous synchronized state within kl target
+                        self.revert_policy()
+                        # for w in self.actor.state_dict().values(): assert w.grad is None  # Just in case
+                        iterations -= sync_iterations
+                        escape = True; break
+                    else:
+                        warnings.warn(
+                            'Update exceeded KL target too fast! Proceeding with update, but may be unstable. '
+                            'Try lowering clip or learning rate parameters.')
+                        escape = True; break
+
                 # Synchronize GPU policies
                 # NOTE: Synchronize gradients every batch if =1, else synchronize whole model
                 # NOTE: =1 keeps optimizers in sync without need for whole-model synchronization
                 if sync_iterations == 1: self.synchronize('learners', grad=True)  # Sync only grad
 
                 # Step
+                if synchronized: self.copy_policy()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
 
@@ -544,6 +582,8 @@ class PPO(nn.Module):
                     last_epoch = iterations == update_iterations
                     if use_collective and (sync_loop or last_epoch):
                         self.synchronize('learners')
+                        synchronized = True
+                    else: synchronized = False
                 # if iterations == 9: print(self.state_dict())  # Check that weights are the same across nodes
 
                 # Increment
@@ -557,28 +597,27 @@ class PPO(nn.Module):
                         f' :: Action STD ({self.get_action_std():.3f})')
                     
                 # Record
-                for k, v in batch_losses.items(): epoch_losses[k] += v / batches
+                for k, v in batch_losses.items(): pool_losses[k] += v
                     
                 # Break
-                if iterations >= update_iterations: break
-
-            # Record
-            # NOTE: Assumes that batches/epochs/pools are multiples
-            for k, v in epoch_losses.items(): pool_losses[k] += v * batches / update_iterations
+                if iterations >= update_iterations: escape = True
+                if escape: break
 
             # Break
-            if iterations >= update_iterations: break
+            if escape: break
 
         # Update scheduler
         self.scheduler.step()
 
-        # Update iteration
+        # Update records
         self.policy_iteration += 1
+        self.copy_policy()
+        for k in pool_losses: pool_losses[k] /= iterations
 
         # Return self
-        return dict(pool_losses)
+        return iterations, dict(batch_losses)  # dict(pool_losses)
 
-    def synchronize(self, group='default', grad=False, broadcast=None, allreduce=None):
+    def synchronize(self, group='default', sync_list=None, grad=False, broadcast=None, allreduce=None):
         # Defaults
         if broadcast is None: broadcast = False
         if allreduce is None: allreduce = not broadcast
@@ -588,16 +627,15 @@ class PPO(nn.Module):
         # rank = col.get_rank(group)
 
         # Sync
+        sync_list = self.parameters() if sync_list is None else sync_list
         with torch.no_grad():
-            for k, w in zip(self.state_dict(), self.parameters()):
-                if k == 'critic.decider.2.bias': print(w)
+            for w in sync_list:  # zip(self.state_dict(), self.parameters())
                 if grad: w = w.grad  # No in-place modification here
                 if w is None: continue
                 if broadcast: col.broadcast(w, 0, group)
                 if allreduce:
                     col.allreduce(w, group)
                     w /= world_size
-                if k == 'critic.decider.2.bias': print(w)
 
     def backward(
         self,
@@ -608,7 +646,7 @@ class PPO(nn.Module):
         advantages,
     ):
         # Get normalized rewards and inferred rewards
-        normalized_advantages = (advantages - advantages.mean()) / advantages.std()  # NEW
+        normalized_advantages = (advantages - advantages.mean()) / advantages.std()
         inferred_rewards = advantages + state_vals
 
         # Evaluate actions and states
@@ -631,8 +669,11 @@ class PPO(nn.Module):
         # NOTE: Not included in training grad if action_std is constant
         loss_entropy = -self.entropy_weight * dist_entropy
 
+        # Calculate KL divergence
+        kl_divergence = action_logs.exp() * (action_logs - action_logs_new)
+
         # Construct final loss
         loss = loss_ppo + loss_critic + loss_entropy
         loss = loss.mean()
 
-        return loss, loss_ppo, loss_critic, loss_entropy
+        return loss, loss_ppo, loss_critic, loss_entropy, kl_divergence
