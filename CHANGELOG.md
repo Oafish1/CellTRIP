@@ -1,3 +1,34 @@
+### 1.0.0+2025.4.16
+- Add and tune automatic KL target weighting
+- Add and tune KL targeting
+- Add stale record culling and staleness tracking
+- Add total loss return from `PPO.update`
+- Bugfix for whole episode culling
+- Environment parameter renaming
+- Extensive model tuning
+- Wall and compute time visualizations
+- Train script imputation support among many new arguments
+- Update parameter and loss visualizations
+
+### 1.0.0+2025.4.15
+- Add bool return case to `AdvancedMemoryBuffer`
+- Add compatibility for multiple logfiles in runtime analysis
+- Add confidence interval and various other enhancements to loss plot
+- Add gap capability for runtime plots
+- Add option for whole episode culling to `AdvancedMemoryBuffer`
+- Add separate lr for `action_std`
+- Allow non-remote policy update
+- Change default PPO parameters to use KL early stopping rather than clipping
+- Correct KL approximation technique
+- Extensive tuning
+- Fix computation of KL divergence to only consider new samples
+- Generalize memory culling code
+- Make early-stopped simulation rewards comparable
+- Recompute state_vals and advantages for each policy iteration
+- Remove zero values from runtime visualization
+- Runtime visualization helpers and QOL
+- Use L2 regularization
+
 ### 1.0.0+2025.4.14
 - AWS cluster config optimizations
 - Add KL divergence target and rollback to policy for update early stopping

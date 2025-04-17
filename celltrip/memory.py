@@ -18,11 +18,13 @@ class AdvancedMemoryBuffer:
         # Propagate
         gae_lambda=.99,
         gae_gamma=.95,
-        # prune=0,  # Used to be 100 with non-terminal episodes
         # Sampling
-        replay_frac=.25,
+        replay_frac=0,
         max_samples_per_state=100,
         shuffle=False,
+        # Culling
+        cull_by_episode=False,
+        max_staleness=5,
         # Split
         split_args={},
         device='cpu',
@@ -37,6 +39,10 @@ class AdvancedMemoryBuffer:
         self.replay_frac = replay_frac
         self.max_samples_per_state = max_samples_per_state
         self.shuffle = shuffle
+        self.cull_by_episode = cull_by_episode
+        if max_staleness == None:
+            self.max_staleness = torch.inf if replay_frac > 0 else 0
+        else: self.max_staleness = max_staleness
         self.split_args = split_args
         self.device = device
 
@@ -51,7 +57,7 @@ class AdvancedMemoryBuffer:
             'is_terminals')         # Booleans indicating if the terminal state has been reached (Bool)
         storage_outcomes = (
             'advantages',           # Advantages, list of lists (1D List)
-            'new_memories')         # Booleans indicating if the memory is new (Bool)
+            'staleness')            # Int indicating the staleness of the memory (Int)
         self.storage = {k: [] for k in storage_keys+storage_outcomes}
         persistent_storage_keys = (
             'suffixes',             # Suffixes corresponding to keys
@@ -105,7 +111,7 @@ class AdvancedMemoryBuffer:
 
             # Additional entries
             self.storage['advantages'].append(None)
-            self.storage['new_memories'].append(True)
+            self.storage['staleness'].append(0)
 
             # Set all variables as unrecorded
             for k in self.recorded: self.recorded[k] = False
@@ -174,7 +180,7 @@ class AdvancedMemoryBuffer:
 
         # Initialization
         ret = defaultdict(lambda: [])
-        memory_indices = []
+        # memory_indices = []
 
         # Get random list order
         list_order = np.arange(len(self.storage['keys']))
@@ -188,7 +194,7 @@ class AdvancedMemoryBuffer:
             #     if not mask[list_num]: continue
 
             # Check if should sample
-            if self.storage['new_memories'][list_num]:
+            if self.storage['staleness'][list_num] == 0:
                 working_memories_recorded = num_new_memories_recorded
                 working_memories = num_new_memories
             else:
@@ -206,7 +212,7 @@ class AdvancedMemoryBuffer:
             # Get values
             for k in self.storage:
                 # Skip certain keys
-                if k in ('keys', 'rewards', 'is_terminals', 'prunes', 'new_memories', 'propagated_rewards', 'normalized_rewards'): continue
+                if k in ('keys', 'rewards', 'is_terminals', 'prunes', 'propagated_rewards', 'normalized_rewards'): continue
 
                 # Special cases
                 if k == 'states':
@@ -216,6 +222,10 @@ class AdvancedMemoryBuffer:
                             keys=self.storage['keys'][list_num]),
                         idx=self_idx,
                         **self.split_args)
+                    
+                # Single value case
+                elif k in ('staleness',):
+                    val = torch.tensor(len(self_idx)*[self.storage[k][list_num]])
 
                 # Main case
                 else: 
@@ -230,7 +240,7 @@ class AdvancedMemoryBuffer:
 
             # Record memory indices and iterate
             # memory_indices += [(list_num, i) for i in self_idx]
-            if self.storage['new_memories'][list_num]:
+            if self.storage['staleness'][list_num]:
                 num_new_memories_recorded += num_memories_to_add
             else:
                 num_replay_memories_recorded += num_memories_to_add
@@ -285,6 +295,16 @@ class AdvancedMemoryBuffer:
 
             # Record
             self.storage['advantages'][i] = running_advantages.clone()
+
+    def recompute_state_vals(self, policy):
+        # NOTE: Could set staleness lower here
+        with torch.no_grad():
+            for i, (keys, states) in enumerate(zip(self.storage['keys'], self.storage['states'])):
+                state_split = _utility.processing.split_state(
+                    self._append_suffix(states, keys=keys), **self.split_args)
+                state_split = [t.to(policy.device) for t in state_split]
+                self.storage['state_vals'][i] = policy.critic.evaluate_state(state_split).cpu().detach()
+                self.storage['advantages'][i] = None
         
     # def adjust_rewards(self):
     #     "Adjust replay rewards from previous reward structure to fit with current new"
@@ -312,8 +332,8 @@ class AdvancedMemoryBuffer:
         key = ('new_len', max_per_step) if not invert else ('replay_len', max_per_step)
         if key not in self.variable_storage:
             self.variable_storage[key] = 0
-            for state, new_memory in zip(self.storage['states'], self.storage['new_memories']):
-                if new_memory^invert:
+            for state, staleness in zip(self.storage['states'], self.storage['staleness']):
+                if (staleness==0)^invert:
                     step_len = state.shape[0]
                     if max_per_step is not None: step_len = min(max_per_step, step_len)
                     self.variable_storage[key] += step_len
@@ -323,7 +343,7 @@ class AdvancedMemoryBuffer:
         return self.get_new_len(invert=True, **kwargs)
     
     def get_new_steps(self, invert=False):
-        num_steps = np.sum(self.storage['new_memories'])
+        num_steps = np.sum(np.array(self.storage['staleness'])==0)
         if invert: num_steps = self.get_steps() - num_steps
         return num_steps
     
@@ -340,7 +360,7 @@ class AdvancedMemoryBuffer:
         # Storage
         if new:
             storage = {
-                k: [v[i] for i in range(len(v)) if self.storage['new_memories'][i]]
+                k: [v[i] for i in range(len(v)) if self.storage['staleness'][i]==0]
                 for k, v in self.storage.items()}
             ret += (storage,)
         else:
@@ -353,13 +373,15 @@ class AdvancedMemoryBuffer:
 
     def mark_sampled(self):
         "Mark all steps as sampled"
-        for i in range(len(self.storage['new_memories'])):
-            if self.storage['new_memories'][i]: self.storage['new_memories'][i] = False
+        for i in range(len(self.storage['staleness'])):
+            self.storage['staleness'][i] += 1
+        self.clear_var_cache()
 
     # Cleanup
-    def cull_records(self, max_memories=None):
+    def cull_records(self, cull_by_episode=None, max_memories=None):
         "Remove replay memories with reservoir sampling"
         # Parameters
+        if cull_by_episode is None: cull_by_episode = self.cull_by_episode
         if max_memories is None: max_memories = self.max_memories
         if max_memories is None: return  # Unlimited memories
 
@@ -367,27 +389,33 @@ class AdvancedMemoryBuffer:
         # Cull
         num_memories_to_remove = len(self) - max_memories
         num_memories_removed = 0
-        new_steps = np.array(self.storage['new_memories'])
+        new_steps = np.array(self.storage['staleness']) == 0
         replay_steps = ~new_steps
         steps_to_remove = np.zeros_like(new_steps, dtype=bool)
         while num_memories_to_remove > num_memories_removed:
             # If replay steps remain
             if replay_steps.sum() > 0:
-                idx = np.random.choice(
-                    np.argwhere(replay_steps).flatten(), 1)[0]
-                steps_to_remove[idx] = True
-                replay_steps[idx] = False
-                num_memories_removed += self.storage['states'][idx].shape[0]
-
+                xx_steps = replay_steps
             # If no replay steps are left
             else:
                 warnings.warn(
                     'Insufficient replay memories found to cull, removing new memories instead. Make sure to'
                     ' mark memories after sampling or try raising `max_memories`.')
-                idx = np.random.choice(
-                    np.argwhere(new_steps).flatten(), 1)[0]
-                steps_to_remove[idx] = True
-                new_steps[idx] = False
+                xx_steps = new_steps
+            idx = np.random.choice(
+                np.argwhere(xx_steps).flatten(), 1)[0]
+            if cull_by_episode:
+                # Find start and end episode idx
+                start_idx = idx
+                while start_idx > 0 and not self.storage['is_terminals'][start_idx-1]:
+                    start_idx -= 1
+                end_idx = idx
+                while not self.storage['is_terminals'][end_idx]:
+                    end_idx += 1
+                idxs = range(start_idx, end_idx+1)
+            else: idxs = [idx]
+            for idx in idxs:
+                steps_to_remove[idx], xx_steps[idx] = True, False
                 num_memories_removed += self.storage['states'][idx].shape[0]
 
         # Remove steps
@@ -402,6 +430,13 @@ class AdvancedMemoryBuffer:
 
         # Clear computed vars
         if len(idx) > 0: self.clear_var_cache()
+
+    def cull_stale(self):
+        "Cull over-stale memories"
+        for i in reversed(range(len(self.storage['staleness']))):
+            if self.storage['staleness'][i] > self.max_staleness:
+                for k in self.storage:
+                    self.storage[k].pop(i)
 
     def clean_keys(self):
         "Clean all unused keys from suffixes"
@@ -429,6 +464,7 @@ class AdvancedMemoryBuffer:
     def cleanup(self):
         "Clean memory"
         self.cull_records()
+        self.cull_stale()
         # self.clean_records()
         self.clean_keys()
         self.clear_suffix_cache()

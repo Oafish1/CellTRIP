@@ -28,10 +28,7 @@ def simulate_until_completion(env, policy, memory=None, keys=None, dummy=False, 
 
             # Get actions from policy
             actions = policy.act_macro(
-                state,
-                keys=keys,
-                memory=memory,
-            )
+                state, keys=keys, memory=memory)
 
             # Step environment and get reward
             rewards, finished, itemized_rewards = env.step(actions, return_itemized_rewards=True)
@@ -60,8 +57,9 @@ def simulate_until_completion(env, policy, memory=None, keys=None, dummy=False, 
             print(f'Timestep {ep_timestep:>4} - Reward {ts_reward:.3f}')
 
     # Summarize and return
-    ep_reward = (ep_reward / ep_timestep).item()
-    ep_itemized_reward = {k: (v / ep_timestep).item() for k, v in ep_itemized_reward.items()}
+    denominator = env.max_timesteps if env.max_timesteps is not None else ep_timestep
+    ep_reward = (ep_reward / denominator).item()  # Standard mean
+    ep_itemized_reward = {k: (v / denominator).item() for k, v in ep_itemized_reward.items()}  # Standard mean
     return ep_timestep, ep_reward, ep_itemized_reward
 
 
@@ -154,7 +152,7 @@ class Worker:
             num_heads-num_learners+1, rank-num_learners+1 if rank !=0 else rank, 'nccl', 'heads')
 
         # Policy parameters
-        self.sync_policy()  # Works because non-heads will wait for head sync
+        self.sync_policy(mark_if_not_learner=False)  # Works because non-heads will wait for head sync
 
         # Flags
         self.flags = {}
@@ -213,6 +211,8 @@ class Worker:
         # Annotate and clean
         num_new_memories = self.memory.get_new_len()
         num_replay_memories = self.memory.get_replay_len()
+        # self.memory.recompute_state_vals(self.policy)  # Technically better, but takes a ton of time
+        self.memory.compute_advantages()
         self.memory.mark_sampled()
 
         # Record
@@ -274,7 +274,7 @@ class Worker:
         return self.policy.get_policy_iteration()
     
     @_decorator.metrics(append_to_dict=True)
-    def sync_policy(self):
+    def sync_policy(self, mark_if_not_learner=True):
         # Copy policy
         if self.parent is not None:
             policy_state = ray.get(self.parent.get_policy_state.remote())
@@ -288,7 +288,7 @@ class Worker:
                 self.policy.synchronize('heads', broadcast=True)
 
         # Mark sampled
-        self.memory.mark_sampled()
+        if mark_if_not_learner and not self.learner: self.memory.mark_sampled()
 
         # Record
         ret = {
@@ -364,7 +364,7 @@ def get_initializers(
 
     # Default ~25Gb Forward, ~16Gb Update, at max capacity
     policy_init = lambda env: _policy.PPO(
-        2*env.dim, env.dataloader.modal_dims, env.dim, **policy_kwargs)  # update_iterations=2, minibatch_size=3e3,
+        2*env.dim, np.array(env.dataloader.modal_dims)[env.input_modalities], env.dim, **policy_kwargs)  # update_iterations=2, minibatch_size=3e3,
 
     memory_init = lambda policy: _memory.AdvancedMemoryBuffer(
         sum(policy.modal_dims), split_args=policy.split_args, **memory_kwargs)
@@ -388,7 +388,6 @@ def train_celltrip(
     checkpoint=None,
     stage_functions=[],
     logfile='cli',
-    record_kwargs={},
     rollout_kwargs={},
     update_kwargs={},
     early_stopping_kwargs={},
@@ -429,7 +428,13 @@ def train_celltrip(
     num_exclusive_runners = num_runners - num_learner_runners
     num_workers = num_exclusive_learners + num_learner_runners + num_exclusive_runners
     num_heads = min(num_gpus, num_workers)
+    
+    # Warn
     assert num_learners <= num_gpus, '`num_learners` cannot be greater than `num_gpus`.'
+    if not sync_across_nodes and num_learners != num_heads:
+        warnings.warn(
+            'Runner will be placed on a node with no learner, and will not contribute to learning. '
+            'Try synchronizing across nodes or adjusting the number of runners.')
 
     # Create workers
     workers = []
@@ -456,6 +461,7 @@ def train_celltrip(
     non_heads = workers[num_heads:]
 
     # Load checkpoint
+    # NOTE: Could be more efficient with sync
     if checkpoint is not None:
         record_buffer.record.remote(*ray.get([w.load_checkpoint.remote(fname=checkpoint) for w in workers]))
     policy_iteration = ray.get(workers[0].get_policy_iteration.remote())
@@ -473,10 +479,10 @@ def train_celltrip(
     # Run policy updates
     # TODO: Maybe add/try async updates
     checkpoint_future = None
-    for policy_iteration in range(max_updates):
+    for current_iteration in range(max_updates):
         # Rollouts
         rewards = []
-        if policy_iteration==0:
+        if current_iteration==0:
             new_records = ray.get([w.rollout.remote(**rollout_kwargs, return_metrics=True) for w in runners])
             rewards += [record['Reward'] for record in new_records if record['Event Type'] == 'Rollout']
             record_buffer.record.remote(*new_records)
@@ -486,9 +492,10 @@ def train_celltrip(
         mean_rollout_reward = np.mean(rewards)
 
         # Collect memories
-        ret = ray.get([w.send_memory.remote(new=True) for w in runners])
-        new_memories, new_records = [[r[i] for r in ret] for i in range(2)]
-        record_buffer.record.remote(*new_records)
+        if num_exclusive_runners > 0 or (sync_across_nodes and num_learners > 1):
+            ret = ray.get([w.send_memory.remote(new=True) for w in runners])
+            new_memories, new_records = [[r[i] for r in ret] for i in range(2)]
+            record_buffer.record.remote(*new_records)
 
         # Broadcast memories
         futures = []; new_memories_w1 = []
@@ -535,12 +542,13 @@ def train_celltrip(
             # TODO: Maybe do this based on action_std or KL (or both)
             if len(stage_functions) == curr_stage:
                 # Escape
-                continue  # break
+                continue
 
             # Advance stage
             else:
                 # ray.get([w.set_flags.remote(adjust_rewards_next_update=True) for w in learners])  # Recalibrate replay rewards next update
                 ray.get([w.execute.remote(func=stage_functions[curr_stage]) for w in workers])
+                # TODO: Clear memory? and/or make checkpoint
                 curr_stage += 1
 
                 # Record

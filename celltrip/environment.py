@@ -28,8 +28,8 @@ class EnvironmentBase:
         penalty_velocity=None,
         penalty_action=None,
         # Targets
-        modalities_to_return=None,  # Which modalities are given as input
-        reward_distance_target=None,  # Which modalities are targets
+        input_modalities=None,  # Which modalities are given as input
+        target_modalities=None,  # Which modalities are targets
         # Device
         device='cpu',
         # Extras
@@ -43,8 +43,8 @@ class EnvironmentBase:
         self.delta = delta
         self.vel_threshold = vel_threshold
         self.max_timesteps = max_timesteps
-        self.modalities_to_return = modalities_to_return
-        self.reward_distance_target = reward_distance_target
+        self.input_modalities = input_modalities
+        self.target_modalities = target_modalities
         self.device = device
 
         # Detect if modality input is dataloader
@@ -66,20 +66,20 @@ class EnvironmentBase:
 
         # Defaults
         all_modalities = list(range(self.num_modalities))
-        if self.reward_distance_target is None:
+        if self.target_modalities is None:
             # By default, all modalities will be targets
-            self.reward_distance_target = all_modalities
-        elif type(self.reward_distance_target) == int:
+            self.target_modalities = all_modalities
+        elif type(self.target_modalities) == int:
             # Make sure that input is of the correct type
-            self.reward_distance_target = [self.reward_distance_target]
+            self.target_modalities = [self.target_modalities]
 
-        if self.modalities_to_return is None:
-            if len(self.reward_distance_target) == self.num_modalities:
+        if self.input_modalities is None:
+            if len(self.target_modalities) == self.num_modalities:
                 # By default, all modalities will be inputs if all modalities are targeted
-                self.modalities_to_return = all_modalities
+                self.input_modalities = all_modalities
             else:
                 # If some modalities aren't targets, they are inputs (imputation)
-                self.modalities_to_return = list(set(all_modalities) - set(self.reward_distance_target))
+                self.input_modalities = list(set(all_modalities) - set(self.target_modalities))
 
         # Weights
         # NOTE: Rewards can and should go positive, penalties can't
@@ -131,12 +131,7 @@ class EnvironmentBase:
 
         ### Pre-step calculations
         # Distance reward
-        if self.reward_distance_target == 'debug':
-            # Debugging mode to test that PPO works, each cell goes to the position of its first `dim` modal features
-            reward_distance = self.get_distance_from_targets()
-        else:
-            # Emulate combined intra-modal distances
-            reward_distance = self.get_distance_match()
+        reward_distance = self.get_distance_match()  # Emulate combined intra-modal distances
 
         # Origin penalty
         reward_origin = self.get_distance_from_origin()
@@ -154,12 +149,7 @@ class EnvironmentBase:
 
         ### Post-step calculations
         # Distance reward
-        if self.reward_distance_target == 'debug':
-            # Debugging mode to test that PPO works, each cell goes to the position of its first `dim` modal features
-            reward_distance -= self.get_distance_from_targets()
-        else:
-            # Emulate combined intra-modal distances
-            reward_distance -= self.get_distance_match()
+        reward_distance -= self.get_distance_match()  # Emulate combined intra-modal distances
 
         # Origin reward
         reward_origin -= self.get_distance_from_origin()
@@ -248,7 +238,7 @@ class EnvironmentBase:
 
     def get_distance_match(self, targets=None):
         # Defaults
-        if targets is None: targets = self.reward_distance_target
+        if targets is None: targets = self.target_modalities
         
         # Calculate modality distances
         # NOTE: Only scaled for `self.dist` calculation
@@ -310,10 +300,10 @@ class EnvironmentBase:
         return self.keys
 
     def get_target_modalities(self):
-        return [m for i, m in enumerate(self.modalities) if i in self.reward_distance_target]
+        return [m for i, m in enumerate(self.modalities) if i in self.target_modalities]
 
     def get_return_modalities(self):
-        return [m for i, m in enumerate(self.modalities) if i in self.modalities_to_return]
+        return [m for i, m in enumerate(self.modalities) if i in self.input_modalities]
 
     def get_modalities(self):
         return self.modalities

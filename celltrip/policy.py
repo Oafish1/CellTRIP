@@ -53,6 +53,7 @@ class ResidualSA(nn.Module):
 
         # Apply residual self attention
         x2 = self.layer_norms[layer_norm_idx](x1)
+        # x2 = x1
         layer_norm_idx += 1
         x3, _ = self.attention(x2, x2, x2)
         x1 = x1 + x3
@@ -60,12 +61,14 @@ class ResidualSA(nn.Module):
         # Apply residual mlps
         for mlp in self.mlps:
             x2 = self.layer_norms[layer_norm_idx](x1)
+            # x2 = x1
             layer_norm_idx += 1
             x3 = mlp(x2)
             x1 = x1 + x3
 
         # Final layer norm
         xf = self.layer_norms[layer_norm_idx](x1)
+        # xf = x1
 
         return xf
 
@@ -183,7 +186,7 @@ class EntitySelfAttention(nn.Module):
         embedding = torch.concat((self_embed.squeeze(-2), attentions_pool), dim=-1)  # Concatenate self embedding to pooled embedding (pg. 24)
 
         # Decision
-        # TODO (Minor): Should layer norm be added here and for feature embedding?
+        # TODO (Minor): Should layer norm be added here and for feature embedding? Probably not.
         actions = self.decider(embedding)
         if self.final_activation is not None: actions = self.final_activation(actions)
 
@@ -235,21 +238,29 @@ class PPO(nn.Module):
             model=EntitySelfAttention,
             # Forward
             action_std=.6,
-            epsilon_ppo=.2,
             forward_batch_size=int(5e4),
             vision_size=int(1e2),
             sample_strategy='random-proximity',
             sample_dim=None,
             reproducible_strategy='mean',
-            # Backward
-            actor_lr=6e-4,  # CHANGED
-            epsilon_critic=.1,
-            critic_lr=2e-3,  # CHANGED
+            # Weights
+            epsilon_ppo=torch.inf,  # Formerly .2,
+            epsilon_critic=torch.inf,  # Formerly .1,
             critic_weight=.5,
-            lr_gamma=.99,
-            entropy_weight=.01,
-            kl_target=.03,
-            update_iterations=80,  # Can also be 'auto'
+            entropy_weight=1e-3,  # Formerly 1e-2
+            kl_beta_init=1.,
+            kl_beta_increment=(.5, 2),
+            kl_target=.1,
+            kl_early_stop=False,
+            # Optimizers
+            action_std_lr=1e-2,
+            actor_lr=3e-4,
+            critic_lr=1e-3,
+            weight_decay=0,  # 1e-3,
+            betas=(.9, .999),  # (.997, .997),
+            lr_gamma=.95,
+            # Backward
+            update_iterations=10,  # Can also be 'auto'
             sync_iterations=1,
             pool_size=None,
             epoch_size=None,
@@ -270,7 +281,10 @@ class PPO(nn.Module):
         # Variables
         self.epsilon_ppo = epsilon_ppo
         self.epsilon_critic = epsilon_critic
+        self.kl_beta = nn.Parameter(torch.tensor(kl_beta_init), requires_grad=False)
+        self.kl_beta_increment = kl_beta_increment
         self.kl_target = kl_target
+        self.kl_early_stop = kl_early_stop
 
         # Runtime management
         self.forward_batch_size = forward_batch_size
@@ -295,17 +309,21 @@ class PPO(nn.Module):
         # New policy
         self.actor = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=output_dim, action_std=action_std, **kwargs)
         self.critic = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=1, final_activation=None, **kwargs)
-        self.optimizer = torch.optim.AdamW([
-            {'params': self.actor.parameters(), 'lr': actor_lr},
-            {'params': self.critic.parameters(), 'lr': critic_lr}])
-        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
+        self.optimizer = torch.optim.Adam([  # CHANGED
+            {'params': list(filter(lambda kv: kv[0] in ('action_std',), self.actor.named_parameters())), 'lr': action_std_lr},
+            {'params': list(filter(lambda kv: kv[0] not in ('action_std',), self.actor.named_parameters())), 'lr': actor_lr},
+            {'params': self.critic.named_parameters(), 'lr': critic_lr}],
+            betas=betas, weight_decay=weight_decay)
+        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma, verbose=True)
 
         # Old policy
         self.actor_old = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=output_dim, action_std=action_std, **kwargs)
         self.critic_old = model(positional_dim=positional_dim, modal_dims=modal_dims, output_dim=1, final_activation=None, **kwargs)
-        self.optimizer_old = torch.optim.AdamW([
-            {'params': self.actor_old.parameters(), 'lr': actor_lr},
-            {'params': self.critic_old.parameters(), 'lr': critic_lr}])
+        self.optimizer_old = torch.optim.Adam([
+            {'params': list(filter(lambda kv: kv[0] in ('action_std',), self.actor_old.named_parameters())), 'lr': action_std_lr},
+            {'params': list(filter(lambda kv: kv[0] not in ('action_std',), self.actor_old.named_parameters())), 'lr': actor_lr},
+            {'params': self.critic_old.named_parameters(), 'lr': critic_lr}],
+            betas=betas, weight_decay=weight_decay)
         self.copy_policy()
 
         # Iteration tracking
@@ -320,8 +338,9 @@ class PPO(nn.Module):
 
     ### Minor functions
     def to(self, device):
-        self.device = device
-        return super().to(device)
+        ret = super().to(device)
+        self.device = self.policy_iteration.get_device()
+        return ret
 
     def get_action_std(self):
         return self.actor.action_std.detach().item()
@@ -536,7 +555,7 @@ class PPO(nn.Module):
                     advantages = minibatch_data['advantages']
 
                     # Perform backward
-                    loss, loss_ppo, loss_critic, loss_entropy, kl_divergence = self.backward(
+                    loss, loss_ppo, loss_critic, loss_entropy, loss_kl = self.backward(
                         states, actions, action_logs, state_vals, advantages)
 
                     # Scale and calculate gradient
@@ -545,26 +564,28 @@ class PPO(nn.Module):
                     loss.backward()  # Longest computation
 
                     # Scale and record
+                    batch_losses['Total'] += (loss.detach() * accumulation_frac).item()
                     batch_losses['PPO'] += (loss_ppo.detach().mean() * accumulation_frac).item()
                     batch_losses['critic'] += (loss_critic.detach().mean() * accumulation_frac).item()
                     batch_losses['entropy'] += (loss_entropy.detach().mean() * accumulation_frac).item()
-                    batch_losses['KL'] += (kl_divergence.detach().mean() * accumulation_frac).item()
+                    batch_losses['KL'] += (loss_kl.detach().mean() * accumulation_frac).item()
 
                 # Escape and roll back if KLD too high
-                kl_divergence = torch.tensor(batch_losses['KL'], device=self.device)
-                self.synchronize('learners', sync_list=[kl_divergence])
-                if kl_divergence.abs() >= self.kl_target:
-                    if iterations - sync_iterations > 0:
-                        # Revert to previous synchronized state within kl target
-                        self.revert_policy()
-                        # for w in self.actor.state_dict().values(): assert w.grad is None  # Just in case
-                        iterations -= sync_iterations
-                        escape = True; break
-                    else:
-                        warnings.warn(
-                            'Update exceeded KL target too fast! Proceeding with update, but may be unstable. '
-                            'Try lowering clip or learning rate parameters.')
-                        escape = True; break
+                if self.kl_early_stop:
+                    loss_kl = torch.tensor(batch_losses['KL'], device=self.device)
+                    self.synchronize('learners', sync_list=[loss_kl])
+                    if loss_kl >= self.kl_target:
+                        if iterations - sync_iterations > 0:
+                            # Revert to previous synchronized state within kl target
+                            self.revert_policy()
+                            # for w in self.actor.state_dict().values(): assert w.grad is None  # Just in case
+                            iterations -= sync_iterations
+                            escape = True; break
+                        else:
+                            warnings.warn(
+                                'Update exceeded KL target too fast! Proceeding with update, but may be unstable. '
+                                'Try lowering clip or learning rate parameters.')
+                            escape = True; break
 
                 # Synchronize GPU policies
                 # NOTE: Synchronize gradients every batch if =1, else synchronize whole model
@@ -572,7 +593,7 @@ class PPO(nn.Module):
                 if sync_iterations == 1: self.synchronize('learners', grad=True)  # Sync only grad
 
                 # Step
-                if synchronized: self.copy_policy()
+                if self.kl_early_stop and synchronized: self.copy_policy()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
 
@@ -623,7 +644,10 @@ class PPO(nn.Module):
         if allreduce is None: allreduce = not broadcast
 
         # Collective operations
-        world_size = col.get_collective_group_size(group)
+        try: world_size = col.get_collective_group_size(group)
+        except:
+            warnings.warn(f'Synchronize called but no group "{group}" found.')
+            return
         # rank = col.get_rank(group)
 
         # Sync
@@ -643,10 +667,11 @@ class PPO(nn.Module):
         actions,
         action_logs,
         state_vals,
-        advantages,
-    ):
+        advantages):
         # Get normalized rewards and inferred rewards
-        normalized_advantages = (advantages - advantages.mean()) / advantages.std()
+        advantages_mean, advantages_std = advantages.mean(), advantages.std()
+        # print(f'{self.get_policy_iteration()} - {advantages_mean:.3f} - {advantages_std:.3f}')
+        normalized_advantages = (advantages - advantages_mean) / advantages_std
         inferred_rewards = advantages + state_vals
 
         # Evaluate actions and states
@@ -663,17 +688,31 @@ class PPO(nn.Module):
         unclipped_critic = (state_vals_new - inferred_rewards).square()
         clipped_state_vals_new = torch.clamp(state_vals_new, state_vals-self.epsilon_critic, state_vals+self.epsilon_critic)
         clipped_critic = (clipped_state_vals_new - inferred_rewards).square()
-        loss_critic = self.critic_weight * torch.max(unclipped_critic, clipped_critic)  # TODO: Figure out max meaning
+        loss_critic = torch.max(unclipped_critic, clipped_critic)
 
-        # Calculate entropy loss
+        # Calculate entropy bonus
         # NOTE: Not included in training grad if action_std is constant
-        loss_entropy = -self.entropy_weight * dist_entropy
+        loss_entropy = -dist_entropy
 
-        # Calculate KL divergence
-        kl_divergence = action_logs.exp() * (action_logs - action_logs_new)
+        # Calculate KL divergence (approximate pointwise KL)
+        # NOTE: A bit odd when it comes to replay
+        loss_kl = (action_logs - action_logs_new)  # * action_logs.exp()
+
+        # Mask and scale where needed
+        # loss_kl[~new_memories] = 0
+        # loss_kl = loss_kl * loss_kl.shape[0] / new_memories.sum()
 
         # Construct final loss
-        loss = loss_ppo + loss_critic + loss_entropy
+        loss = (
+            loss_ppo
+            + self.critic_weight * loss_critic
+            + self.entropy_weight * loss_entropy
+            + self.kl_beta * loss_kl)
         loss = loss.mean()
 
-        return loss, loss_ppo, loss_critic, loss_entropy, kl_divergence
+        # Update KL beta
+        # NOTE: Same as Torch KLPENPPOLoss implementation
+        if loss_kl.mean() < self.kl_target / 1.5: self.kl_beta.data *= self.kl_beta_increment[0]
+        elif loss_kl.mean() > self.kl_target * 1.5: self.kl_beta.data *= self.kl_beta_increment[1]
+
+        return loss, loss_ppo, loss_critic, loss_entropy, loss_kl
