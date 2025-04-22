@@ -48,6 +48,8 @@ class Preprocessing:
         # Data
         self.is_sparse_transform = None
 
+    def set_num_nodes(self, num_nodes):
+        self.num_nodes = num_nodes
     
     def fit(self, modalities, *, total_statistics=False, **kwargs):
         # Parameters
@@ -515,19 +517,36 @@ class PreprocessFromAnnData:
 def split_state(
     state,
     idx=None,
-    max_nodes=None,
     sample_strategy='random-proximity',
+    # Strategy kwargs
+    max_nodes=None,
     reproducible_strategy='mean',
     sample_dim=None,  # Should be the dim of the env
     return_mask=False,
 ):
     "Split full state matrix into individual inputs, self_idx is an optional array"
+    # Skip if indicated 
+
     # Parameters
     if idx is None: idx = np.arange(state.shape[0]).tolist()
     if not _utility.general.is_list_like(idx): idx = [idx]
     self_idx = idx
     del idx
     device = state.device
+
+    # Batch input for Lite model
+    if sample_strategy is None:
+        # All processing case
+        if len(self_idx) == state.shape[0]:
+            # This optimization saves a lot of time
+            if (self_idx[:-1] < self_idx[1:]).all(): return state,
+            elif (np.unique(self_idx) == np.arange(state.shape[0])).all(): return state[self_idx],
+
+        # Subset case
+        self_entity = state[self_idx]
+        node_entities = state  # Could remove the self_idx in the case len == 1, but doesn't really matter
+        mask = torch.eye(state.shape[0], dtype=torch.bool, device=device)[self_idx]
+        return self_entity, node_entities, mask
 
     # Get self features for each node
     self_entity = state[self_idx]
@@ -674,7 +693,8 @@ def sample_and_cast(
     load_level,
     cast_level,
     device,
-    sequential_num=None):
+    sequential_num=None,
+    **kwargs):
     "Sample and/or cast based on load level and cast level"
     smaller_data = None
     if larger_size is not None and larger_data is not None:
@@ -685,7 +705,7 @@ def sample_and_cast(
             smaller_idx = slice(min_idx, max_idx)
         else: smaller_idx = np.random.choice(larger_size, smaller_size, replace=False)
     if load_level == current_level:
-        smaller_data = memory.fast_sample(smaller_size)
+        smaller_data = memory.fast_sample(smaller_size, **kwargs)
     elif load_level < current_level:
         smaller_data = _utility.processing.dict_map_recursive_tensor_idx_to(larger_data, smaller_idx, None)
     if cast_level == current_level:

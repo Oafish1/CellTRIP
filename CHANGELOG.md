@@ -1,3 +1,12 @@
+### 1.0.0+2025.4.18
+- Allow state output for `simulate_until_completion`
+- Bugfixes for `simulate_until_completion` argument combinations
+- Device policy storage bugfix
+- Fix log concatenation
+
+### 1.0.0+2025.4.17
+- Add total time to time visualization
+
 ### 1.0.0+2025.4.16
 - Add and tune automatic KL target weighting
 - Add and tune KL targeting

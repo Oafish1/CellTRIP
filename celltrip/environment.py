@@ -12,24 +12,27 @@ class EnvironmentBase:
     def __init__(self,
         # Data
         *modalities_or_dataloader,
-        # Params
+        # Creation
         dim=16,
         pos_bound=10,
-        pos_rand_bound=1,
+        pos_rand_bound=5,
         vel_bound=1,
+        vel_rand_bound=1,
         delta=.1,
-        # Early stopping
-        vel_threshold=1e-3,
-        max_timesteps=1_000,
+        # Targets
+        input_modalities=None,  # Which modalities are given as input
+        target_modalities=None,  # Which modalities are targets
         # Rewards
         reward_distance=None,
         reward_origin=None,
         penalty_bound=None,
         penalty_velocity=None,
         penalty_action=None,
-        # Targets
-        input_modalities=None,  # Which modalities are given as input
-        target_modalities=None,  # Which modalities are targets
+        # Early stopping
+        max_timesteps=500,
+        min_timesteps=0,
+        vel_threshold=1e-3,
+        latency=5,
         # Device
         device='cpu',
         # Extras
@@ -40,12 +43,18 @@ class EnvironmentBase:
         self.pos_bound = pos_bound
         self.pos_rand_bound = pos_rand_bound
         self.vel_bound = vel_bound
+        self.vel_rand_bound = vel_rand_bound
         self.delta = delta
         self.vel_threshold = vel_threshold
+        self.min_timesteps = min_timesteps
         self.max_timesteps = max_timesteps
+        self.latency = latency
         self.input_modalities = input_modalities
         self.target_modalities = target_modalities
         self.device = device
+
+        # Cache
+        self.dist = {}
 
         # Detect if modality input is dataloader
         if (len(modalities_or_dataloader) == 1
@@ -96,10 +105,10 @@ class EnvironmentBase:
         if np.array(list(reward_not_set.values())).all():
             # If all rewards are unset to zero, turn on default final rewards
             self.reward_scales = {
-                'reward_distance': 1,
+                'reward_distance': 0,
                 'reward_origin': 0,
                 'penalty_bound': 1,
-                'penalty_velocity': 1,
+                'penalty_velocity': 0,
                 'penalty_action': 1,
             }
         else:
@@ -107,11 +116,9 @@ class EnvironmentBase:
             for k in reward_not_set:
                 if reward_not_set[k]: self.reward_scales[k] = 0
 
-        # Storage
-        self.dist = None
-
         # Initialize
         self.reset()
+        # self.steps = 0
 
     def to(self, device):
         self.device = device
@@ -127,16 +134,20 @@ class EnvironmentBase:
         if delta is None: delta = self.delta
 
         # Check dimensions
-        assert actions.shape == self.vel.shape
+        # assert actions.shape == self.vel.shape
 
         ### Pre-step calculations
-        # Distance reward
-        reward_distance = self.get_distance_match()  # Emulate combined intra-modal distances
-
+        # Distance reward (Emulate combined intra-modal distances)
+        if self.reward_scales['reward_distance'] != 0: reward_distance = self.get_distance_match()
+        else: reward_distance = torch.zeros(actions.shape[0], device=self.device)
         # Origin penalty
-        reward_origin = self.get_distance_from_origin()
+        if self.reward_scales['reward_origin'] != 0: reward_origin = self.get_distance_from_origin()
+        else: reward_origin = torch.zeros(actions.shape[0], device=self.device)
 
         ### Step positions
+        # Old storage
+        # old_vel = self.vel.clone()
+        # old_bound_hit_mask = self.pos.abs() == self.pos_bound
         # Add velocity
         self.add_velocities(delta * actions)
         # Iterate positions
@@ -146,33 +157,52 @@ class EnvironmentBase:
         # Erase velocity of bound-hits
         bound_hit_mask = self.pos.abs() == self.pos_bound
         self.vel[bound_hit_mask] = 0
+        # self.pos[bound_hit_mask.sum(dim=1) > 0] = 0  # Send to center
+        # Reset cache
+        self.reset_cache()
 
         ### Post-step calculations
+        # Finished
+        self.timestep += 1
+        finished = self.finished()
         # Distance reward
-        reward_distance -= self.get_distance_match()  # Emulate combined intra-modal distances
-
+        if self.reward_scales['reward_distance'] != 0:
+            reward_distance -= self.get_distance_match()  # Emulate combined intra-modal distances
         # Origin reward
-        reward_origin -= self.get_distance_from_origin()
-        # reward_origin = -self.reward_scales['reward_origin'] * self.pos.mean(dim=0).square().sum()
-        # reward_origin = -self.reward_scales['reward_origin'] * self.pos.square().sum(dim=1)
-
+        if self.reward_scales['reward_origin'] != 0:
+            reward_origin -= self.get_distance_from_origin()
         # Boundary penalty
+        # penalty_bound = -(bound_hit_mask*~old_bound_hit_mask).sum(dim=1).float()
         penalty_bound = torch.zeros(self.pos.shape[0], device=self.device)
         penalty_bound[bound_hit_mask.sum(dim=1) > 0] = -1
-
-        # Velocity penalty
-        penalty_velocity = -self.vel.square().mean(dim=1)
-
-        # Action penalty
+        # Velocity penalty (Apply to ending velocity)
+        penalty_velocity = -self.vel.square().mean(dim=1) * finished
+        # penalty_velocity = (old_vel.square() - self.vel.square()).mean(dim=1)
+        # Action penalty (Smooth movements)
         penalty_action = -actions.square().mean(dim=1)
+        # if finished: print(reason)
+        # print(actions)
 
         ### Management
+        if self.get_distance_match().mean() < self.best: self.lapses += delta
+        else: self.best = self.get_distance_match().mean(); self.lapses = 0
+
         # Scale rewards
-        reward_distance *=  self.reward_scales['reward_distance']   * 100
-        reward_origin *=   self.reward_scales['reward_origin']    * 100
-        penalty_bound *=    self.reward_scales['penalty_bound']     * 2
-        penalty_velocity *= self.reward_scales['penalty_velocity']  * 10
-        penalty_action *=   self.reward_scales['penalty_action']    * 1
+        # def get_coef_from_step(step, in_step, top_step, out_step=None, factor=5000):
+        #     step = step / factor
+        #     if step < top_step or out_step is None:
+        #         if in_step == top_step: return 1
+        #         return np.clip((step - in_step) / (top_step - in_step), 0, 1)
+        #     else:
+        #         if top_step == out_step: return 1
+        #         return np.clip((step - top_step) / (out_step - top_step), 1, 0)
+
+        reward_distance     *=  self.reward_scales['reward_distance']    * 1e0/delta
+        reward_origin       *=  self.reward_scales['reward_origin']      * 1e0/delta
+        penalty_bound       *=  self.reward_scales['penalty_bound']      * 1e2
+        penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e2
+        penalty_action      *=  self.reward_scales['penalty_action']     * 1e0
+        # self.steps += 1
 
         # Compute total reward
         rwd = (
@@ -180,20 +210,15 @@ class EnvironmentBase:
             + reward_origin
             + penalty_bound
             + penalty_velocity
-            + penalty_action
-        )
+            + penalty_action)
 
-        # Iterate timestep
-        self.timestep += 1
-
-        ret = (rwd, self.finished())
+        ret = (rwd, finished)
         if return_itemized_rewards: ret += {
             'distance': reward_distance,
             'origin': reward_origin,
             'bound': penalty_bound,
             'velocity': penalty_velocity,
-            'action': penalty_action,
-        },
+            'action': penalty_action},
         return ret
 
     def reset(self):
@@ -207,10 +232,19 @@ class EnvironmentBase:
 
         # Assign random positions and velocities
         self.pos = self.pos_rand_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
-        self.vel = self.vel_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
+        self.vel = self.vel_rand_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
 
         # Reset timestep
         self.timestep = 0
+        self.lapses = 0
+        self.best = 0
+
+        # Reset cache
+        self.dist.clear()
+        self.reset_cache()
+
+    def reset_cache(self):
+        self.cached_dist_match = {}
 
     ### Input functions
     def add_velocities(self, velocities, node_ids=None):
@@ -224,6 +258,32 @@ class EnvironmentBase:
         self.vel = torch.clamp(self.vel, -self.vel_bound, self.vel_bound)
 
     ### Evaluation functions
+    def get_distance_match(self, targets=None):
+        # Defaults
+        if targets is None: targets = self.target_modalities
+        targets = tuple(targets)
+
+        # Return if cached
+        if targets in self.cached_dist_match: return self.cached_dist_match[targets]
+
+        # Calculate distance for position
+        pos_dist = _utility.distance.euclidean_distance(self.pos)
+
+        # Calculate reward
+        running = torch.zeros(self.pos.shape[0], device=self.device)
+        for target in targets:
+            if target not in self.dist: self.calculate_dist([target])
+            dist = self.dist[target]
+            square_ew = (pos_dist - dist)**2
+            mean_square_ew = square_ew.mean(dim=1)
+            running = running + mean_square_ew
+        running = running / len(targets)
+
+        # Cache result
+        self.cached_dist_match[targets] = running
+
+        return running
+    
     def get_distance_from_origin(self):
         return self.pos.norm(dim=1)
 
@@ -236,40 +296,37 @@ class EnvironmentBase:
 
         return dist.norm(dim=1)
 
-    def get_distance_match(self, targets=None):
-        # Defaults
-        if targets is None: targets = self.target_modalities
-        
-        # Calculate modality distances
-        # NOTE: Only scaled for `self.dist` calculation
-        if self.dist is None:
-            self.dist = []
-            for target in targets:
-                m = self.modalities[target]
-                m_dist = _utility.distance.euclidean_distance(m, scaled=True)
-                self.dist.append(m_dist)
-
-        # Calculate distance for position
-        pos_dist = _utility.distance.euclidean_distance(self.pos)
-
-        # Calculate reward
-        running = torch.zeros(self.pos.shape[0], device=self.device)
-        for dist in self.dist:
-            square_ew = (pos_dist - dist)**2
-            mean_square_ew = square_ew.mean(dim=1)
-            running = running + mean_square_ew
-        running = running / len(self.dist)
-
-        return running
-
     def finished(self):
-        return (self.get_velocities() <= self.vel_threshold).all() or self.timestep >= self.max_timesteps
+        # Min threshold for stop
+        if self.timestep < self.min_timesteps: return False  # , 'min_thresh', 0.
+        # Boundary stop
+        # if (self.pos.abs() == self.pos_bound).any(): return True, 'bound', 0.
+        # Latency stop
+        # if self.lapses >= self.latency: return True, 'lat', 0.
+        # Velocity stop
+        # if (self.get_velocities() <= self.vel_threshold).all(): return True, 'vel', 0.  # Need to add reward here, but how?
+        # Time stop
+        if self.timestep >= self.max_timesteps: return True  # , 'time', 0.
+        # Default
+        return False  # , 'def', 0.
 
     ### Get-Set functions
+    def calculate_dist(self, targets):
+        # Defaults
+        if targets is None: targets = self.target_modalities
+        targets = tuple(targets)
+
+        for target in targets:
+            if target in self.dist: continue
+            m = self.modalities[target]
+            # NOTE: Only scaled for `self.dist` calculation
+            m_dist = _utility.distance.euclidean_distance(m, scaled=True)
+            self.dist[target] = m_dist
+
     def set_modalities(self, modalities):
         # Set modalities and reset pre-calculated inter-node dist
         self.modalities = modalities
-        self.dist = None
+        self.calculate_dist(self.target_modalities)
 
         # Assert all modalities share the first dimension and reset num_nodes
         assert all(m.shape[0] == self.modalities[0].shape[0] for m in self.modalities)
@@ -277,7 +334,7 @@ class EnvironmentBase:
 
     def set_rewards(self, **new_reward_scales):
         # Check that all rewards are valid
-        for k, v in new_reward_scales.items():
+        for k in new_reward_scales:
             if k not in self.reward_scales:
                 raise LookupError(f'`{k}` not found in rewards')
 
@@ -308,13 +365,13 @@ class EnvironmentBase:
     def get_modalities(self):
         return self.modalities
 
-    def get_state(self, include_modalities=False):
-        if include_modalities:
-            return torch.cat((self.pos, self.vel, *self.get_return_modalities()), dim=1)
-        else:
-            return torch.cat((self.pos, self.vel), dim=1)
+    def get_state(self, include_modalities=False, include_timestep=False):
+        cat = (self.pos, self.vel)
+        if include_timestep: cat += (torch.tensor(self.timestep, device=self.device).expand((self.num_nodes, 1)),)
+        if include_modalities: cat += (*self.get_return_modalities(),)
+        return torch.cat(cat, dim=-1)
         
     def set_state(self, state):
-        # Non-compatible with `include_modalities`
+        # Non-compatible with `include_modalities` or `include_timestep`
         self.set_positions(state[..., :self.dim])
         self.set_velocities(state[..., self.dim:])
