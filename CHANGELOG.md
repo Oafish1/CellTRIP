@@ -86,6 +86,7 @@
   - `sample_and_cast` formatting and argument passing to memory
 - Notebooks
   - Analyses for trained model, including gene set perturbation, knockdown, trajectory preview, pinning, and prioritization
+  - Begin implementing `Fastplotlib` for GPU-accelerated 3d visualization
   - Better runtime visualizations
 - Miscellaneous
   - Distance explanation and unused moving statistic class
