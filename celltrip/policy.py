@@ -188,9 +188,9 @@ class EntitySelfAttention(nn.Module):
         # Select continuous action
         dist = MultivariateNormal(
             loc=actions,
-            covariance_matrix=torch.diag(self.log_std.exp().square().expand((self.output_dim,))).unsqueeze(dim=0),
+            # covariance_matrix=torch.diag(self.log_std.exp().square().expand((self.output_dim,))).unsqueeze(dim=0),
             # TODO: Double check no square here b/c Cholesky
-            # scale_tril=torch.diag(self.log_std.exp().expand((self.output_dim,))).unsqueeze(dim=0),  # Speeds up computation compared to using cov matrix
+            scale_tril=torch.diag(self.log_std.exp().expand((self.output_dim,))).unsqueeze(dim=0),  # Speeds up computation compared to using cov matrix
             validate_args=False)  # Speeds up computation
 
         # Sample
@@ -224,7 +224,6 @@ class EntitySelfAttention(nn.Module):
             embedding = torch.concat((self_embed.squeeze(-2), attentions_pool), dim=-1)  # Concatenate self embedding to pooled embedding (pg. 24)
             common_embedding = embedding
             # common_embedding = self_entity[:, :6]
-
 
         # Critic block
         if self.independent_critic and critic:

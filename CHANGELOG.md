@@ -1,3 +1,99 @@
+### 1.0.0+2025.4.24
+- Decorator
+  - Added line-by-line profiling decorator
+  - Improved reliability of `metrics` decorator by enforcing CUDA synchronization
+- Environment
+  - `include_timestep` option for `get_state`
+  - A litany of new reward schema in comments
+  - Additional return information from `finished`
+  - Calculation skipping for distance and origin rewards if unneeded
+  - Coefficient changes for all rewards
+  - Delta scaling for appropriate rewards
+  - Early termination and selectable conditions, including velocity, time without improvement, and boundary
+  - Implement additional customizable attributes
+  - Inter-cell distance caching
+  - Logarithmic distance reward - aiding in model optimization
+  - Rename several input parameters
+  - Seperate `vel_rand_bound`
+- Memory
+  - Add bootstrapping capabilities, currently no distinction between truncation and termination, however
+  - Add calculation of propagated rewards
+  - Bugfix from staleness update
+  - Change default hyperparameters
+  - Downgrate small sample error to warning
+  - Efficient padding and batch calculation minimizing redundancy, compatible with new `Lite` attention model (~10x faster on MERFISH)
+  - More returns from `fast_sample`
+  - Optimizations to avoid unneeded tensor shuffles and similar
+  - Optional memory record buffer to not force GPU synchronization
+  - Readd pruning, but default to none
+  - Rewards normalization for `compute_advantages`
+  - Sample "rounding", i.e. selecting or dropping a sample instead of cutting it when the number of requested nodes is reached
+  - Uniform memory sampling technique
+- Policy
+  - Action computation strategy using cosine similarity with learned embedding
+  - Add propagated rewards compatibility, mainly for testing and validation purposes
+  - Add shared actor/critic model option with two heads and optional computation for each
+  - Allow regular (non-self) attention in `ResidualAttention` block
+  - Better KL divergence estimation for continuous action space
+  - Better checkpoint loading procedures
+  - Better synchronization tensor sanitization
+  - Change default hidden dimensions for `EntitySelfAttention` architecture (original)
+  - Class renaming and parameter changes
+  - Clean and generalize `PPO.forward` formatting, including calculation for terminal states (later used in bootstrapping)
+  - Different default learning rate decay, comments for linear version as well
+  - Gradient clipping (disabled by default)
+  - Merge actor and critic into one class
+  - Minimize stored input parameters in model classes
+  - Move KL targeting to main `update` function
+  - Move main computation in model and policy to `forward` for ease of use
+  - Moving statistics class for any size data
+  - New loss recording strategy for `PPO.update`
+  - Optimization runs with many combinations of network architectures
+  - Optimize previous parameters
+  - Optional frozen updates for critic and policy
+  - Optional return standardization (off by default)
+  - Orthogonal weight initialization and utility function
+  - Sampling size consideration even before `load_level`
+  - Separate and cachable feature embeddings, cutting down on computational/time cost when a large number of features are used
+  - Separation of actor, critic, and log_std learning rates
+  - Switch `action_std` for `log_std`
+  - Update returns from `PPO.update`
+  - Use Smooth L1 loss instead of MSE for critic loss
+  - Use `scale_tril` wherever possible, as covariance matrix is equivalent when diagonal
+  - Utility world size function for `PPO`
+  - `Dummy` network which only takes positional attributes
+  - `EntitySelfAttentionLite` class which avoids concatenation of self embeddings onto node embeddings, allowing for ~(#Nodes)x speedup
+  - `EntitySelfAttention` better compatibility with batched input
+  - `ResidualAttentionBlock` class for more typical pre-ln residual attention
+  - `fit_and_strip` option for `EntitySelfAttentionLite` which flattens sample-node dimensions into batches after computation
+- Remote Interface
+  - Additional returns for `Worker.update`
+  - Bugfix with loaded model not performing benchmark on the first update
+  - Feature embedding caching capability for `simulate_until_completion`
+  - Fix bug with `load_checkpoint`
+  - Fix checkpoint save spacing and activation bugs
+  - Optional delayed flush for rollout memory
+  - Optional state returns for `simulate_until_completion`
+  - Reward is now output as the cumulative (by time) mean (by sample) rewards
+  - Smarter memory sending and receiving logic and culling
+  - Terminal state critic evaluation for later bootstrapping
+  - Updated `dummy` handling
+- Processing
+  - Avoid unnecessary masking
+  - Public function for changing sampling size
+  - Safer data handling, at the risk of having some user-unfriendliness deep in the API
+  - `Lite`-model specific optimized `split_state` handling, constructing (a) nothing or (b) self, node, and attention mask matrices
+  - `sample_and_cast` formatting and argument passing to memory
+- Notebooks
+  - Analyses for trained model, including gene set perturbation, knockdown, trajectory preview, pinning, and prioritization
+  - Better runtime visualizations
+- Miscellaneous
+  - Distance explanation and unused moving statistic class
+  - Recompile requirements
+  - Script revisions
+  - Trials with training stages for increasing numbers of nodes
+  - `Vectorized` notebook containing a minimal implementation of PPO with vectorized environments, for benchmarking and comparison
+
 ### 1.0.0+2025.4.18
 - Allow state output for `simulate_until_completion`
 - Bugfixes for `simulate_until_completion` argument combinations

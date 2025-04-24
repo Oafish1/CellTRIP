@@ -25,7 +25,7 @@ class AdvancedMemoryBuffer:
         replay_frac=0,
         max_samples_per_state=np.inf,
         uniform=False,
-        shuffle=False,  # CHANGED for Lite
+        shuffle=False,
         # Culling
         prune=None,
         cull_by_episode=False,
@@ -244,13 +244,14 @@ class AdvancedMemoryBuffer:
             if not uniform:
                 # Greedily add
                 num_memories_to_add = min(list_len, max_samples_per_state)
-                if working_memories_recorded + num_memories_to_add > working_memories:
-                    num_memories_to_add = working_memories-working_memories_recorded
-                if list_len != num_memories_to_add and round_sample != 'up':
+                if working_memories_recorded + num_memories_to_add > working_memories and round_sample != 'up':
                     if round_sample is None:
-                        self_idx = np.random.choice(list_len, num_memories_to_add, replace=False)
+                        num_memories_to_add = working_memories-working_memories_recorded
                     elif round_sample == 'down': break
                     else: raise RuntimeError(f'`round_sample` method `{round_sample}` not implemented.')
+                if list_len != num_memories_to_add:
+                    if round_sample is None:
+                        self_idx = np.random.choice(list_len, num_memories_to_add, replace=False)
                 else: self_idx = np.arange(list_len)
             else:
                 # Uniformly add

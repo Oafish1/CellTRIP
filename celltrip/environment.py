@@ -144,7 +144,7 @@ class EnvironmentBase:
         ### Pre-step calculations
         # Distance reward (Emulate combined intra-modal distances)
         if self.reward_scales['reward_distance'] != 0:
-            reward_distance = self.get_distance_match().log()  # CHANGED, ADDED LOG
+            reward_distance = self.get_distance_match().log()
         else: reward_distance = torch.zeros(actions.shape[0], device=self.device)
         # Origin penalty
         if self.reward_scales['reward_origin'] != 0: reward_origin = self.get_distance_from_origin()
@@ -173,7 +173,7 @@ class EnvironmentBase:
         finished = self.finished()
         # Distance reward
         if self.reward_scales['reward_distance'] != 0:
-            reward_distance -= self.get_distance_match().log()  # CHANGED, ADDED LOG
+            reward_distance -= self.get_distance_match().log()
         # Origin reward
         if self.reward_scales['reward_origin'] != 0:
             reward_origin -= self.get_distance_from_origin()
