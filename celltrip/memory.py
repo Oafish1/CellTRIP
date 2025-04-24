@@ -23,12 +23,13 @@ class AdvancedMemoryBuffer:
         gamma=.99,
         # Sampling
         replay_frac=0,
-        max_samples_per_state=100,
+        max_samples_per_state=np.inf,
         uniform=False,
         shuffle=False,  # CHANGED for Lite
         # Culling
+        prune=None,
         cull_by_episode=False,
-        max_staleness=5,
+        max_staleness=None,
         # Split
         split_args={},
         device='cpu',
@@ -44,8 +45,9 @@ class AdvancedMemoryBuffer:
         self.max_samples_per_state = max_samples_per_state
         self.shuffle = shuffle
         self.uniform = uniform
+        self.prune = prune
         self.cull_by_episode = cull_by_episode
-        if max_staleness == None:
+        if max_staleness is None:
             self.max_staleness = torch.inf if replay_frac > 0 else 0
         else: self.max_staleness = max_staleness
         self.split_args = split_args
@@ -175,7 +177,9 @@ class AdvancedMemoryBuffer:
         # Clear vars
         self.clear_var_cache()
 
-    def fast_sample(self, num_memories, replay_frac=None, max_samples_per_state=None, uniform=None, shuffle=None, efficient=True):
+    def fast_sample(
+        self, num_memories, replay_frac=None, max_samples_per_state=None,
+        uniform=None, shuffle=None, efficient=True, round_sample='up'):
         # NOTE: Shuffle should only be used when sequential sampling is taking place
         # Parameters
         if replay_frac is None: replay_frac = self.replay_frac
@@ -242,8 +246,12 @@ class AdvancedMemoryBuffer:
                 num_memories_to_add = min(list_len, max_samples_per_state)
                 if working_memories_recorded + num_memories_to_add > working_memories:
                     num_memories_to_add = working_memories-working_memories_recorded
-                if list_len == num_memories_to_add: self_idx = np.arange(list_len)
-                else: self_idx = np.random.choice(list_len, num_memories_to_add, replace=False)
+                if list_len != num_memories_to_add and round_sample != 'up':
+                    if round_sample is None:
+                        self_idx = np.random.choice(list_len, num_memories_to_add, replace=False)
+                    elif round_sample == 'down': break
+                    else: raise RuntimeError(f'`round_sample` method `{round_sample}` not implemented.')
+                else: self_idx = np.arange(list_len)
             else:
                 # Uniformly add
                 mask = working_memories_to_record < list_len
@@ -297,7 +305,7 @@ class AdvancedMemoryBuffer:
             if num_replay_memories_recorded + num_new_memories_recorded >= num_memories: break
 
         # Catch if too few
-        else: raise IndexError(
+        else: warnings.warn(
             f'Only able to gather {num_replay_memories_recorded + num_new_memories_recorded}'
             f' memories with current parameters, {num_memories} requested.')
 
@@ -320,10 +328,17 @@ class AdvancedMemoryBuffer:
         # Return
         return dict(ret)  # memory_indices
         
-    def compute_advantages(self):
+    def compute_advantages(self, normalize_rewards=True, prune=None):
         # NOTE: Assumes keys stay the same throughout any single eposide, can be adjusted, however
-        rewards_mean = torch.cat([rew for rew, stale in zip(self.storage['rewards'], self.storage['staleness']) if stale==0]).mean()
-        rewards_std =torch.cat([rew for rew, stale in zip(self.storage['rewards'], self.storage['staleness']) if stale==0]).std()
+        # Default values
+        if prune is None: prune = self.prune
+
+        # Normalize
+        if normalize_rewards:
+            # rewards_mean = torch.cat([rew for rew, stale in zip(self.storage['rewards'], self.storage['staleness']) if stale==0]).mean()
+            # rewards_std = torch.cat([rew for rew, stale in zip(self.storage['rewards'], self.storage['staleness']) if stale==0]).std()
+            rewards_max = torch.cat([rew for rew, stale in zip(self.storage['rewards'], self.storage['staleness']) if stale==0]).max()
+            rewards_min = torch.cat([rew for rew, stale in zip(self.storage['rewards'], self.storage['staleness']) if stale==0]).min()
 
         for i, (rewards, is_terminal, state_vals, terminal_state_vals, advantages, propagated_rewards) in enumerate(zip(
             self.storage['rewards'][::-1],
@@ -341,34 +356,27 @@ class AdvancedMemoryBuffer:
                     next_advantages = 0
                     next_state_vals = terminal_state_vals  # 0
                 # Compute advantage
-                # normalized_rewards = (rewards - rewards_mean) / rewards_std
+                if normalize_rewards:
+                    # rewards = (rewards - rewards_mean) / rewards_std + 1e-8
+                    rewards = (rewards - rewards_min) / (rewards_max - rewards_min + 1e-8)
                 deltas = rewards + self.gamma * next_state_vals - state_vals  # TODO: Examine
                 next_advantages = deltas + self.gamma * self.gae_lambda * next_advantages
                 # Record
                 next_state_vals = state_vals
                 self.storage['advantages'][i] = next_advantages.clone()
             # Compute rewards
+            # Could remove this, but performance impact is minimal
             if propagated_rewards is None:
                 if is_terminal:
                     next_rewards = 0
-                    # step_num = 0
+                    if prune is not None: step_num = 0
                 next_rewards = rewards + self.gamma * next_rewards
                 self.storage['propagated_rewards'][i] = next_rewards
                 # Pruning (only if it's truncated not terminated! store the reason)
                 # TODO: Try finite horizon GAE (will still need to prune)
-                # self.storage['prunes'][i] = step_num < 200
-                # step_num += 1
-
-        # # Perform pruning
-        # # NOTE: Doesn't play nicely with whole episode culling
-        # num_steps = self.get_steps()
-        # for i, prune in enumerate(self.storage['prunes'][::-1]):
-        #     i = num_steps-i-1
-        #     if prune:
-        #         for k in self.storage:
-        #             self.storage[k].pop(i)
-        # self.clear_var_cache()
-
+                if prune is not None:
+                    self.storage['prunes'][i] = step_num < prune
+                    step_num += 1
 
     def recompute_state_vals(self, policy):
         # NOTE: Could set staleness lower here
@@ -461,7 +469,6 @@ class AdvancedMemoryBuffer:
         if max_memories is None: max_memories = self.max_memories
         if max_memories is None: return  # Unlimited memories
 
-
         # Cull
         num_memories_to_remove = len(self) - max_memories
         num_memories_removed = 0
@@ -513,6 +520,19 @@ class AdvancedMemoryBuffer:
             if self.storage['staleness'][i] > self.max_staleness:
                 for k in self.storage:
                     self.storage[k].pop(i)
+        self.clear_var_cache()
+
+    def cull_prune(self):
+        "Cull memories marked for pruning"
+        # Perform pruning
+        # NOTE: Doesn't play nicely with whole episode culling
+        num_steps = self.get_steps()
+        for i, prune in enumerate(self.storage['prunes'][::-1]):
+            i = num_steps-i-1
+            if prune:
+                for k in self.storage:
+                    self.storage[k].pop(i)
+        self.clear_var_cache()
 
     def clean_keys(self):
         "Clean all unused keys from suffixes"
@@ -540,6 +560,7 @@ class AdvancedMemoryBuffer:
     def cleanup(self):
         "Clean memory"
         self.cull_records()
+        self.cull_prune()
         self.cull_stale()
         # self.clean_records()
         self.clean_keys()

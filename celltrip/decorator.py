@@ -1,4 +1,5 @@
 import cProfile
+import line_profiler
 import sys
 import time
 import traceback
@@ -40,26 +41,18 @@ def profile(_func=None, fname=None, time_annotation=False):
     else: return profile_decorator(_func)
 
 
-# def line_profile(_func=None, fname=None, time_annotation=False):
-#     # Adapted from https://stackoverflow.com/a/5376616
-#     import line_profiler
-#     def profile_decorator(func):
-#         def profile_wrapper(*args, **kwargs):
-#             nonlocal fname
-#             nonlocal func
-#             nonlocal time_annotation
-#             if fname is None: fname_use = func.__name__ + '.line_prof'
-#             else: fname_use = fname
-#             if time_annotation: fname_use += '.' + str(int(time.perf_counter()))
-#             prof = line_profiler.LineProfiler()
-#             func_prof = prof(func)
-#             ret = func_prof(*args, **kwargs)
-#             prof.print_stats()
-#             return ret
-#         return profile_wrapper
+def line_profile(_func=None, signatures=[]):
+    # Adapted from https://stackoverflow.com/a/5376616
+    def profile_decorator(func):
+        def profile_wrapper(*args, **kwargs):
+            prof = line_profiler.LineProfiler(func, *signatures)
+            ret = prof.runcall(func, *args, **kwargs)
+            prof.print_stats(output_unit=1)
+            return ret
+        return profile_wrapper
     
-#     if _func is None: return profile_decorator
-#     else: return profile_decorator(_func)
+    if _func is None: return profile_decorator
+    else: return profile_decorator(_func)
 
 
 def metrics(_func=None, append_to_dict=False, dict_index=None):
@@ -100,8 +93,7 @@ def metrics(_func=None, append_to_dict=False, dict_index=None):
                 arg_mem = sum(arg_sizes+np_arg_sizes)
 
                 # Synchronize CUDA
-                import torch
-                torch.synchronize()
+                if torch.cuda.is_available(): torch.cuda.synchronize()
                 
                 metrics['memory'] = tracemalloc.get_traced_memory()[1] - base_memory + arg_mem  # Memory usage
                 if torch.cuda.is_available():

@@ -5,6 +5,7 @@ adjustText
 anndata
 h5py
 ipympl
+line_profiler
 matplotlib
 memory-profiler
 memray

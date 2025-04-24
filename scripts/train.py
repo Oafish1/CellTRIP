@@ -107,7 +107,7 @@ def train(config):
     import celltrip
 
     # Initialization
-    dataloader_kwargs = {'num_nodes': 200, 'pca_dim': 128}
+    dataloader_kwargs = {}  # {'num_nodes': 2000, 'pca_dim': 256}
     environment_kwargs = {
         'input_modalities': config.input_modalities,
         'target_modalities': config.target_modalities, 'dim': 3}

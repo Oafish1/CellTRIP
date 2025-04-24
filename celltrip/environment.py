@@ -29,8 +29,10 @@ class EnvironmentBase:
         penalty_velocity=None,
         penalty_action=None,
         # Early stopping
-        max_timesteps=500,
+        max_timesteps=1_000,
         min_timesteps=0,
+        terminate_time=True,
+        terminate_velocity=False,
         vel_threshold=1e-3,
         latency=5,
         # Device
@@ -45,6 +47,9 @@ class EnvironmentBase:
         self.vel_bound = vel_bound
         self.vel_rand_bound = vel_rand_bound
         self.delta = delta
+        self.termination_conds = {
+            'time': terminate_time,
+            'velocity': terminate_velocity}
         self.vel_threshold = vel_threshold
         self.min_timesteps = min_timesteps
         self.max_timesteps = max_timesteps
@@ -105,10 +110,10 @@ class EnvironmentBase:
         if np.array(list(reward_not_set.values())).all():
             # If all rewards are unset to zero, turn on default final rewards
             self.reward_scales = {
-                'reward_distance': 0,
+                'reward_distance': 1,
                 'reward_origin': 0,
                 'penalty_bound': 1,
-                'penalty_velocity': 0,
+                'penalty_velocity': 1,
                 'penalty_action': 1,
             }
         else:
@@ -138,7 +143,8 @@ class EnvironmentBase:
 
         ### Pre-step calculations
         # Distance reward (Emulate combined intra-modal distances)
-        if self.reward_scales['reward_distance'] != 0: reward_distance = self.get_distance_match()
+        if self.reward_scales['reward_distance'] != 0:
+            reward_distance = self.get_distance_match().log()  # CHANGED, ADDED LOG
         else: reward_distance = torch.zeros(actions.shape[0], device=self.device)
         # Origin penalty
         if self.reward_scales['reward_origin'] != 0: reward_origin = self.get_distance_from_origin()
@@ -167,7 +173,7 @@ class EnvironmentBase:
         finished = self.finished()
         # Distance reward
         if self.reward_scales['reward_distance'] != 0:
-            reward_distance -= self.get_distance_match()  # Emulate combined intra-modal distances
+            reward_distance -= self.get_distance_match().log()  # CHANGED, ADDED LOG
         # Origin reward
         if self.reward_scales['reward_origin'] != 0:
             reward_origin -= self.get_distance_from_origin()
@@ -176,7 +182,7 @@ class EnvironmentBase:
         penalty_bound = torch.zeros(self.pos.shape[0], device=self.device)
         penalty_bound[bound_hit_mask.sum(dim=1) > 0] = -1
         # Velocity penalty (Apply to ending velocity)
-        penalty_velocity = -self.vel.square().mean(dim=1) * finished
+        penalty_velocity = -self.vel.square().mean(dim=1)  #  * finished
         # penalty_velocity = (old_vel.square() - self.vel.square()).mean(dim=1)
         # Action penalty (Smooth movements)
         penalty_action = -actions.square().mean(dim=1)
@@ -197,10 +203,10 @@ class EnvironmentBase:
         #         if top_step == out_step: return 1
         #         return np.clip((step - top_step) / (out_step - top_step), 1, 0)
 
-        reward_distance     *=  self.reward_scales['reward_distance']    * 1e0/delta
+        reward_distance     *=  self.reward_scales['reward_distance']    * 1e2/delta
         reward_origin       *=  self.reward_scales['reward_origin']      * 1e0/delta
         penalty_bound       *=  self.reward_scales['penalty_bound']      * 1e2
-        penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e2
+        penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e0
         penalty_action      *=  self.reward_scales['penalty_action']     * 1e0
         # self.steps += 1
 
@@ -304,9 +310,10 @@ class EnvironmentBase:
         # Latency stop
         # if self.lapses >= self.latency: return True, 'lat', 0.
         # Velocity stop
-        # if (self.get_velocities() <= self.vel_threshold).all(): return True, 'vel', 0.  # Need to add reward here, but how?
+        if self.termination_conds['velocity'] and (self.get_velocities() <= self.vel_threshold).all():
+            return True, 'vel', 0.
         # Time stop
-        if self.timestep >= self.max_timesteps: return True  # , 'time', 0.
+        if self.termination_conds['time'] and self.timestep >= self.max_timesteps: return True  # , 'time', 0.
         # Default
         return False  # , 'def', 0.
 
@@ -340,6 +347,15 @@ class EnvironmentBase:
 
         # Set new rewards
         self.reward_scales.update(new_reward_scales)
+
+    def set_termination_conds(self, **new_termination_conds):
+        # Check that all rewards are valid
+        for k in new_termination_conds:
+            if k not in self.termination_conds:
+                raise LookupError(f'`{k}` not found in rewards')
+
+        # Set new rewards
+        self.termination_conds.update(new_termination_conds)
 
     def set_positions(self, pos):
         self.pos = pos

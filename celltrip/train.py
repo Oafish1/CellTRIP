@@ -16,7 +16,10 @@ from . import utility as _utility
 
 
 # @_decorator.profile
-def simulate_until_completion(env, policy, memory=None, keys=None, store_states=False, flush=True, dummy=False, verbose=False):
+def simulate_until_completion(
+    env, policy, memory=None, keys=None,
+    cache_feature_embeds=True, store_states=False, flush=True,
+    dummy=False, verbose=False):
     # NOTE: Does not flush buffer
     # Params
     if keys is None: keys = env.get_keys()
@@ -26,13 +29,17 @@ def simulate_until_completion(env, policy, memory=None, keys=None, store_states=
 
     # Simulation
     ep_timestep = 0; ep_reward = 0; ep_itemized_reward = defaultdict(lambda: 0); finished = False
+    feature_embeds = None
     with torch.inference_mode():
         while not finished:
             # Get current state
             state = env.get_state(include_modalities=True)
 
             # Get actions from policy
-            actions = policy(state, keys=keys, memory=memory)
+            actions = policy(
+                state, keys=keys, memory=memory,
+                feature_embeds=feature_embeds, return_feature_embeds=cache_feature_embeds)
+            if cache_feature_embeds: actions, feature_embeds = actions
 
             # Step environment and get reward
             rewards, finished, itemized_rewards = env.step(actions, return_itemized_rewards=True)
@@ -67,15 +74,15 @@ def simulate_until_completion(env, policy, memory=None, keys=None, store_states=
         
         # Record terminals
         state = env.get_state(include_modalities=True)
-        policy(state, keys=keys, memory=memory, terminal=True)
+        policy(state, keys=keys, memory=memory, terminal=True, feature_embeds=feature_embeds)
 
     # Flush
-    if flush: memory.flush_buffer()
+    if flush and memory: memory.flush_buffer()
 
     # Summarize and return
     denominator = 1  # env.max_timesteps if env.max_timesteps is not None else ep_timestep
     ep_reward = (ep_reward / denominator).item()  # Standard mean
-    ep_itemized_reward = {k: (v / denominator).item() for k, v in ep_itemized_reward.items()}  # Standard mean
+    ep_itemized_reward = {k: (v / denominator).item() for k, v in ep_itemized_reward.items()}
     ret = (ep_timestep, ep_reward, ep_itemized_reward)
     if store_states:
         state_storage = torch.stack(state_storage)
@@ -219,6 +226,10 @@ class Worker:
         return ret
     
     @_decorator.metrics(append_to_dict=True)
+    # @_decorator.line_profile(signatures=[
+    #     _memory.AdvancedMemoryBuffer.compute_advantages,
+    #     _memory.AdvancedMemoryBuffer.fast_sample, _policy.PPO.update,
+    #     _utility.processing.split_state])
     # @_decorator.profile(time_annotation=True)
     def update(self, **kwargs):
         # Perform update
@@ -399,7 +410,7 @@ def train_celltrip(
     learners_can_be_runners=True,
     sync_across_nodes=True,
     max_updates=200,
-    steps=int(2.5e3),
+    steps=int(5e3),
     delayed_rollout_flush=True,
     flush_iterations=None,
     checkpoint_iterations=50,
@@ -512,23 +523,22 @@ def train_celltrip(
         record_buffer.record.remote(*new_records)
         mean_rollout_reward = np.mean(rewards)
 
-        # Collect memories
-        if num_exclusive_runners > 0 or (sync_across_nodes and num_learners > 1):
+        # Share memories
+        if num_exclusive_runners > 0 or (sync_across_nodes and num_learners > 1):  # Not dummy-proof if someone strands a runner
+            # Collect memories
             ret = ray.get([w.send_memory.remote(new=True) for w in runners])
             new_memories, new_records = [[r[i] for r in ret] for i in range(2)]
             record_buffer.record.remote(*new_records)
 
-        # Broadcast memories
-        futures = []; new_memories_w1 = []
-        for i, w1 in enumerate(learners):
-            if sync_across_nodes:
-                new_memories_w1 = [ref for w2, ref in zip(runners, new_memories) if w1!=w2]
-            else:
-                new_memories_w1 = new_memories[num_heads+i::num_heads]
-            future = w1.recv_memories.remote(new_memories=new_memories_w1)
-            futures.append(future)
-        del new_memories, new_memories_w1
-        record_buffer.record.remote(*ray.get(futures))
+            # Broadcast memories
+            futures = []; new_memories_w1 = []
+            for i, w1 in enumerate(learners):
+                if sync_across_nodes: new_memories_w1 = [ref for w2, ref in zip(runners, new_memories) if w1!=w2]
+                else: new_memories_w1 = new_memories[num_heads+i::num_heads]
+                future = w1.recv_memories.remote(new_memories=new_memories_w1)
+                futures.append(future)
+            del new_memories, new_memories_w1
+            record_buffer.record.remote(*ray.get(futures))
 
         # Make sure checkpoint is finished
         # NOTE: Technically could be moved back, but unlikely to make a difference
@@ -546,7 +556,7 @@ def train_celltrip(
         policy_iteration = ray.get(workers[0].get_policy_iteration.remote())  # A little inefficient
 
         # Flush records and checkpoint
-        if (current_iteration % checkpoint_iterations == 0) and (checkpoint_dir is not None):
+        if ((current_iteration+1) % checkpoint_iterations == 0) and (checkpoint_dir is not None):
                 checkpoint_future = workers[0].save_checkpoint.remote(
                     directory=checkpoint_dir, name=checkpoint_name)
         if flush_iterations is not None and current_iteration % flush_iterations == 0:
