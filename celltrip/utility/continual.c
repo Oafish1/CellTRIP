@@ -7725,6 +7725,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_9continual_17RunningStatistics_8var
  *         n = self.n_set if self.n_set is not None else self.n
  *         if n < 2: return 0             # <<<<<<<<<<<<<<
  *         else: return self.m2 / (self.n - 1)
+ * 
  */
   __pyx_t_1 = PyObject_RichCompare(__pyx_v_n, __pyx_int_2, Py_LT); __Pyx_XGOTREF(__pyx_t_1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 208, __pyx_L1_error)
   __pyx_t_3 = __Pyx_PyObject_IsTrue(__pyx_t_1); if (unlikely((__pyx_t_3 < 0))) __PYX_ERR(0, 208, __pyx_L1_error)
@@ -7740,6 +7741,8 @@ static PyObject *__pyx_pf_8celltrip_7utility_9continual_17RunningStatistics_8var
  *         n = self.n_set if self.n_set is not None else self.n
  *         if n < 2: return 0
  *         else: return self.m2 / (self.n - 1)             # <<<<<<<<<<<<<<
+ * 
+ * 
  */
   /*else*/ {
     __Pyx_XDECREF(__pyx_r);

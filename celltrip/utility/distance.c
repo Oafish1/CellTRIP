@@ -2984,7 +2984,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_8distance_2euclidean_distance(CYTHO
  *     # Calculate euclidean distance
  *     if a.dtype == torch.float16: a = a.type(torch.float32)             # <<<<<<<<<<<<<<
  *     dist = torch.cdist(a, a, p=2)
- *     # Scaled makes this equivalent to MSE
+ *     # Scaled makes this equivalent to sqrt(MSE)
  */
   __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_a, __pyx_n_s_dtype); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 16, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
@@ -3037,7 +3037,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_8distance_2euclidean_distance(CYTHO
  *     # Calculate euclidean distance
  *     if a.dtype == torch.float16: a = a.type(torch.float32)
  *     dist = torch.cdist(a, a, p=2)             # <<<<<<<<<<<<<<
- *     # Scaled makes this equivalent to MSE
+ *     # Scaled makes this equivalent to sqrt(MSE)
  *     if scaled: dist /= np.sqrt(a.shape[1])
  */
   __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_torch); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 17, __pyx_L1_error)
@@ -3066,7 +3066,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_8distance_2euclidean_distance(CYTHO
 
   /* "celltrip/utility/distance.py":19
  *     dist = torch.cdist(a, a, p=2)
- *     # Scaled makes this equivalent to MSE
+ *     # Scaled makes this equivalent to sqrt(MSE)
  *     if scaled: dist /= np.sqrt(a.shape[1])             # <<<<<<<<<<<<<<
  *     return dist
  * 
@@ -3114,7 +3114,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_8distance_2euclidean_distance(CYTHO
   }
 
   /* "celltrip/utility/distance.py":20
- *     # Scaled makes this equivalent to MSE
+ *     # Scaled makes this equivalent to sqrt(MSE)
  *     if scaled: dist /= np.sqrt(a.shape[1])
  *     return dist             # <<<<<<<<<<<<<<
  * 

@@ -94,6 +94,8 @@ setup(
         'compile': [
             'Cython'],
         'dev': [
+            # 'jupyter_rfb',  # simplejpeg, pillow
+            'line_profiler',
             'memory-profiler',
             'memray',
             'pip-tools',
@@ -102,6 +104,7 @@ setup(
             'adjustText',
             'aiobotocore[boto3]',  # Compatibility with boto3 and s3fs
             'anndata',
+            # 'fastplotlib[notebook,imgui]',  # imgui needed `sudo apt install xorg-dev cmake`
             'h5py',
             'ipympl',
             'matplotlib',

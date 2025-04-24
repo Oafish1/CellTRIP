@@ -1,6 +1,7 @@
 # Random python
 *.egg-info
 __pycache__
+.ipynb_checkpoints
 
 # Cython
 build/

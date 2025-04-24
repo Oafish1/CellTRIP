@@ -48,6 +48,8 @@ class Preprocessing:
         # Data
         self.is_sparse_transform = None
 
+    def set_num_nodes(self, num_nodes):
+        self.num_nodes = num_nodes
     
     def fit(self, modalities, *, total_statistics=False, **kwargs):
         # Parameters
@@ -74,6 +76,7 @@ class Preprocessing:
 
         # Filtering
         # NOTE: Currently calculates even if not needed and `top_variant` is set
+        # NOTE: Currently requires standardization
         if self.top_variant is not None:
             # Calculate per-feature variance if needed
             st_std = self.standardize_std if not total_statistics else get_standardize_std(False)
@@ -81,7 +84,7 @@ class Preprocessing:
             # Compute mask
             self.filter_mask = [
                 np.argsort(std[0])[:-int(var+1):-1]
-                if var is not None else None
+                if var is not None and std[0].shape[0] > var else None
                 for std, var in zip(st_std, self.top_variant)
             ]
             modalities = [m[:, mask] if mask is not None else m for m, mask in zip(modalities, self.filter_mask)]
@@ -127,7 +130,7 @@ class Preprocessing:
             
         return self
 
-    def transform(self, modalities, adata_vars=None, force_filter=None, subset_features=None, subset_modality=None, *args, **kwargs):
+    def transform(self, modalities, adata_vars=None, force_filter=True, subset_features=None, subset_modality=None, *args, **kwargs):
         # Default
         # NOTE: `subset_modality` currently incompatible with list arguments, kind of hacky
         if subset_features is not None:
@@ -176,7 +179,7 @@ class Preprocessing:
             # Set all features but requested to zero/center
             all_but_needed = np.setxor1d(np.arange(modalities[0].shape[1]), np.array(idx_loc))
             # PCA compatibility
-            if not self.is_sparse_transform[sm][0]:
+            if self.pca_class[sm][0] is not None and not self.is_sparse_transform[sm][0]:
                 center = self.pca_class[sm][0].mean_
                 center = center[all_but_needed]
             else: center = 0
@@ -515,19 +518,36 @@ class PreprocessFromAnnData:
 def split_state(
     state,
     idx=None,
-    max_nodes=None,
     sample_strategy='random-proximity',
+    # Strategy kwargs
+    max_nodes=None,
     reproducible_strategy='mean',
     sample_dim=None,  # Should be the dim of the env
     return_mask=False,
 ):
     "Split full state matrix into individual inputs, self_idx is an optional array"
+    # Skip if indicated 
+
     # Parameters
     if idx is None: idx = np.arange(state.shape[0]).tolist()
     if not _utility.general.is_list_like(idx): idx = [idx]
     self_idx = idx
     del idx
     device = state.device
+
+    # Batch input for Lite model
+    if sample_strategy is None:
+        # All processing case
+        if len(self_idx) == state.shape[0]:
+            # This optimization saves a lot of time
+            if (self_idx[:-1] < self_idx[1:]).all(): return state,
+            elif (np.unique(self_idx) == np.arange(state.shape[0])).all(): return state[self_idx],
+
+        # Subset case
+        self_entity = state[self_idx]
+        node_entities = state  # Could remove the self_idx in the case len == 1, but doesn't really matter
+        mask = torch.eye(state.shape[0], dtype=torch.bool, device=device)[self_idx]
+        return self_entity, node_entities, mask
 
     # Get self features for each node
     self_entity = state[self_idx]
@@ -665,17 +685,13 @@ def dict_map_recursive_tensor_idx_to(dict, idx, device):
 
 
 def sample_and_cast(
-    memory,
-    larger_data,
-    larger_size,
-    smaller_size,
-    *,
-    current_level,
-    load_level,
-    cast_level,
-    device,
-    sequential_num=None):
-    "Sample and/or cast based on load level and cast level"
+    memory, larger_data, larger_size, smaller_size,
+    *, current_level, load_level, cast_level,
+    device, sequential_num=None, **kwargs):
+    """
+    Sample and/or cast based on load level and cast level
+    NOTE: Ignores sequential num if random sampling
+    """
     smaller_data = None
     if larger_size is not None and larger_data is not None:
         if sequential_num is not None:
@@ -685,7 +701,7 @@ def sample_and_cast(
             smaller_idx = slice(min_idx, max_idx)
         else: smaller_idx = np.random.choice(larger_size, smaller_size, replace=False)
     if load_level == current_level:
-        smaller_data = memory.fast_sample(smaller_size)
+        smaller_data = memory.fast_sample(smaller_size, **kwargs)
     elif load_level < current_level:
         smaller_data = _utility.processing.dict_map_recursive_tensor_idx_to(larger_data, smaller_idx, None)
     if cast_level == current_level:

@@ -207,3 +207,21 @@ class RunningStatistics:
         n = self.n_set if self.n_set is not None else self.n
         if n < 2: return 0
         else: return self.m2 / (self.n - 1)
+
+
+# class MomentumStatistics:
+#     def __init__(self, dim, momentum=.999):
+#         self.dim = tuple(dim)
+#         self.momentum = momentum
+#         self.mean = np.zeros(dim)
+#         self.std = np.ones(dim)
+
+#     def update(self, x):
+#         samples = int(np.prod(x.shape) / np.prod(self.dim))
+#         self.mean = self.momentum**samples * self.mean + (1-self.momentum**samples) * x.mean(dim=-1)
+#         self.std = self.momentum**samples * self.std + (1-self.momentum**samples) * x.std(dim=-1)
+
+#     def normalize(self, x):
+#         return (x - self.mean) / self.std
+
+    

@@ -62,7 +62,7 @@ if not celltrip.utility.notebook.is_notebook():
     # ray job submit -- python train.py...
     config = parser.parse_args()
 else:
-    experiment_name = '3gpu-9k-ExtraKL-DontSync'
+    experiment_name = '3gpu-9k-ExtraKL-DontSync_1k'
     command = (
         f's3://nkalafut-celltrip/MERFISH/expression.h5ad s3://nkalafut-celltrip/MERFISH/spatial.h5ad '
         # f'/home/nck/repos/INEPT/data/MERFISH/expression.h5ad /home/nck/repos/INEPT/data/MERFISH/spatial.h5ad '
@@ -107,7 +107,7 @@ def train(config):
     import celltrip
 
     # Initialization
-    dataloader_kwargs = {'num_nodes': 200, 'pca_dim': 128}
+    dataloader_kwargs = {}  # {'num_nodes': 2000, 'pca_dim': 256}
     environment_kwargs = {
         'input_modalities': config.input_modalities,
         'target_modalities': config.target_modalities, 'dim': 3}
@@ -117,9 +117,9 @@ def train(config):
         environment_kwargs=environment_kwargs)
 
     stage_functions = [
-        # lambda w: w.env.set_rewards(penalty_velocity=1, penalty_action=1),
-        # lambda w: w.env.set_rewards(reward_origin=1),
-        # lambda w: w.env.set_rewards(reward_origin=0, reward_distance=1),
+        # lambda w: w.env.dataloader.preprocessing.set_num_nodes(500),
+        # lambda w: w.env.dataloader.preprocessing.set_num_nodes(1000),
+        # lambda w: w.env.dataloader.preprocessing.set_num_nodes(3000),
     ]
 
     # Run function

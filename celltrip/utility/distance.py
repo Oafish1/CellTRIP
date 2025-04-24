@@ -15,7 +15,7 @@ def euclidean_distance(a, scaled=False):
     # Calculate euclidean distance
     if a.dtype == torch.float16: a = a.type(torch.float32)
     dist = torch.cdist(a, a, p=2)
-    # Scaled makes this equivalent to MSE
+    # Scaled makes this equivalent to sqrt(MSE)
     if scaled: dist /= np.sqrt(a.shape[1])
     return dist
 

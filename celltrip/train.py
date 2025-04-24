@@ -15,26 +15,40 @@ from . import policy as _policy
 from . import utility as _utility
 
 
-def simulate_until_completion(env, policy, memory=None, keys=None, dummy=False, verbose=False):
+# @_decorator.profile
+def simulate_until_completion(
+    env, policy, memory=None, keys=None,
+    cache_feature_embeds=True, store_states=False, flush=True,
+    dummy=False, verbose=False):
+    # NOTE: Does not flush buffer
     # Params
     if keys is None: keys = env.get_keys()
 
+    # Store states
+    if store_states: state_storage = [env.get_state()]
+
     # Simulation
     ep_timestep = 0; ep_reward = 0; ep_itemized_reward = defaultdict(lambda: 0); finished = False
-    while not finished:
-        with torch.inference_mode():
+    feature_embeds = None
+    with torch.inference_mode():
+        while not finished:
             # Get current state
             state = env.get_state(include_modalities=True)
 
             # Get actions from policy
-            actions = policy.act_macro(
-                state, keys=keys, memory=memory)
+            actions = policy(
+                state, keys=keys, memory=memory,
+                feature_embeds=feature_embeds, return_feature_embeds=cache_feature_embeds)
+            if cache_feature_embeds: actions, feature_embeds = actions
 
             # Step environment and get reward
             rewards, finished, itemized_rewards = env.step(actions, return_itemized_rewards=True)
 
+            # Store states
+            if store_states: state_storage.append(env.get_state())
+
             # Record rewards
-            memory.record(rewards=rewards, is_terminals=finished)
+            if memory is not None: memory.record_buffer(rewards=rewards, is_terminals=finished)
 
             # Tracking
             ts_reward = rewards.cpu().mean()
@@ -45,22 +59,35 @@ def simulate_until_completion(env, policy, memory=None, keys=None, dummy=False, 
 
             # Dummy return for testing
             if dummy:
-                if memory and not finished:
-                    # 1000 steps
-                    ep_timestep = int(1e3)
-                    for _ in range(ep_timestep-1): memory.append_memory({k: v[-1:] for k, v in memory.storage.items()})
+                if not finished:
+                    # Fill all but first and last
+                    ep_timestep = env.max_timesteps
+                    memory.flush_buffer()
+                    for _ in range(ep_timestep-2):
+                        if memory is not None: memory.append_memory({k: v[-1:] for k, v in memory.storage.items()})
+                        if store_states: state_storage.append(env.get_state)
                     memory.storage['is_terminals'][-1] = True
-                break
         
-        # CLI
-        if verbose and ((ep_timestep % 200 == 0) or ep_timestep in (100,)):
-            print(f'Timestep {ep_timestep:>4} - Reward {ts_reward:.3f}')
+            # CLI
+            if verbose and ((ep_timestep % 200 == 0) or ep_timestep in (100,) or finished):
+                print(f'Timestep {ep_timestep:>4} - Reward {ts_reward:.3f}')
+        
+        # Record terminals
+        state = env.get_state(include_modalities=True)
+        policy(state, keys=keys, memory=memory, terminal=True, feature_embeds=feature_embeds)
+
+    # Flush
+    if flush and memory: memory.flush_buffer()
 
     # Summarize and return
-    denominator = env.max_timesteps if env.max_timesteps is not None else ep_timestep
+    denominator = 1  # env.max_timesteps if env.max_timesteps is not None else ep_timestep
     ep_reward = (ep_reward / denominator).item()  # Standard mean
-    ep_itemized_reward = {k: (v / denominator).item() for k, v in ep_itemized_reward.items()}  # Standard mean
-    return ep_timestep, ep_reward, ep_itemized_reward
+    ep_itemized_reward = {k: (v / denominator).item() for k, v in ep_itemized_reward.items()}
+    ret = (ep_timestep, ep_reward, ep_itemized_reward)
+    if store_states:
+        state_storage = torch.stack(state_storage)
+        ret += (state_storage,)
+    return ret
 
 
 @ray.remote(num_cpus=1e-4)
@@ -169,9 +196,8 @@ class Worker:
             self.env, self.policy, self.memory, **kwargs)
         env_nodes = self.env.num_nodes
         
-        # Reset and propagate
+        # Reset and clean
         self.env.reset()
-        self.memory.compute_advantages()
         self.memory.cleanup()
 
         # Record
@@ -200,19 +226,21 @@ class Worker:
         return ret
     
     @_decorator.metrics(append_to_dict=True)
+    # @_decorator.line_profile(signatures=[
+    #     _memory.AdvancedMemoryBuffer.compute_advantages,
+    #     _memory.AdvancedMemoryBuffer.fast_sample, _policy.PPO.update,
+    #     _utility.processing.split_state])
     # @_decorator.profile(time_annotation=True)
     def update(self, **kwargs):
         # Perform update
-        # if self.flags['adjust_rewards_next_update'] and False:  # TODO: Reevaluate
-        #     self.memory.adjust_rewards()
-        #     self.flags['adjust_rewards_next_update'] = False
+        self.memory.flush_buffer()
+        # self.memory.recompute_state_vals(self.policy)  # Technically better when replay used, but takes a ton of time
+        self.memory.compute_advantages()
         iterations, losses = self.policy.update(self.memory, **kwargs)
 
         # Annotate and clean
         num_new_memories = self.memory.get_new_len()
         num_replay_memories = self.memory.get_replay_len()
-        # self.memory.recompute_state_vals(self.policy)  # Technically better, but takes a ton of time
-        self.memory.compute_advantages()
         self.memory.mark_sampled()
 
         # Record
@@ -226,7 +254,8 @@ class Worker:
             'Total Memories': len(self.memory),
             'Iterations': iterations,
             'Losses': losses,
-            'Action STD': self.policy.get_action_std()}
+            'Log STD': self.policy.get_log_std(),
+            'Advantage STD': self.policy.get_advantage_std()}
         return ret
     
     def set_flags(self, **new_flag_values):
@@ -237,6 +266,7 @@ class Worker:
     @_decorator.metrics(append_to_dict=True, dict_index=1)
     def send_memory(self, **kwargs):
         # Put in object store
+        self.memory.flush_buffer()
         mem = self.memory.get_storage(**kwargs)
         ref = ray.put(mem)
 
@@ -313,7 +343,7 @@ class Worker:
     
     @_decorator.metrics(append_to_dict=True)
     def load_checkpoint(self, fname):
-        self.policy.save_checkpoint(fname)
+        self.policy.load_checkpoint(fname)
 
         # Record
         ret = {
@@ -381,6 +411,7 @@ def train_celltrip(
     sync_across_nodes=True,
     max_updates=200,
     steps=int(5e3),
+    delayed_rollout_flush=True,
     flush_iterations=None,
     checkpoint_iterations=50,
     checkpoint_dir='./checkpoints',
@@ -486,28 +517,28 @@ def train_celltrip(
             new_records = ray.get([w.rollout.remote(**rollout_kwargs, return_metrics=True) for w in runners])
             rewards += [record['Reward'] for record in new_records if record['Event Type'] == 'Rollout']
             record_buffer.record.remote(*new_records)
-        new_records = sum(ray.get([w.rollout_until_new.remote(num_new=steps/num_workers, **rollout_kwargs) for w in runners]), [])
+        new_records = sum(ray.get([
+            w.rollout_until_new.remote(num_new=steps/num_workers, flush=not delayed_rollout_flush, **rollout_kwargs) for w in runners]), [])
         rewards += [record['Reward'] for record in new_records if record['Event Type'] == 'Rollout']
         record_buffer.record.remote(*new_records)
         mean_rollout_reward = np.mean(rewards)
 
-        # Collect memories
-        if num_exclusive_runners > 0 or (sync_across_nodes and num_learners > 1):
+        # Share memories
+        if num_exclusive_runners > 0 or (sync_across_nodes and num_learners > 1):  # Not dummy-proof if someone strands a runner
+            # Collect memories
             ret = ray.get([w.send_memory.remote(new=True) for w in runners])
             new_memories, new_records = [[r[i] for r in ret] for i in range(2)]
             record_buffer.record.remote(*new_records)
 
-        # Broadcast memories
-        futures = []; new_memories_w1 = []
-        for i, w1 in enumerate(learners):
-            if sync_across_nodes:
-                new_memories_w1 = [ref for w2, ref in zip(runners, new_memories) if w1!=w2]
-            else:
-                new_memories_w1 = new_memories[num_heads+i::num_heads]
-            future = w1.recv_memories.remote(new_memories=new_memories_w1)
-            futures.append(future)
-        del new_memories, new_memories_w1
-        record_buffer.record.remote(*ray.get(futures))
+            # Broadcast memories
+            futures = []; new_memories_w1 = []
+            for i, w1 in enumerate(learners):
+                if sync_across_nodes: new_memories_w1 = [ref for w2, ref in zip(runners, new_memories) if w1!=w2]
+                else: new_memories_w1 = new_memories[num_heads+i::num_heads]
+                future = w1.recv_memories.remote(new_memories=new_memories_w1)
+                futures.append(future)
+            del new_memories, new_memories_w1
+            record_buffer.record.remote(*ray.get(futures))
 
         # Make sure checkpoint is finished
         # NOTE: Technically could be moved back, but unlikely to make a difference
@@ -517,7 +548,7 @@ def train_celltrip(
 
         # Updates
         record_buffer.record.remote(*ray.get([w.update.remote(
-            **update_kwargs, return_metrics=policy_iteration==0) for w in learners]))
+            **update_kwargs, return_metrics=current_iteration==0) for w in learners]))
 
         # Synchronize policies
         record_buffer.record.remote(*ray.get([w.sync_policy.remote() for w in heads]))
@@ -525,10 +556,10 @@ def train_celltrip(
         policy_iteration = ray.get(workers[0].get_policy_iteration.remote())  # A little inefficient
 
         # Flush records and checkpoint
-        if (policy_iteration % checkpoint_iterations == 0) and (checkpoint_dir is not None):
+        if ((current_iteration+1) % checkpoint_iterations == 0) and (checkpoint_dir is not None):
                 checkpoint_future = workers[0].save_checkpoint.remote(
                     directory=checkpoint_dir, name=checkpoint_name)
-        if flush_iterations is not None and policy_iteration % flush_iterations == 0:
+        if flush_iterations is not None and current_iteration % flush_iterations == 0:
             record_buffer.flush.remote()
 
         # Early stopping
@@ -541,8 +572,8 @@ def train_celltrip(
             # Escape if no more stages
             # TODO: Maybe do this based on action_std or KL (or both)
             if len(stage_functions) == curr_stage:
-                # Escape
                 continue
+                # break # Escape
 
             # Advance stage
             else:
