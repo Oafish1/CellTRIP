@@ -13,7 +13,137 @@ import torch.nn.functional as F
 from . import utility as _utility
 
 
+# Initialization
+def orthogonal_init(module):
+    for name, param in module.named_parameters():
+        if name.endswith('.weight') or name.endswith('_weight'):
+            std = .1 if name.startswith('actor_decider') else 1
+            try:
+                torch.nn.init.orthogonal_(param, std)
+                # print(f'Weight: {name} - {std}')
+            except:
+                torch.nn.init.constant_(param, 1)
+                # print(f'Weight Fail: {name}')
+        elif name.endswith('.bias') or name.endswith('_bias'):
+            # print(f'Bias: {name}')
+            torch.nn.init.constant_(param, 0)
+        else:
+            # print(f'None: {name}')
+            pass
+
+
+def layer_init(layer, std=np.sqrt(2), bias_const=0.):
+    torch.nn.init.sparse_(layer.weight, std)
+    if layer.bias is not None:
+        torch.nn.init.constant_(layer.bias, bias_const)
+    return layer
+
+
 # Modules
+class Dummy(nn.Module):
+    def __init__(
+        self,
+        positional_dim,
+        modal_dims,
+        output_dim,
+        log_std_init=-1,
+        hidden_dim=128,
+        embed_dim=32,
+        activation=nn.ReLU,
+        independent_critic=True,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+
+        # Parameters
+        self.positional_dim = positional_dim
+        self.output_dim = output_dim
+        self.log_std = nn.Parameter(torch.tensor(log_std_init, dtype=torch.float))
+        self.independent_critic = independent_critic
+
+        # Layers
+        num_dims = positional_dim + np.array(modal_dims).sum()
+        self.self_embed = nn.Sequential(
+            nn.Linear(num_dims, hidden_dim), activation(),
+            nn.Linear(hidden_dim, hidden_dim), activation())
+        # Independent critic
+        if independent_critic:
+            self.critic_self_embed = nn.Sequential(
+                nn.Linear(num_dims, hidden_dim), activation(),
+                nn.Linear(hidden_dim, hidden_dim), activation())
+        # Deciders
+        self.actions = nn.Parameter(torch.eye(output_dim), requires_grad=False)
+        self.action_embed = nn.Sequential(
+            nn.Linear(output_dim, hidden_dim), activation(),
+            nn.Linear(hidden_dim, embed_dim), activation())
+        self.actor_decider = nn.Sequential(
+            activation(), nn.Linear(hidden_dim, embed_dim))
+        self.critic_decider = nn.Sequential(
+            activation(), nn.Linear(hidden_dim, 1))
+    
+    def forward(
+            self, self_entities, node_entities=None, mask=None,
+            actor=True, sample=False, action=None, entropy=False, critic=False, squeeze=True):
+        # Formatting
+        # if self_entities.dim() > 2:
+        #     shape = self_entities.shape
+        #     self_entities = self_entities.reshape((-1, self_entities.shape[-1]))
+        # else: shape = None
+
+        # Common block
+        if actor or not self.independent_critic:
+            self_embeds = self.self_embed(self_entities)  # Self embedding
+            common_self_embeds = self_embeds
+
+        # Critic block
+        if self.independent_critic and critic:
+            self_embeds = self.self_embed(self_entities)  # Self embedding
+            critic_self_embeds = self_embeds
+        else: critic_self_embeds = common_self_embeds
+
+        # Decisions, samples, and returns
+        ret = ()
+        if actor:
+            self_action_embeds = self.actor_decider(common_self_embeds)
+            action_embeds = self.action_embed(self.actions)
+            if self_action_embeds.dim() > 2:
+                action_means = torch.einsum('bik,jk->bij', self_action_embeds, action_embeds)
+            else: action_means = torch.einsum('ik,jk->ij', self_action_embeds, action_embeds)
+            ret += (action_means,)
+            if sample: ret += self.select_action(action_means, action=action, return_entropy=entropy)  # action, action_log, dist_entropy
+        if critic: ret += (self.critic_decider(critic_self_embeds).squeeze(-1),)  # state_val
+        # if shape is not None: ret = tuple(t.reshape(*shape[:2], -1) if t.dim() == 2 else t.reshape(*shape[:2]) for t in ret)
+        if squeeze and self_entities.dim() > 2:
+            ret = tuple(t.squeeze(dim=1) for t in ret)
+            # ret = tuple(t.flatten(end_dim=1) for t in ret)
+        
+        return ret
+    
+    def select_action(self, actions, *, action=None, return_entropy=False):
+        # Format
+        set_action = action is not None
+
+        # Select continuous action
+        dist = MultivariateNormal(
+            loc=actions,
+            # covariance_matrix=torch.diag(self.action_std.square().expand((self.output_dim,))).unsqueeze(dim=0),
+            # TODO: Double check no square here b/c Cholesky
+            scale_tril=torch.diag(self.log_std.exp().expand((self.output_dim,))).unsqueeze(dim=0),  # Speeds up computation compared to using cov matrix
+            validate_args=False)  # Speeds up computation
+
+        # Sample
+        if not set_action: action = dist.sample()
+        action_log = dist.log_prob(action)
+
+        # Return
+        ret = ()
+        if not set_action:
+            ret += (action,)
+        ret += (action_log,)
+        if return_entropy: ret += (dist.entropy(),)
+        return ret
+
+
 class ResidualAttention(nn.Module):
     def __init__(
         self,
@@ -62,13 +192,6 @@ class ResidualAttention(nn.Module):
         # xf = x1
 
         return xf
-    
-
-def layer_init(layer, std=np.sqrt(2), bias_const=0.):
-    torch.nn.init.sparse_(layer.weight, std)
-    if layer.bias is not None:
-        torch.nn.init.constant_(layer.bias, bias_const)
-    return layer
     
 
 class EntitySelfAttention(nn.Module):
@@ -252,128 +375,6 @@ class EntitySelfAttention(nn.Module):
                 ret += self.select_action(actions, action=action, return_entropy=entropy)  # action, action_log, dist_entropy
         if critic: ret += (self.critic_decider(critic_embedding).squeeze(-1),)  # state_val
         return ret
-    
-
-class Dummy(nn.Module):
-    def __init__(
-        self,
-        positional_dim,
-        modal_dims,
-        output_dim,
-        log_std_init=-1,
-        hidden_dim=128,
-        embed_dim=32,
-        activation=nn.ReLU,
-        independent_critic=True,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-
-        # Parameters
-        self.positional_dim = positional_dim
-        self.output_dim = output_dim
-        self.log_std = nn.Parameter(torch.tensor(log_std_init, dtype=torch.float))
-        self.independent_critic = independent_critic
-
-        # Layers
-        num_dims = positional_dim + np.array(modal_dims).sum()
-        self.self_embed = nn.Sequential(
-            nn.Linear(num_dims, hidden_dim), activation(),
-            nn.Linear(hidden_dim, hidden_dim), activation())
-        # Independent critic
-        if independent_critic:
-            self.critic_self_embed = nn.Sequential(
-                nn.Linear(num_dims, hidden_dim), activation(),
-                nn.Linear(hidden_dim, hidden_dim), activation())
-        # Deciders
-        self.actions = nn.Parameter(torch.eye(output_dim), requires_grad=False)
-        self.action_embed = nn.Sequential(
-            nn.Linear(output_dim, hidden_dim), activation(),
-            nn.Linear(hidden_dim, embed_dim), activation())
-        self.actor_decider = nn.Sequential(
-            activation(), nn.Linear(hidden_dim, embed_dim))
-        self.critic_decider = nn.Sequential(
-            activation(), nn.Linear(hidden_dim, 1))
-    
-    def forward(
-            self, self_entities, node_entities=None, mask=None,
-            actor=True, sample=False, action=None, entropy=False, critic=False, squeeze=True):
-        # Formatting
-        # if self_entities.dim() > 2:
-        #     shape = self_entities.shape
-        #     self_entities = self_entities.reshape((-1, self_entities.shape[-1]))
-        # else: shape = None
-
-        # Common block
-        if actor or not self.independent_critic:
-            self_embeds = self.self_embed(self_entities)  # Self embedding
-            common_self_embeds = self_embeds
-
-        # Critic block
-        if self.independent_critic and critic:
-            self_embeds = self.self_embed(self_entities)  # Self embedding
-            critic_self_embeds = self_embeds
-        else: critic_self_embeds = common_self_embeds
-
-        # Decisions, samples, and returns
-        ret = ()
-        if actor:
-            self_action_embeds = self.actor_decider(common_self_embeds)
-            action_embeds = self.action_embed(self.actions)
-            if self_action_embeds.dim() > 2:
-                action_means = torch.einsum('bik,jk->bij', self_action_embeds, action_embeds)
-            else: action_means = torch.einsum('ik,jk->ij', self_action_embeds, action_embeds)
-            ret += (action_means,)
-            if sample: ret += self.select_action(action_means, action=action, return_entropy=entropy)  # action, action_log, dist_entropy
-        if critic: ret += (self.critic_decider(critic_self_embeds).squeeze(-1),)  # state_val
-        # if shape is not None: ret = tuple(t.reshape(*shape[:2], -1) if t.dim() == 2 else t.reshape(*shape[:2]) for t in ret)
-        if squeeze and self_entities.dim() > 2:
-            ret = tuple(t.squeeze(dim=1) for t in ret)
-            # ret = tuple(t.flatten(end_dim=1) for t in ret)
-        
-        return ret
-    
-    def select_action(self, actions, *, action=None, return_entropy=False):
-        # Format
-        set_action = action is not None
-
-        # Select continuous action
-        dist = MultivariateNormal(
-            loc=actions,
-            # covariance_matrix=torch.diag(self.action_std.square().expand((self.output_dim,))).unsqueeze(dim=0),
-            # TODO: Double check no square here b/c Cholesky
-            scale_tril=torch.diag(self.log_std.exp().expand((self.output_dim,))).unsqueeze(dim=0),  # Speeds up computation compared to using cov matrix
-            validate_args=False)  # Speeds up computation
-
-        # Sample
-        if not set_action: action = dist.sample()
-        action_log = dist.log_prob(action)
-
-        # Return
-        ret = ()
-        if not set_action:
-            ret += (action,)
-        ret += (action_log,)
-        if return_entropy: ret += (dist.entropy(),)
-        return ret
-    
-
-def orthogonal_init(module):
-    for name, param in module.named_parameters():
-        if name.endswith('.weight') or name.endswith('_weight'):
-            std = .1 if name.startswith('actor_decider') else 1
-            try:
-                torch.nn.init.orthogonal_(param, std)
-                # print(f'Weight: {name} - {std}')
-            except:
-                torch.nn.init.constant_(param, 1)
-                # print(f'Weight Fail: {name}')
-        elif name.endswith('.bias') or name.endswith('_bias'):
-            # print(f'Bias: {name}')
-            torch.nn.init.constant_(param, 0)
-        else:
-            # print(f'None: {name}')
-            pass
 
 
 class ResidualAttentionBlock(nn.Module):
@@ -473,6 +474,15 @@ class EntitySelfAttentionLite(nn.Module):
         if mask is None:
             mask = torch.eye(self_entities.shape[-2], dtype=torch.bool, device=self_entities.device)
             if self_entities.dim() > 2: mask = mask.repeat((self_entities.shape[0], 1, 1))
+
+        # Workaround for https://github.com/pytorch/pytorch/issues/41508
+        # Essentially, totally masked entries in attn_mask will cause NAN on backprop
+        # regardless of if they're even considered in loss, so, we allow masked entries
+        # to attend to themselves
+        include_mask = mask.sum(dim=-1) < mask.shape[-1]
+        mask[~include_mask, torch.argwhere(~include_mask)[:, -1]] = False
+        
+        # More formatting
         if self_entities.dim() > 2:
             # NOTE: Grouped batches (i.e. (>1, >1, ...) shape) are possible with squeeze=False
             if mask.dim() < 3: mask.unsqueeze(0)
@@ -524,9 +534,12 @@ class EntitySelfAttentionLite(nn.Module):
 
         # NOTE: fit_and_strip breaks compatibility on batch-batch native programs (Grouped batches)
         if fit_and_strip and self_entities.dim() > 2:
-            # Strip padded entries
-            actor_self_embeds = actor_self_embeds[~actor_self_embeds.sum(dim=-1).isnan()]
-            if critic: critic_self_embeds = critic_self_embeds[~critic_self_embeds.sum(dim=-1).isnan()]
+            # Strip padded entries with workaround
+            if actor: actor_self_embeds = actor_self_embeds[include_mask]
+            if critic: critic_self_embeds = critic_self_embeds[include_mask]
+            # # Strip padded entries
+            # actor_self_embeds = actor_self_embeds[~actor_self_embeds.sum(dim=-1).isnan()]
+            # if critic: critic_self_embeds = critic_self_embeds[~critic_self_embeds.sum(dim=-1).isnan()]
 
         # Decisions, samples, and returns
         ret = ()
@@ -534,8 +547,9 @@ class EntitySelfAttentionLite(nn.Module):
             self_action_embeds = self.actor_decider(actor_self_embeds)
             action_embeds = self.action_embed(self.actions)
             # Norms
-            self_action_embeds = self_action_embeds / self_action_embeds.norm(p=2, keepdim=True, dim=-1)
-            action_embeds = action_embeds / action_embeds.norm(p=2, keepdim=True, dim=-1)
+            # NOTE: Norm causes NAN, could use eps but might as well remove to avoid vanish
+            # self_action_embeds = self_action_embeds  / self_action_embeds.norm(p=2, keepdim=True, dim=-1)
+            # action_embeds = action_embeds   / action_embeds.norm(p=2, keepdim=True, dim=-1)
             # Dot/cosine
             if self_action_embeds.dim() > 2:
                 action_means = torch.einsum('bik,jk->bij', self_action_embeds, action_embeds)
@@ -553,8 +567,9 @@ class EntitySelfAttentionLite(nn.Module):
         set_action = action is not None
 
         # Select continuous action
-        if self.training: scale_tril = torch.diag(self.log_std.exp().expand((self.output_dim,))).unsqueeze(dim=0)
+        if self.training: scale_tril = torch.diag(self.log_std.exp().expand((self.output_dim,)))  # .unsqueeze(dim=0)
         else: scale_tril = torch.zeros((self.output_dim, self.output_dim), device=self.log_std.device)
+        # scale_tril = torch.zeros((self.output_dim, self.output_dim), device=self.log_std.device)
         dist = MultivariateNormal(
             loc=actions,
             # covariance_matrix=torch.diag(self.action_std.square().expand((self.output_dim,))).unsqueeze(dim=0),
@@ -574,356 +589,29 @@ class EntitySelfAttentionLite(nn.Module):
         if return_entropy: ret += entropy,
         return ret
 
-        # # Feature embedding
-        # self.feature_embed = nn.ModuleList([
-        #     nn.Sequential(
-        #         nn.Linear(modal_dims[i], feature_embed_dim),
-        #         activation)
-        #     for i in range(len(modal_dims))])
-
-        # # Embedding
-        # solo_features_len = feature_embed_dim * len(modal_dims) + positional_dim
-        # self.self_embed = nn.Sequential(
-        #     nn.Linear(solo_features_len, embed_dim),
-        #     activation,
-        #     nn.Linear(embed_dim, embed_dim))
-        # # This could be wrong, but I couldn't think of another interpretation.
-        # # Also backed by https://glouppe.github.io/info8004-advanced-machine-learning/pdf/pleroy-hide-and-seek.pdf
-        # self.node_embed = nn.Sequential(
-        #     nn.Linear(solo_features_len, embed_dim),
-        #     activation,
-        #     nn.Linear(embed_dim, embed_dim))  # Not across entities
-
-        # # Self attention
-        # self.residual_attention = ResidualAttention(embed_dim, num_heads, activation=activation, num_mlps=num_mlps)
-
-        # # Deciders
-        # self.actor_decider = nn.Sequential(
-        #     layer_init(nn.Linear(embed_dim, embed_dim)),
-        #     activation,
-        #     layer_init(nn.Linear(embed_dim, output_dim), std=1e-2))
-        # self.critic_decider = nn.Sequential(
-        #     layer_init(nn.Linear(embed_dim, embed_dim)),
-        #     activation,
-        #     layer_init(nn.Linear(embed_dim, 1), std=1.))
-
-    # def embed_features(self, entities):
-    #     running_idx = self.positional_dim
-    #     ret = [entities[..., :running_idx]]
-    #     for ms, fe in zip(
-    #         self.modal_dims,
-    #         self.feature_embed):
-    #         # Record embedded features
-    #         val = fe(entities[..., running_idx:(running_idx + ms)])
-    #         # val = self.activation(val)
-
-    #         # Record
-    #         ret.append(val)
-    #         running_idx += ms # Increment start idx
-
-    #     # Check shape
-    #     assert running_idx == entities.shape[-1]
-
-    #     # Construct full matrix
-    #     ret = torch.concat(ret, dim=-1)
-
-    #     return ret
-
-
-# class EntityCalculation(nn.Module):
-#     def __init__(self, output_dim, log_std_init=-1, **kwargs):
-#         super().__init__()
-
-#         # Parameters
-#         self.output_dim = output_dim
-
-#         # Set action std
-#         self.log_std = nn.Parameter(torch.tensor(log_std_init, dtype=torch.float))
-#         # self.recalculate_scale_tril()
-
-#     # def recalculate_scale_tril(self):
-#     #     covariance_matrix = torch.diag(self.action_std.square().expand((self.output_dim,))).unsqueeze(dim=0)
-#     #     self.scale_tril = torch.linalg.cholesky(covariance_matrix)
-#     #     print(self.scale_tril)
-
-#     def calculate_actions(self, state): pass
-
-#     def evaluate_state(self, state):
-#         return self.calculate_actions(state).squeeze(-1)
-
-#     def evaluate_action(self, state, action):
-#         actions = self.calculate_actions(state)
-#         action_log, dist_entropy = self.select_action(actions, action=action, return_entropy=True)
-
-#         return action_log, dist_entropy
-
-#     def select_action(self, actions, *, action=None, return_entropy=False):
-#         # Format
-#         set_action = action is not None
-
-#         # Select continuous action
-#         dist = MultivariateNormal(
-#             loc=actions,
-#             # covariance_matrix=torch.diag(self.action_std.square().expand((self.output_dim,))).unsqueeze(dim=0),
-#             # TODO: Double check no square here b/c Cholesky
-#             scale_tril=torch.diag(self.log_std.exp().expand((self.output_dim,))).unsqueeze(dim=0),  # Speeds up computation compared to using cov matrix
-#             validate_args=False)  # Speeds up computation
-
-#         # Sample
-#         if not set_action: action = dist.sample()
-#         action_log = dist.log_prob(action)
-
-#         # Return
-#         ret = ()
-#         if not set_action:
-#             ret += (action,)
-#         ret += (action_log,)
-#         if return_entropy: ret += (dist.entropy(),)
-#         if len(ret) == 1: ret = ret[0]
-#         return ret
-
-
-# class EntitySelfAttention(EntityCalculation):
-#     def __init__(
-#         self,
-#         positional_dim,
-#         modal_dims,
-#         output_dim,
-#         feature_embed_dim=32,
-#         embed_dim=64,
-#         num_heads=4,
-#         activation=nn.ReLU(),
-#         final_activation=nn.Tanh(),
-#         num_mlps=1,
-#         critic=False,
-#         **kwargs,
-#     ):
-#         super().__init__(output_dim, **kwargs)
-
-#         # Base information
-#         self.positional_dim = positional_dim
-#         self.modal_dims = modal_dims
-#         self.output_dim = output_dim
-#         self.feature_embed_dim = feature_embed_dim
-#         self.embed_dim = embed_dim
-#         self.num_heads = num_heads
-#         self.activation = activation
-#         self.final_activation = final_activation
-#         self.num_mlps = num_mlps
-#         self.critic = critic
-
-#         # Feature embedding
-#         self.feature_embed = nn.ModuleList([
-#             nn.Sequential(
-#                 nn.Linear(self.modal_dims[i], self.feature_embed_dim),
-#                 self.activation,
-#                 nn.Linear(self.feature_embed_dim, self.feature_embed_dim),
-#                 nn.LayerNorm(self.feature_embed_dim))
-#             for i in range(len(self.modal_dims))])
-
-#         # Embedding
-#         solo_features_len = self.feature_embed_dim * len(self.modal_dims) + self.positional_dim
-#         self.self_embed = nn.Sequential(
-#             nn.Linear(solo_features_len, self.embed_dim),
-#             self.activation,
-#             nn.Linear(self.embed_dim, self.embed_dim),
-#             nn.LayerNorm(self.embed_dim))
-#         # This could be wrong, but I couldn't think of another interpretation.
-#         # Also backed by https://glouppe.github.io/info8004-advanced-machine-learning/pdf/pleroy-hide-and-seek.pdf
-#         self.node_embed = nn.Sequential(
-#             nn.Linear(self.embed_dim + solo_features_len, self.embed_dim),
-#             self.activation,
-#             nn.Linear(self.embed_dim, self.embed_dim),
-#             nn.LayerNorm(self.embed_dim))  # Not across entities
-
-#         # Self attention
-#         self.residual_self_attention = ResidualAttention(self.embed_dim, self.num_heads, activation=self.activation, num_mlps=self.num_mlps)
-
-#         # Decision
-#         self.decider = nn.Sequential(
-#             nn.Linear(2*self.embed_dim, 2*self.embed_dim),
-#             self.activation,
-#             nn.Linear(2*self.embed_dim, self.output_dim))
-
-#     ### Calculation functions
-#     def _embed_features(self, entities):
-#         # TODO: Maybe there's a more efficient way to do this with masking
-#         running_idx = self.positional_dim
-#         ret = [entities[..., :running_idx]]
-#         for ms, fe in zip(
-#             self.modal_dims,
-#             self.feature_embed):
-#             # Record embedded features
-#             # Maybe pre-ln if we don't care about magnitude
-#             val = fe(entities[..., running_idx:(running_idx + ms)])
-#             val = self.activation(val)
-
-#             # Record
-#             ret.append(val)
-#             running_idx += ms # Increment start idx
-
-#         # Check shape
-#         assert running_idx == entities.shape[-1]
-
-#         # Construct full matrix
-#         ret = torch.concat(ret, dim=-1)
-
-#         return ret
-    
-#     def calculate_actions(self, state):
-#         # Formatting
-#         self_entity, node_entities = state
-
-#         # Feature embedding (could be done with less redundancy)
-#         self_entity = self._embed_features(self_entity)
-#         node_entities = self._embed_features(node_entities)
-
-#         # Self embedding
-#         self_embed = self.self_embed(self_entity).unsqueeze(-2)  # This has blown up with multi-gpu backward
-
-#         # Node embeddings
-#         node_embeds = self.node_embed(torch.concat((self_embed.expand(*node_entities.shape[:-1], self_embed.shape[-1]), node_entities), dim=-1))
-
-#         # Self attention across entities
-#         embeddings = torch.concat((self_embed, node_embeds), dim=-2)
-#         attentions = self.residual_self_attention(embeddings)
-#         attentions_pool = attentions.mean(dim=-2)  # Average across entities
-#         embedding = torch.concat((self_embed.squeeze(-2), attentions_pool), dim=-1)  # Concatenate self embedding to pooled embedding (pg. 24)
-
-#         # Decision
-#         # TODO (Minor): Should layer norm be added here and for feature embedding? Probably not.
-#         actions = self.decider(embedding)
-#         if self.final_activation is not None: actions = self.final_activation(actions)
-
-#         return actions
-    
-
-# class EntitySelfAttentionLite(EntityCalculation):
-#     def __init__(
-#         self,
-#         positional_dim,
-#         modal_dims,
-#         output_dim,
-#         feature_embed_dim=32,
-#         embed_dim=64,
-#         num_heads=4,
-#         activation=nn.ReLU(),
-#         final_activation=nn.Tanh(),
-#         num_blocks=1,
-#         num_mlps=1,
-#         critic=False,
-#         **kwargs,
-#     ):
-#         super().__init__(output_dim, **kwargs)
-
-#         # Base information
-#         self.positional_dim = positional_dim
-#         self.modal_dims = modal_dims
-#         self.output_dim = output_dim
-#         self.feature_embed_dim = feature_embed_dim
-#         self.embed_dim = embed_dim
-#         self.num_heads = num_heads
-#         self.activation = activation
-#         self.final_activation = final_activation
-#         self.num_mlps = num_mlps
-#         self.critic = critic
-
-#         # Feature embedding
-#         self.feature_embed = nn.ModuleList([
-#             nn.Sequential(
-#                 nn.Linear(self.modal_dims[i], self.feature_embed_dim),
-#                 self.activation,
-#                 nn.Linear(self.feature_embed_dim, self.feature_embed_dim),
-#                 nn.LayerNorm(self.feature_embed_dim))
-#             for i in range(len(self.modal_dims))])
-
-#         # Embedding
-#         solo_features_len = self.feature_embed_dim * len(self.modal_dims) + self.positional_dim
-#         self.q_embed = nn.Sequential(
-#             nn.Linear(solo_features_len, self.embed_dim),
-#             self.activation,
-#             nn.Linear(self.embed_dim, self.embed_dim),
-#             nn.LayerNorm(self.embed_dim))
-#         self.kv_embed = nn.Sequential(
-#             nn.Linear(solo_features_len, self.embed_dim),
-#             self.activation,
-#             nn.Linear(self.embed_dim, self.embed_dim),
-#             nn.LayerNorm(self.embed_dim))
-
-#         # Self attention
-#         self.residual_attention_blocks = nn.ModuleList([
-#             ResidualAttention(self.embed_dim, self.num_heads, activation=self.activation, num_mlps=self.num_mlps) for _ in range(num_blocks)])
-
-#         # Decision
-#         self.decider = nn.Sequential(
-#             nn.Linear(self.embed_dim, self.embed_dim),
-#             self.activation,
-#             nn.Linear(self.embed_dim, self.output_dim))
-
-#     ### Calculation functions
-#     def embed_features(self, entities):
-#         running_idx = self.positional_dim
-#         ret = [entities[..., :running_idx]]
-#         for ms, fe in zip(
-#             self.modal_dims,
-#             self.feature_embed):
-#             # Record embedded features
-#             # Maybe pre-ln if we don't care about magnitude
-#             val = fe(entities[..., running_idx:(running_idx + ms)])
-#             val = self.activation(val)
-
-#             # Record
-#             ret.append(val)
-#             running_idx += ms # Increment start idx
-
-#         # Check shape
-#         assert running_idx == entities.shape[-1]
-
-#         # Construct full matrix
-#         ret = torch.concat(ret, dim=-1)
-
-#         return ret
-    
-#     def calculate_actions(self, state):
-#         # return torch.zeros((200, 3), device=self.action_std.device)
-
-#         # Formatting
-#         entities, = state
-
-#         # Feature embedding (could be done with less redundancy)
-#         entities = self.embed_features(entities)
-
-#         # Self embedding
-#         query = self.q_embed(entities).unsqueeze(0)
-#         key_value = self.kv_embed(entities).unsqueeze(0)
-
-#         # Self attention across entities
-#         for block in self.residual_attention_blocks:
-#             query = block(query, key_value)
-#         # attentions_pool = attentions.mean(dim=-2)  # Average across entities
-#         # embedding = torch.concat((self_embed.squeeze(0), attentions.squeeze(0)), dim=-1)  # Concatenate self embedding to pooled embedding (pg. 24)
-
-#         # Decision
-#         # TODO (Minor): Should layer norm be added here and for feature embedding? Probably not.
-#         actions = self.decider(query.squeeze(0))
-#         if self.final_activation is not None: actions = self.final_activation(actions)
-
-#         return actions
-
 
 class MomentumStandardization(nn.Module):
-    def __init__(self, momentum=0, mean=0, std=1):  # .99997
+    def __init__(self, dim=(1,), beta=.5):  # .99997
         super().__init__()
 
-        self.momentum = momentum
-        self.mean = nn.Parameter(torch.tensor(float(mean)), requires_grad=False)
-        self.std = nn.Parameter(torch.tensor(float(std)), requires_grad=False)
+        self.beta = beta
+        self.mean = nn.Parameter(torch.zeros(dim), requires_grad=False)
+        self.square_mean = nn.Parameter(torch.ones(dim), requires_grad=False)
+        self.std = nn.Parameter(torch.ones(dim).sqrt(), requires_grad=False)
 
     def update(self, x):
         "First dimension must be batch"
-        samples = x.shape[0]
-        self.mean.data = self.momentum**samples * self.mean + (1 - self.momentum**samples) * x.mean(keepdim=True, dim=0)
-        self.std.data = self.momentum**samples * self.std + (1 - self.momentum**samples) * x.std(keepdim=True, dim=0)  # Not technically correct
+        # https://github.com/opendilab/PPOxFamily/blob/main/chapter4_reward/popart.py#L93
+        batch_mean = (1 - self.beta) * self.mean + self.beta * x.mean(keepdim=True, dim=0)
+        batch_square_mean = (1 - self.beta) * self.std + self.beta * x.square().mean(keepdim=True, dim=0)
+        batch_std = (batch_square_mean - batch_mean.square()).sqrt()
+        batch_mean[batch_mean.isnan()] = self.mean[batch_mean.isnan()]
+        batch_square_mean[batch_square_mean.isnan()] = self.square_mean[batch_square_mean.isnan()]
+        batch_std[batch_std.isnan()] = self.std[batch_std.isnan()]
+        batch_std = batch_std.clamp(1e-4, 1e6)
+        self.mean.data = batch_mean
+        self.square_mean.data = batch_square_mean
+        self.std.data = batch_std
 
     def apply(self, x, mean=True, std=True):
         if mean: x = x - self.mean
@@ -963,23 +651,23 @@ class PPO(nn.Module):
             kl_beta_increment=(.5, 2),
             kl_target=.03,
             kl_early_stop=False,
-            grad_clip=torch.inf,
+            grad_clip=.5,
             # Optimizers
             log_std_lr=3e-4,
             actor_lr=3e-4,
-            critic_lr=3e-5,  # Not really needed
-            weight_decay=0.,
+            critic_lr=3e-4,  # Not really needed
+            weight_decay=1e-3,
             betas=(.9, .999),  # (.997, .997),
             # lr_iters=200,
-            lr_gamma=.97,
+            lr_gamma=1,
             # Backward
-            update_iterations=10,  # 10*int(32*4*200/(64*200)), MIGHT WANT TO CHANGE, CHANGED FROM 80
+            update_iterations=5,  # 10*int(32*4*200/(64*200)), MIGHT WANT TO CHANGE, CHANGED FROM 80
             sync_iterations=1,
             pool_size=None,
-            epoch_size=8*2_000,
-            batch_size=2_000,
+            epoch_size=100_000,
+            batch_size=100_000,
             minibatch_size=None,
-            load_level='minibatch',
+            load_level='minibatch',  # TODO: Allow for loading at batch
             cast_level='minibatch',
             **kwargs,
     ):
@@ -1052,6 +740,7 @@ class PPO(nn.Module):
 
         # Non-grad params
         self.policy_iteration = nn.Parameter(torch.tensor(0.), requires_grad=False)
+        self.reward_standardization = MomentumStandardization()
         self.return_standardization = MomentumStandardization()
 
         # Initialize
@@ -1082,9 +771,6 @@ class PPO(nn.Module):
 
     def get_log_std(self):
         return self.actor_critic.log_std.detach().item()
-
-    def get_advantage_std(self):
-        return self.return_standardization.std.mean().item()
 
     def get_policy_iteration(self):
         return int(self.policy_iteration.item())
@@ -1184,7 +870,7 @@ class PPO(nn.Module):
                         for i, feat_tensors in enumerate(feature_embeds_sub)]
 
         # Unstandardize state_val
-        state_val = self.return_standardization.remove(state_val, mean=False)
+        # state_val = self.return_standardization.remove(state_val, mean=False)
         
         # Record
         # NOTE: `reward` and `is_terminal` are added outside of the class, calculated
@@ -1201,8 +887,10 @@ class PPO(nn.Module):
                 memory.record_buffer(
                     terminal_states=compressed_state,
                     terminal_state_vals=state_val)
-        ret = action,
+        ret = ()
+        if not terminal: ret += action,
         if return_feature_embeds: ret += feature_embeds,
+        # print(action)
         return _utility.general.clean_return(ret)
     
     def frozen_update(self, *args, **kwargs):
@@ -1230,7 +918,7 @@ class PPO(nn.Module):
         self,
         memory,
         update_iterations=None,
-        standardize_returns=False,
+        # standardize_returns=False,  # Generally explodes with GAE
         verbose=False,
         # Collective args
         sync_iterations=None,
@@ -1252,19 +940,19 @@ class PPO(nn.Module):
         assert cast_level >= load_level, 'Cannot cast without first loading'
 
         # Determine level sizes
+        denominator = self.get_world_size('learners') if sync_iterations == 1 else 1  # Adjust sizes if gradients synchronized across GPUs
         memory_size = len(memory)
         pool_size = self.pool_size
-        if pool_size is not None: pool_size = int(min(pool_size, memory_size))
+        if pool_size is not None: pool_size = min(pool_size, memory_size)
         epoch_size = self.epoch_size if not (self.epoch_size is None and pool_size is not None) else pool_size
         if epoch_size is not None and pool_size is not None: epoch_size = int(min(epoch_size, pool_size))
+        epoch_size = np.ceil(epoch_size / denominator).astype(int)
         batch_size = self.batch_size if not (self.batch_size is None and epoch_size is not None) else epoch_size
         if batch_size is not None and epoch_size is not None: batch_size = int(min(batch_size, epoch_size))
+        batch_size = np.ceil(batch_size / denominator).astype(int)
         minibatch_size = self.minibatch_size if not (self.minibatch_size is None and batch_size is not None) else batch_size
         if minibatch_size is not None and batch_size is not None: minibatch_size = int(min(minibatch_size, batch_size))
-        if sync_iterations == 1:
-            # Adjust batch size if gradients are synchronized
-            if batch_size is not None: batch_size = np.ceil(batch_size / self.get_world_size('learners')).astype(int)
-            else: minibatch_size = np.ceil(minibatch_size / self.get_world_size('learners')).astype(int)
+        # print(f'{pool_size} - {epoch_size} - {batch_size} - {minibatch_size}')
 
         # Cap at max size to reduce redundancy for sequential samples
         # NOTE: Pool->epoch is the only non-sequential sample, and is thus not included here
@@ -1272,14 +960,15 @@ class PPO(nn.Module):
         # epoch_size = min(epoch_size, max_unique_memories)
 
         # Update moving return mean
-        if standardize_returns:
-            # TODO: Clean this up if it works
-            advantages = torch.concat([memory.storage['advantages'][i] for i in range(memory.get_steps()) if memory.storage['staleness'][i]==0]).to(self.policy_iteration.device)
-            state_vals = torch.concat([memory.storage['state_vals'][i] for i in range(memory.get_steps()) if memory.storage['staleness'][i]==0]).to(self.policy_iteration.device)
-            self.return_standardization.update(advantages - state_vals)
+        # if standardize_returns:
+        #     # TODO: Clean this up if it works
+        #     advantages = torch.concat([memory.storage['advantages'][i] for i in range(memory.get_steps()) if memory.storage['staleness'][i]==0]).to(self.policy_iteration.device)
+        #     state_vals = torch.concat([memory.storage['state_vals'][i] for i in range(memory.get_steps()) if memory.storage['staleness'][i]==0]).to(self.policy_iteration.device)
+        #     self.return_standardization.update(advantages - state_vals)
 
         # Load pool
         total_losses = defaultdict(lambda: [])
+        total_statistics = defaultdict(lambda: [])
         pool_data = _utility.processing.sample_and_cast(
             memory, None, None, pool_size,
             current_level=0, load_level=load_level, cast_level=cast_level,
@@ -1294,22 +983,24 @@ class PPO(nn.Module):
                 current_level=1, load_level=load_level, cast_level=cast_level,
                 device=self.policy_iteration.device, **kwargs)
             batches = np.ceil(epoch_size/batch_size).astype(int) if epoch_size is not None else 1
+            batch_returns = torch.zeros(0, device=self.policy_iteration.device)
             for batch_num in range(batches):
                 # Load batch
                 batch_losses = defaultdict(lambda: 0)
+                batch_statistics = defaultdict(lambda: 0)
                 batch_data = _utility.processing.sample_and_cast(
                     memory, epoch_data, epoch_size, batch_size,
                     current_level=2, load_level=load_level, cast_level=cast_level,
                     device=self.policy_iteration.device, sequential_num=batch_num,
-                    **kwargs)
+                    clip_sequential=False, **kwargs)
                 minibatches = np.ceil(batch_size/minibatch_size).astype(int) if batch_size is not None else 1
                 for minibatch_num in range(minibatches):
                     # Load minibatch
-                    minibatch_data = _utility.processing.sample_and_cast(
+                    minibatch_data, minibatch_actual_size = _utility.processing.sample_and_cast(
                         memory, batch_data, batch_size, minibatch_size,
                         current_level=3, load_level=load_level, cast_level=cast_level,
                         device=self.policy_iteration.device, sequential_num=minibatch_num,
-                        **kwargs)
+                        clip_sequential=True, **kwargs)
 
                     # Get subset data
                     states = minibatch_data['states']
@@ -1320,13 +1011,18 @@ class PPO(nn.Module):
                     # rewards = minibatch_data['propagated_rewards']
 
                     # Perform backward
-                    loss, loss_ppo, loss_critic, loss_entropy, loss_kl = self.backward(
+                    losses, statistics = self.calculate_losses(
                         states, actions, action_logs, state_vals, advantages=advantages, rewards=None)
+                    loss, loss_ppo, loss_critic, loss_entropy, loss_kl = losses
+                    exp_var, = statistics
 
                     # Scale and calculate gradient
-                    accumulation_frac = states[0].shape[0] / batch_size
+                    accumulation_frac = minibatch_actual_size / batch_size
                     loss = loss * accumulation_frac
                     loss.backward()  # Longest computation
+
+                    # Update moving return mean
+                    batch_returns = torch.cat((batch_returns, (advantages-state_vals).mean(keepdim=True, dim=-1) * accumulation_frac), dim=0)
 
                     # Scale and record
                     batch_losses['Total'] += loss.detach()
@@ -1334,9 +1030,19 @@ class PPO(nn.Module):
                     batch_losses['critic'] += loss_critic.detach().mean() * accumulation_frac
                     batch_losses['entropy'] += loss_entropy.detach().mean() * accumulation_frac
                     batch_losses['KL'] += loss_kl.detach().mean() * accumulation_frac
+                    # batch_statistics['Advantage Mean'] += self.return_standardization.mean.mean().item() * accumulation_frac
+                    # batch_statistics['Advantage STD'] += self.return_standardization.std.mean().item() * accumulation_frac
+                    batch_statistics['Advantage Mean'] += advantages.detach().mean().item() * accumulation_frac
+                    batch_statistics['Advantage STD'] += advantages.detach().std().item() * accumulation_frac
+                    batch_statistics['Log STD'] += self.get_log_std() * accumulation_frac
+                    batch_statistics['Explained Variance'] += exp_var.detach().item() * accumulation_frac
+
+                # Update moving return mean
+                # if standardize_returns: self.return_standardization.update(batch_returns)
                 
                 # Record
                 for k, v in batch_losses.items(): total_losses[k].append(v)
+                for k, v in batch_statistics.items(): total_statistics[k].append(v)
 
                 # Synchronize GPU policies and step
                 # NOTE: Synchronize gradients every batch if =1, else synchronize whole model
@@ -1364,6 +1070,7 @@ class PPO(nn.Module):
                         exp_limit = 32
                         if loss_kl_mean < self.kl_target / 1.5 and self.kl_beta > 2**-exp_limit: self.kl_beta.data *= self.kl_beta_increment[0]
                         elif loss_kl_mean > self.kl_target * 1.5 and self.kl_beta < 2**exp_limit: self.kl_beta.data *= self.kl_beta_increment[1]
+
                 # Escape and roll back if KLD too high
                 if self.kl_early_stop:
                     if loss_kl_mean > 1.5 * self.kl_target:
@@ -1387,8 +1094,8 @@ class PPO(nn.Module):
                 print(
                     f'Iteration {iterations:02} - '
                     + f' + '.join([f'{k} ({np.mean([v.item() for v in vl[-batches:]]):.5f})' for k, vl in total_losses.items()])
-                    + f' :: Log STD ({self.get_log_std():.5f})'
-                    + f' :: Advantage STD ({self.return_standardization.std.mean().item():.5f})')
+                    + f' :: '
+                    + f', '.join([f'{k} ({np.mean([v for v in vl[-batches:]]):.5f})' for k, vl in total_statistics.items()]))
 
             # Break
             if escape: break
@@ -1399,7 +1106,10 @@ class PPO(nn.Module):
         self.policy_iteration += 1
         self.copy_policy()
         # Return
-        return iterations, {k: np.mean([v.item() for v in vl]) for k, vl in total_losses.items()}
+        return (
+            iterations,
+            {k: np.mean([v.item() for v in vl]) for k, vl in total_losses.items()},
+            {k: np.mean([v for v in vl]) for k, vl in total_statistics.items()})
 
     def get_world_size(self, group='default'):
         try:
@@ -1431,7 +1141,7 @@ class PPO(nn.Module):
                     col.allreduce(w, group)
                     if not grad: w /= world_size
 
-    def backward(
+    def calculate_losses(
         self,
         states,
         actions,
@@ -1449,22 +1159,28 @@ class PPO(nn.Module):
         # Get normalized advantages
         advantages_mean, advantages_std = advantages.mean(), advantages.std() + 1e-8
         normalized_advantages = (advantages - advantages_mean) / advantages_std
+        # Clip advantages
+        normalized_advantages =  normalized_advantages.clamp(
+            normalized_advantages.quantile(.05), normalized_advantages.quantile(.95))
 
         # Get normalized returns/rewards (sensitive to minibatch)
-        # self.return_standardization.update(rewards)
         # NOTE: Action STD explosion/instability points to a normalization and/or critic fitting issue
         #       or, possibly, the returns are too homogeneous - i.e. the problem is solved
-        normalized_rewards = self.return_standardization.apply(rewards, mean=False)
+        # normalized_rewards = self.return_standardization.apply(rewards)  # , mean=False
 
         # Evaluate actions and states
         _, action_logs_new, dist_entropy, state_vals_new = self.actor_critic(*states, sample=True, action=actions, entropy=True, critic=True)
-        # _, action_logs_new, state_vals_new = self.actor_critic(states, sample=True, action=actions, entropy=False, critic=True)
         # dist_entropy = -action_logs_new  # Approximation
+
+        # Backward NAN warning from too-low action log probability
+        # action_logs_new = action_logs_new.clamp(-20, 0)
         
         # Calculate PPO loss
-        ratios = torch.exp(action_logs_new - action_logs)
+        log_ratios = action_logs_new - action_logs
+        # log_ratios = log_ratios.clamp(-20, 20)
+        ratios = log_ratios.exp()
         unclipped_ppo = ratios * normalized_advantages
-        clipped_ppo = torch.clamp(ratios, 1-self.epsilon_ppo, 1+self.epsilon_ppo) * normalized_advantages
+        clipped_ppo = ratios.clamp(1-self.epsilon_ppo, 1+self.epsilon_ppo) * normalized_advantages
         loss_ppo = -torch.min(unclipped_ppo, clipped_ppo)
 
         # Calculate KL divergence
@@ -1473,15 +1189,14 @@ class PPO(nn.Module):
         # loss_kl = F.kl_div(action_logs, action_logs_new, reduction='batchmean', log_target=True)
         # loss_kl = ((action_logs - action_logs_new)  # * action_logs.exp()).sum(-1)  # Approximation
         # Continuous (http://joschu.net/blog/kl-approx.html)
-        log_ratio = (action_logs_new - action_logs)
-        loss_kl = (log_ratio.exp() - 1) - log_ratio
+        loss_kl = (log_ratios.exp() - 1) - log_ratios
 
         # Calculate critic loss
         # unclipped_critic = (state_vals_new - normalized_rewards).square()
-        unclipped_critic = F.smooth_l1_loss(state_vals_new, normalized_rewards)
+        unclipped_critic = F.smooth_l1_loss(state_vals_new, rewards)
         clipped_state_vals_new = torch.clamp(state_vals_new, state_vals-self.epsilon_critic, state_vals+self.epsilon_critic)
         # clipped_critic = (clipped_state_vals_new - normalized_rewards).square()
-        clipped_critic = F.smooth_l1_loss(clipped_state_vals_new, normalized_rewards, reduction='none')
+        clipped_critic = F.smooth_l1_loss(clipped_state_vals_new, rewards, reduction='none')
         loss_critic = torch.max(unclipped_critic, clipped_critic)
         # if torch.rand(1) < .03:
         #     print(
@@ -1490,7 +1205,8 @@ class PPO(nn.Module):
         #         f' - {normalized_rewards.mean().detach().item():.3f}'
         #         f' - {normalized_rewards.std().detach().item():.3f}')
 
-        # TODO: Calculate critic KL from Normal
+        # Calculate explained variance
+        exp_var = (1-(rewards-state_vals_new).var() / rewards.var()).clamp(min=-1)
 
         # Calculate entropy bonus
         # NOTE: Not included in training grad if action_std is constant
@@ -1508,4 +1224,4 @@ class PPO(nn.Module):
             + self.kl_beta * loss_kl)
         loss = loss.mean()
 
-        return loss, loss_ppo, loss_critic, loss_entropy, loss_kl
+        return (loss, loss_ppo, loss_critic, loss_entropy, loss_kl), (exp_var,)

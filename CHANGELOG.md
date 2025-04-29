@@ -1,3 +1,38 @@
+### 1.0.0+2025.4.28
+- Add log probability clipping to avoid `nan` values during training
+- Add partial training case to logfile concatenation logic
+- Change environment reward scales
+- Remove strict cosine similarity from action determination to avoid `nan` values
+
+### 1.0.0+2025.4.27
+- Add timestep-based training (as opposed to episode-based) as in traditional PPO (5-6x speedup!)
+- Add train/val sampling from dataloader
+- Change memory hyperparameters
+- Fix various normalization quirks
+- Opimize preprocessing sampling for large datasets
+- Revise record concatenation strategy
+
+### 1.0.0+2025.4.26
+- Add advantage clipping
+- Implement and try PopArt
+- Synchronized moving standardization for rewards
+- Remove unused preprocessing code
+- Reorganize policy module
+
+### 1.0.0+2025.4.25
+- Add epsilon to cap distance and velocity rewards
+- Add explained variance
+- Add `norm` option to `euclidean_distance`
+- Better return sanitization for `PPO.forward`
+- Change environment hyperparameters
+- Cleanup
+- Figure changes
+- New output statistics for policy update
+- Normalize environment dist matrix and match initial distribution to velocity
+- Optimize policy hyperparameters and test with PCA
+- Relative logarithmic velocity penalty
+- Shorten environment default `max_timesteps` again
+
 ### 1.0.0+2025.4.24
 - Decorator
   - Added line-by-line profiling decorator
@@ -32,7 +67,7 @@
 - Policy
   - Action computation strategy using cosine similarity with learned embedding
   - Add propagated rewards compatibility, mainly for testing and validation purposes
-  - Add shared actor/critic model option with two heads and optional computation for each
+  - Add shared actor/critic model option with two heads and optional computation for each (2x faster and more reliable)
   - Allow regular (non-self) attention in `ResidualAttention` block
   - Better KL divergence estimation for continuous action space
   - Better checkpoint loading procedures
@@ -89,6 +124,7 @@
   - Begin implementing `Fastplotlib` for GPU-accelerated 3d visualization
   - Better runtime visualizations
 - Miscellaneous
+  - Benchmarking and manual tuning on numerous policies, reward schema, and architectures
   - Distance explanation and unused moving statistic class
   - Recompile requirements
   - Script revisions

@@ -20,7 +20,7 @@ class AdvancedMemoryBuffer:
         flush_on_record=True,
         # Propagate
         gae_lambda=.95,
-        gamma=.99,
+        gamma=.995,
         # Sampling
         replay_frac=0,
         max_samples_per_state=np.inf,
@@ -179,7 +179,7 @@ class AdvancedMemoryBuffer:
 
     def fast_sample(
         self, num_memories, replay_frac=None, max_samples_per_state=None,
-        uniform=None, shuffle=None, efficient=True, round_sample='up'):
+        uniform=None, shuffle=None, efficient=True, round_sample=None):
         # NOTE: Shuffle should only be used when sequential sampling is taking place
         # Parameters
         if replay_frac is None: replay_frac = self.replay_frac
@@ -328,8 +328,11 @@ class AdvancedMemoryBuffer:
 
         # Return
         return dict(ret)  # memory_indices
+    
+    def feed_new(self, moving_class, key='rewards'):
+        moving_class.update(torch.cat([t for t, stale in zip(self.storage[key], self.storage['staleness']) if stale==0]).to(moving_class.mean.device))
         
-    def compute_advantages(self, normalize_rewards=True, prune=None):
+    def compute_advantages(self, normalize_rewards=False, moving_standardization=None, prune=None):
         # NOTE: Assumes keys stay the same throughout any single eposide, can be adjusted, however
         # Default values
         if prune is None: prune = self.prune
@@ -360,6 +363,7 @@ class AdvancedMemoryBuffer:
                 if normalize_rewards:
                     # rewards = (rewards - rewards_mean) / rewards_std + 1e-8
                     rewards = (rewards - rewards_min) / (rewards_max - rewards_min + 1e-8)
+                if moving_standardization: rewards = moving_standardization.apply(rewards.to(moving_standardization.mean.device)).to(self.device)
                 deltas = rewards + self.gamma * next_state_vals - state_vals  # TODO: Examine
                 next_advantages = deltas + self.gamma * self.gae_lambda * next_advantages
                 # Record

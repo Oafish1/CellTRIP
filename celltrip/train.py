@@ -18,6 +18,7 @@ from . import utility as _utility
 # @_decorator.profile
 def simulate_until_completion(
     env, policy, memory=None, keys=None,
+    max_timesteps=np.inf, max_memories=np.inf, reset_on_finish=False,
     cache_feature_embeds=True, store_states=False, flush=True,
     dummy=False, verbose=False):
     # NOTE: Does not flush buffer
@@ -28,10 +29,10 @@ def simulate_until_completion(
     if store_states: state_storage = [env.get_state()]
 
     # Simulation
-    ep_timestep = 0; ep_reward = 0; ep_itemized_reward = defaultdict(lambda: 0); finished = False
+    ep_timestep = 0; ep_memories = 0; ep_reward = 0; ep_itemized_reward = defaultdict(lambda: 0); finished = False
     feature_embeds = None
     with torch.inference_mode():
-        while not finished:
+        while True:
             # Get current state
             state = env.get_state(include_modalities=True)
 
@@ -47,34 +48,44 @@ def simulate_until_completion(
             # Store states
             if store_states: state_storage.append(env.get_state())
 
-            # Record rewards
-            if memory is not None: memory.record_buffer(rewards=rewards, is_terminals=finished)
-
             # Tracking
             ts_reward = rewards.cpu().mean()
             ep_reward = ep_reward + ts_reward
             for k, v in itemized_rewards.items():
                 ep_itemized_reward[k] += v.cpu().mean()
             ep_timestep += 1
+            ep_memories += env.num_nodes
+
+            # Record rewards
+            continue_condition = ep_timestep < max_timesteps
+            if memory is not None: continue_condition *= ep_memories < max_memories
+            if memory is not None: memory.record_buffer(rewards=rewards, is_terminals=finished or not continue_condition)
 
             # Dummy return for testing
-            if dummy:
-                if not finished:
-                    # Fill all but first and last
-                    ep_timestep = env.max_timesteps
-                    memory.flush_buffer()
-                    for _ in range(ep_timestep-2):
-                        if memory is not None: memory.append_memory({k: v[-1:] for k, v in memory.storage.items()})
-                        if store_states: state_storage.append(env.get_state)
-                    memory.storage['is_terminals'][-1] = True
+            # if dummy:
+            #     if not finished:
+            #         # Fill all but first and last
+            #         ep_timestep = env.max_timesteps
+            #         memory.flush_buffer()
+            #         for _ in range(ep_timestep-2):
+            #             if memory is not None: memory.append_memory({k: v[-1:] for k, v in memory.storage.items()})
+            #             if store_states: state_storage.append(env.get_state)
+            #         memory.storage['is_terminals'][-1] = True
         
             # CLI
             if verbose and ((ep_timestep % 200 == 0) or ep_timestep in (100,) or finished):
                 print(f'Timestep {ep_timestep:>4} - Reward {ts_reward:.3f}')
         
-        # Record terminals
-        state = env.get_state(include_modalities=True)
-        policy(state, keys=keys, memory=memory, terminal=True, feature_embeds=feature_embeds)
+            # Record terminals and reset if needed
+            if finished or not continue_condition:
+                state = env.get_state(include_modalities=True)
+                policy(state, keys=keys, memory=memory, terminal=True, feature_embeds=feature_embeds)
+            # Reset if needed
+            if finished:
+                if reset_on_finish: env.reset()
+                else: break
+            # Escape
+            if not continue_condition: break
 
     # Flush
     if flush and memory: memory.flush_buffer()
@@ -83,7 +94,7 @@ def simulate_until_completion(
     denominator = 1  # env.max_timesteps if env.max_timesteps is not None else ep_timestep
     ep_reward = (ep_reward / denominator).item()  # Standard mean
     ep_itemized_reward = {k: (v / denominator).item() for k, v in ep_itemized_reward.items()}
-    ret = (ep_timestep, ep_reward, ep_itemized_reward)
+    ret = (ep_timestep, ep_memories, ep_reward, ep_itemized_reward)
     if store_states:
         state_storage = torch.stack(state_storage)
         ret += (state_storage,)
@@ -190,40 +201,46 @@ class Worker:
 
     @_decorator.metrics(append_to_dict=True)
     # @_decorator.profile(time_annotation=True)
-    def rollout(self, **kwargs):
+    def rollout(self, num_new=None, condition='memories', **kwargs):
+        # Arguments
+        max_kwargs = {}
+        if condition == 'steps': max_kwargs['max_timesteps'] = num_new
+        elif condition == 'memories': max_kwargs['max_memories'] = num_new
+
         # Perform rollout
         result = simulate_until_completion(
-            self.env, self.policy, self.memory, **kwargs)
-        env_nodes = self.env.num_nodes
+            self.env, self.policy, self.memory,
+            reset_on_finish=(num_new is not None), **max_kwargs,
+            **kwargs)
         
         # Reset and clean
-        self.env.reset()
+        # self.env.reset()
         self.memory.cleanup()
 
         # Record
-        timestep, reward, itemized_reward = result
+        timestep, memories, reward, itemized_reward = result
         ret = {
             'Timestamp': str(datetime.now()),
             'Event Type': 'Rollout',
             'Policy Iteration': self.policy.get_policy_iteration(),
             'Rank': self.rank,
             'Timesteps': timestep,
-            'Memories': timestep*env_nodes,
+            'Memories': memories,
             'Reward': reward,
             'Itemized Reward': itemized_reward}
         return ret
 
-    def rollout_until_new(self, num_new, condition='steps', **kwargs):
-        # Parameters
-        if condition == 'memories': measure = self.memory.get_new_len
-        elif condition == 'steps': measure = self.memory.get_new_steps
-        else: raise ValueError(f'Condition `{condition}` not found.')
+    # def rollout_until_new(self, num_new, condition='steps', **kwargs):
+    #     # Parameters
+    #     if condition == 'memories': measure = self.memory.get_new_len
+    #     elif condition == 'steps': measure = self.memory.get_new_steps
+    #     else: raise ValueError(f'Condition `{condition}` not found.')
 
-        # Compute rollouts
-        ret = []
-        while measure() < num_new:
-            ret.append(self.rollout(**kwargs))
-        return ret
+    #     # Compute rollouts
+    #     ret = []
+    #     while measure() < num_new:
+    #         ret.append(self.rollout(**kwargs))
+    #     return ret
     
     @_decorator.metrics(append_to_dict=True)
     # @_decorator.line_profile(signatures=[
@@ -232,11 +249,20 @@ class Worker:
     #     _utility.processing.split_state])
     # @_decorator.profile(time_annotation=True)
     def update(self, **kwargs):
-        # Perform update
+        # Flush buffer
         self.memory.flush_buffer()
+
+        # Synchronize reward normalization
+        self.memory.feed_new(self.policy.reward_standardization)
+        self.policy.synchronize('learners')
+
+        # Compute GAE
         # self.memory.recompute_state_vals(self.policy)  # Technically better when replay used, but takes a ton of time
-        self.memory.compute_advantages()
-        iterations, losses = self.policy.update(self.memory, **kwargs)
+        self.memory.compute_advantages(moving_standardization=self.policy.reward_standardization)
+
+        # Perform update
+        with torch.autograd.detect_anomaly():
+            iterations, losses, statistics = self.policy.update(self.memory, **kwargs)
 
         # Annotate and clean
         num_new_memories = self.memory.get_new_len()
@@ -254,8 +280,7 @@ class Worker:
             'Total Memories': len(self.memory),
             'Iterations': iterations,
             'Losses': losses,
-            'Log STD': self.policy.get_log_std(),
-            'Advantage STD': self.policy.get_advantage_std()}
+            'Statistics': statistics}
         return ret
     
     def set_flags(self, **new_flag_values):
@@ -409,8 +434,8 @@ def train_celltrip(
     num_runners,
     learners_can_be_runners=True,
     sync_across_nodes=True,
-    max_updates=200,
-    steps=int(5e3),
+    max_timesteps=2_000_000_000,
+    update_timesteps=100_000,
     delayed_rollout_flush=True,
     flush_iterations=None,
     checkpoint_iterations=50,
@@ -510,18 +535,23 @@ def train_celltrip(
     # Run policy updates
     # TODO: Maybe add/try async updates
     checkpoint_future = None
-    for current_iteration in range(max_updates):
+    for current_iteration in range(max_timesteps//update_timesteps):
         # Rollouts
         rewards = []
-        if current_iteration==0:
-            new_records = ray.get([w.rollout.remote(**rollout_kwargs, return_metrics=True) for w in runners])
-            rewards += [record['Reward'] for record in new_records if record['Event Type'] == 'Rollout']
-            record_buffer.record.remote(*new_records)
-        new_records = sum(ray.get([
-            w.rollout_until_new.remote(num_new=steps/num_workers, flush=not delayed_rollout_flush, **rollout_kwargs) for w in runners]), [])
+        new_records = ray.get([
+            w.rollout.remote(num_new=update_timesteps/num_workers, flush=not delayed_rollout_flush, **rollout_kwargs, return_metrics=current_iteration==0) for w in runners])
         rewards += [record['Reward'] for record in new_records if record['Event Type'] == 'Rollout']
         record_buffer.record.remote(*new_records)
         mean_rollout_reward = np.mean(rewards)
+        # if current_iteration==0:
+        #     new_records = ray.get([w.rollout.remote(**rollout_kwargs, return_metrics=True) for w in runners])
+        #     rewards += [record['Reward'] for record in new_records if record['Event Type'] == 'Rollout']
+        #     record_buffer.record.remote(*new_records)
+        # new_records = sum(ray.get([
+        #     w.rollout_until_new.remote(num_new=steps/num_workers, flush=not delayed_rollout_flush, **rollout_kwargs) for w in runners]), [])
+        # rewards += [record['Reward'] for record in new_records if record['Event Type'] == 'Rollout']
+        # record_buffer.record.remote(*new_records)
+        # mean_rollout_reward = np.mean(rewards)
 
         # Share memories
         if num_exclusive_runners > 0 or (sync_across_nodes and num_learners > 1):  # Not dummy-proof if someone strands a runner
@@ -571,8 +601,8 @@ def train_celltrip(
 
             # Escape if no more stages
             # TODO: Maybe do this based on action_std or KL (or both)
-            if len(stage_functions) == curr_stage:
-                continue
+            if len(stage_functions) == curr_stage: continue
+                # print(current_iteration)
                 # break # Escape
 
             # Advance stage

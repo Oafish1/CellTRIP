@@ -4671,7 +4671,7 @@ PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_8celltrip_7utility_7general_10rolled_index, "\n    Recursive function to return result of indexing into multiple lists as if they were\n    sub-arrays\n\n    Example:\n    for i in range(3 * 2 * 4):\n    print(rolled_index([[1, 2, 3], [4, 5], [6, 7, 8, 9]], i))\n\n    > [1, 4, 6]\n    > [1, 4, 7]\n    > ...\n    > [3, 5, 9]\n    ");
+PyDoc_STRVAR(__pyx_doc_8celltrip_7utility_7general_10rolled_index, "\n    Recursive function to return result of indexing into multiple lists as if they were\n    sub-arrays\n\n    Example:\n    for i in range(3 * 2 * 4):\n        print(rolled_index([[1, 2, 3], [4, 5], [6, 7, 8, 9]], i))\n\n    > [1, 4, 6]\n    > [1, 4, 7]\n    > ...\n    > [3, 5, 9]\n    ");
 static PyMethodDef __pyx_mdef_8celltrip_7utility_7general_11rolled_index = {"rolled_index", (PyCFunction)(void*)(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_8celltrip_7utility_7general_11rolled_index, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_8celltrip_7utility_7general_10rolled_index};
 static PyObject *__pyx_pw_8celltrip_7utility_7general_11rolled_index(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL

@@ -232,18 +232,21 @@ class Preprocessing:
         modalities=None,
         adata_obs=None,
         partition_cols=None,
+        mask=None,
         return_partition=False,
         **kwargs,
     ):
         # Defaults
         assert not np.array([v is None for v in (modalities, adata_obs)]).all(), (
-            'At least of `modalities` or `adata_obs` must be provided')
+            'At least one of `modalities` or `adata_obs` must be provided')
         if adata_obs is None:
             assert np.array([m.shape[0] == modalities[0].shape[0] for m in modalities]).all(), (
                 'No `adata_obs` provided but datasets are not aligned')
         modal_sizes = (
             [m.shape[0] for m in modalities] if modalities is not None else
             [adata_ob.shape[0] for adata_ob in adata_obs])
+        if mask is not None: sample_mask = np.array(mask)
+        else: sample_mask = None
             
         # Align datasets
         # TODO: Add as auxiliary function
@@ -261,17 +264,28 @@ class Preprocessing:
         #     if modalities is not None:
         #         modalities = [m[s] for m, s in zip(modalities, series)]
         #     adata_obs = [adata_ob.iloc[s] for adata_ob, s in zip(adata_obs, series)]
+
+        # Apply mask
+        if sample_mask is not None:
+            if modalities is not None:
+                modalities = [m[sample_mask] for m in modalities]
+            if adata_obs is not None:
+                adata_obs = [adata_ob[sample_mask] for adata_ob in adata_obs]
         
         # Partition
         selected_partition = None
         if partition_cols is not None:
             if adata_obs is None: raise AttributeError('Cannot compute partitions without `adata_obs`.')
-            unique_partition_vals = [np.unique([adata_ob[col].unique() for adata_ob in adata_obs]) for col in partition_cols]
+            # unique_partition_vals = [np.unique([adata_ob[col].unique() for adata_ob in adata_obs]) for col in partition_cols]
+            adata_ob = adata_obs[0]  # Just use first modality to determine, TODO: will need to revise for data with unmatched partitions
+            unique_partition_vals = (
+                adata_ob.drop_duplicates(partition_cols)[partition_cols]
+                .apply(lambda r: tuple(r[col] for col in r.index), axis=1).to_numpy())
             # Continually sample until non-zero combination is found
-            # TODO: Maybe revise?
             while True:
-                selected_partition = _utility.general.rolled_index(
-                unique_partition_vals, np.random.choice(np.prod(list(map(len, unique_partition_vals)))))
+                # selected_partition = _utility.general.rolled_index(
+                #     unique_partition_vals, np.random.choice(np.prod(list(map(len, unique_partition_vals)))))
+                selected_partition = np.random.choice(unique_partition_vals)
                 masks = [
                     np.prod([
                         adata_ob[col] == val
@@ -408,6 +422,7 @@ class PreprocessFromAnnData:
         *adatas,
         memory_efficient='auto',  # Also works on in-memory datasets
         partition_cols=None,
+        mask=None,  # List or int indicating pct of keepable samples
         fit_sample='auto',
         seed=None,
         **kwargs
@@ -416,10 +431,16 @@ class PreprocessFromAnnData:
         self.preprocessing = Preprocessing(**kwargs, seed=seed)
         self.seed = seed
 
+        # RNG
+        self.rng = np.random.default_rng(self.seed)
+
         # Parameters
         if partition_cols is not None and not _utility.general.is_list_like(partition_cols):
             partition_cols = [partition_cols]
         self.partition_cols = partition_cols
+        if isinstance(mask, float):
+            self.mask = self.rng.random(adatas[0].shape[0]) < mask
+        else: self.mask = mask
         if memory_efficient == 'auto':
             # Only activate if on disk
             self.memory_efficient = np.array([
@@ -452,9 +473,8 @@ class PreprocessFromAnnData:
 
     def _fit_memory(self):
         if self.fit_sample:
-            rng = np.random.default_rng(self.seed)
             modalities = [
-                adata[rng.choice(adata.shape[0], self.fit_sample)].X
+                adata[self.rng.choice(adata.shape[0], self.fit_sample)].X
                 if adata.shape[0] > self.fit_sample else
                 adata.X
                 for adata in self.adatas]
@@ -463,7 +483,7 @@ class PreprocessFromAnnData:
         adata_obs = [adata.obs for adata in self.adatas]
 
         # Perform preprocessing
-        self.preprocessing.fit([adata.X for adata in self.adatas])
+        # self.preprocessing.fit([adata.X for adata in self.adatas])
         self.processed_adata_obs = adata_obs
         self.processed_modalities, self.processed_adata_vars = self.preprocessing.fit_transform(
             modalities, adata_vars=adata_vars, force_filter=True)
@@ -475,6 +495,7 @@ class PreprocessFromAnnData:
             self.processed_modalities,
             adata_obs=self.processed_adata_obs,
             partition_cols=self.partition_cols,
+            mask=self.mask,
             return_partition=return_partition)
         if return_partition: sampled_adata_obs, partition = sampled_adata_obs
         
@@ -485,7 +506,7 @@ class PreprocessFromAnnData:
     def _fit_disk(self):
         if self.fit_sample:
             modalities = [
-                adata[np.random.choice(adata.shape[0], self.fit_sample)].X
+                adata[self.rng.choice(adata.shape[0], self.fit_sample)].X
                 if adata.shape[0] > self.fit_sample else
                 adata[:].X[:]
                 for adata in self.adatas]
@@ -503,6 +524,7 @@ class PreprocessFromAnnData:
         sampled_adata_obs = self.preprocessing.subsample(
             adata_obs=adata_obs,
             partition_cols=self.partition_cols,
+            mask=self.mask,
             return_partition=return_partition)
         if return_partition: sampled_adata_obs, partition = sampled_adata_obs
         sampled_modalities = [adata[adata_ob.index.to_numpy()].X for adata, adata_ob in zip(self.adatas, sampled_adata_obs)]
@@ -687,16 +709,18 @@ def dict_map_recursive_tensor_idx_to(dict, idx, device):
 def sample_and_cast(
     memory, larger_data, larger_size, smaller_size,
     *, current_level, load_level, cast_level,
-    device, sequential_num=None, **kwargs):
+    device, sequential_num=None, clip_sequential=False,
+    **kwargs):
     """
     Sample and/or cast based on load level and cast level
     NOTE: Ignores sequential num if random sampling
     """
     smaller_data = None
-    if larger_size is not None and larger_data is not None:
+    if larger_size is not None:  #  and larger_data is not None
         if sequential_num is not None:
             min_idx = sequential_num * smaller_size
-            max_idx = (sequential_num+1)*smaller_size
+            max_idx = min(larger_size-1, (sequential_num+1)*smaller_size)
+            if clip_sequential: smaller_size = max_idx - min_idx + 1
             # smaller_idx = np.arange(min_idx, min(max_idx, larger_size))
             smaller_idx = slice(min_idx, max_idx)
         else: smaller_idx = np.random.choice(larger_size, smaller_size, replace=False)
@@ -707,4 +731,6 @@ def sample_and_cast(
     if cast_level == current_level:
         smaller_data = _utility.processing.dict_map_recursive_tensor_idx_to(smaller_data, None, device)
 
-    return smaller_data
+    ret = smaller_data,
+    if clip_sequential: ret += smaller_size,
+    return _utility.general.clean_return(ret)

@@ -62,7 +62,7 @@ def rolled_index(arrays, idx):
 
     Example:
     for i in range(3 * 2 * 4):
-    print(rolled_index([[1, 2, 3], [4, 5], [6, 7, 8, 9]], i))
+        print(rolled_index([[1, 2, 3], [4, 5], [6, 7, 8, 9]], i))
 
     > [1, 4, 6]
     > [1, 4, 7]
