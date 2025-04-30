@@ -330,11 +330,14 @@ class AdvancedMemoryBuffer:
         return dict(ret)  # memory_indices
     
     def feed_new(self, moving_class, key='rewards'):
+        # NOTE: Should update AFTER computing advantages, as otherwise rewards and state vals are not on the same policy (Maybe?)
         moving_class.update(torch.cat([t for t, stale in zip(self.storage[key], self.storage['staleness']) if stale==0]).to(moving_class.mean.device))
         
-    def compute_advantages(self, normalize_rewards=False, moving_standardization=None, prune=None):
+    def compute_advantages(self, gamma=None, gae_lambda=None, prune=None, normalize_rewards=False, moving_standardization=None):
         # NOTE: Assumes keys stay the same throughout any single eposide, can be adjusted, however
         # Default values
+        if gamma is None: gamma = self.gamma
+        if gae_lambda is None: gae_lambda = self.gae_lambda
         if prune is None: prune = self.prune
 
         # Normalize
@@ -358,14 +361,12 @@ class AdvancedMemoryBuffer:
                 # Reset values and advantages if terminal
                 if is_terminal:
                     next_advantages = 0
-                    next_state_vals = terminal_state_vals  # 0
+                    next_state_vals = terminal_state_vals  # 0 for terminal not truncated
                 # Compute advantage
-                if normalize_rewards:
-                    # rewards = (rewards - rewards_mean) / rewards_std + 1e-8
-                    rewards = (rewards - rewards_min) / (rewards_max - rewards_min + 1e-8)
-                if moving_standardization: rewards = moving_standardization.apply(rewards.to(moving_standardization.mean.device)).to(self.device)
-                deltas = rewards + self.gamma * next_state_vals - state_vals  # TODO: Examine
-                next_advantages = deltas + self.gamma * self.gae_lambda * next_advantages
+                if normalize_rewards: rewards = (rewards - rewards_min) / (rewards_max - rewards_min + 1e-8)
+                if moving_standardization is not None: rewards = moving_standardization.apply(rewards.to(moving_standardization.mean.device)).to(self.device)
+                deltas = rewards + gamma * next_state_vals - state_vals
+                next_advantages = deltas + gamma * gae_lambda * next_advantages
                 # Record
                 next_state_vals = state_vals
                 self.storage['advantages'][i] = next_advantages.clone()
@@ -375,7 +376,7 @@ class AdvancedMemoryBuffer:
                 if is_terminal:
                     next_rewards = 0
                     if prune is not None: step_num = 0
-                next_rewards = rewards + self.gamma * next_rewards
+                next_rewards = rewards + gamma * next_rewards
                 self.storage['propagated_rewards'][i] = next_rewards
                 # Pruning (only if it's truncated not terminated! store the reason)
                 # TODO: Try finite horizon GAE (will still need to prune)

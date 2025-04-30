@@ -590,28 +590,84 @@ class EntitySelfAttentionLite(nn.Module):
         return ret
 
 
-class MomentumStandardization(nn.Module):
-    def __init__(self, dim=(1,), beta=.5):  # .99997
+class ArtStandardization(nn.Module):
+    "Adaptively Rescaling Targets"
+    def __init__(self, dim=(), beta=3e-4, use_mean=True, use_std=True):
         super().__init__()
 
         self.beta = beta
-        self.mean = nn.Parameter(torch.zeros(dim), requires_grad=False)
-        self.square_mean = nn.Parameter(torch.ones(dim), requires_grad=False)
-        self.std = nn.Parameter(torch.ones(dim).sqrt(), requires_grad=False)
+        self.use_mean = use_mean
+        self.use_std = use_std
+        # TODO: Change to buffers
+        self.mean = nn.Parameter(torch.zeros((1, *dim)), requires_grad=False)  # Should probably make this a buffer
+        self.square_mean = nn.Parameter(torch.ones((1, *dim)), requires_grad=False)
+        self.std = nn.Parameter(torch.ones((1, *dim)).sqrt(), requires_grad=False)
 
     def update(self, x):
         "First dimension must be batch"
         # https://github.com/opendilab/PPOxFamily/blob/main/chapter4_reward/popart.py#L93
-        batch_mean = (1 - self.beta) * self.mean + self.beta * x.mean(keepdim=True, dim=0)
-        batch_square_mean = (1 - self.beta) * self.std + self.beta * x.square().mean(keepdim=True, dim=0)
+        # NOTE: It might be better to use another variance approximation method, but this one
+        # is the easiest - https://www.johndcook.com/blog/2008/09/26/comparing-three-methods-of-computing-standard-deviation/
+        # Update params
+        batch_mean = (1-self.beta) * self.mean + self.beta * x.mean(keepdim=True, dim=0)
+        batch_square_mean = (1-self.beta) * self.square_mean + self.beta * x.square().mean(keepdim=True, dim=0)
         batch_std = (batch_square_mean - batch_mean.square()).sqrt()
+
+        # Handle NANs
         batch_mean[batch_mean.isnan()] = self.mean[batch_mean.isnan()]
         batch_square_mean[batch_square_mean.isnan()] = self.square_mean[batch_square_mean.isnan()]
         batch_std[batch_std.isnan()] = self.std[batch_std.isnan()]
+        # batch_std = batch_std.nan_to_num(0.)
         batch_std = batch_std.clamp(1e-4, 1e6)
+
+        # Update layers
         self.mean.data = batch_mean
         self.square_mean.data = batch_square_mean
         self.std.data = batch_std
+
+    def apply(self, x):
+        if self.use_mean: x = x - self.mean
+        if self.use_std: x = x / self.std
+        return x
+
+    def remove(self, x):
+        if self.use_std: x = x * self.std
+        if self.use_mean: x = x + self.mean
+        return x
+    
+
+class PopArtStandardization(ArtStandardization):
+    "https://arxiv.org/pdf/1809.04474"
+    def __init__(self, layer, **kwargs):
+        super().__init__(**kwargs)
+        self.layer = layer
+
+    def update(self, x):
+        # Perform update
+        prev_mean = self.mean.clone()
+        prev_std = self.std.clone()
+        super().update(x)
+
+        # POP - Preserving Outputs Precisely
+        self.layer.weight.data = self.layer.weight * prev_std.unsqueeze(-1) / self.std.unsqueeze(-1)
+        self.layer.bias.data = (self.layer.bias * prev_std + prev_mean - self.mean) / self.std
+
+
+class BufferStandardization(nn.Module):
+    def __init__(self, dim=(), buffer_size=1_000):
+        super().__init__()
+
+        self.buffer_size = buffer_size
+        self.buffer = nn.Parameter(torch.zeros((buffer_size, *dim)), requires_grad=False)
+        self.mean = nn.Parameter(torch.zeros(dim), requires_grad=False)
+        self.std = nn.Parameter(torch.ones(dim), requires_grad=False)
+
+    def update(self, x):
+        "First dimension must be batch"
+        self.buffer.data[:-x.shape[0]] = self.buffer[x.shape[0]:].clone()
+        self.buffer.data[-x.shape[0]:] = x
+        self.mean.data = self.buffer.mean(keepdim=True, dim=0)
+        self.std.data = self.buffer.std(keepdim=True, dim=0)
 
     def apply(self, x, mean=True, std=True):
         if mean: x = x - self.mean
@@ -656,12 +712,12 @@ class PPO(nn.Module):
             log_std_lr=3e-4,
             actor_lr=3e-4,
             critic_lr=3e-4,  # Not really needed
-            weight_decay=1e-3,
+            weight_decay=0,
             betas=(.9, .999),  # (.997, .997),
             # lr_iters=200,
             lr_gamma=1,
             # Backward
-            update_iterations=5,  # 10*int(32*4*200/(64*200)), MIGHT WANT TO CHANGE, CHANGED FROM 80
+            update_iterations=1,  # 10*int(32*4*200/(64*200)), MIGHT WANT TO CHANGE, CHANGED FROM 80
             sync_iterations=1,
             pool_size=None,
             epoch_size=100_000,
@@ -740,8 +796,19 @@ class PPO(nn.Module):
 
         # Non-grad params
         self.policy_iteration = nn.Parameter(torch.tensor(0.), requires_grad=False)
-        self.reward_standardization = MomentumStandardization()
-        self.return_standardization = MomentumStandardization()
+
+        # Moving Buffer
+        # buffer_size = epoch_size
+        # if buffer_size is None: buffer_size = batch_size
+        # if buffer_size is None: buffer_size = minibatch_size
+        # buffer_size *= 10  # 10 full samples
+        # self.reward_standardization = BufferStandardization(buffer_size=buffer_size)
+        # self.return_standardization = BufferStandardization(buffer_size=buffer_size)
+
+        # PopArt
+        self.reward_standardization = ArtStandardization(beta=.5)
+        self.return_standardization = PopArtStandardization(self.actor_critic.critic_decider[-1], beta=3e-4)
+        
 
         # Initialize
         orthogonal_init(self)
@@ -870,7 +937,7 @@ class PPO(nn.Module):
                         for i, feat_tensors in enumerate(feature_embeds_sub)]
 
         # Unstandardize state_val
-        # state_val = self.return_standardization.remove(state_val, mean=False)
+        state_val = self.return_standardization.remove(state_val)  # , mean=False
         
         # Record
         # NOTE: `reward` and `is_terminal` are added outside of the class, calculated
@@ -918,7 +985,7 @@ class PPO(nn.Module):
         self,
         memory,
         update_iterations=None,
-        # standardize_returns=False,  # Generally explodes with GAE
+        standardize_returns=True,
         verbose=False,
         # Collective args
         sync_iterations=None,
@@ -983,7 +1050,6 @@ class PPO(nn.Module):
                 current_level=1, load_level=load_level, cast_level=cast_level,
                 device=self.policy_iteration.device, **kwargs)
             batches = np.ceil(epoch_size/batch_size).astype(int) if epoch_size is not None else 1
-            batch_returns = torch.zeros(0, device=self.policy_iteration.device)
             for batch_num in range(batches):
                 # Load batch
                 batch_losses = defaultdict(lambda: 0)
@@ -993,6 +1059,7 @@ class PPO(nn.Module):
                     current_level=2, load_level=load_level, cast_level=cast_level,
                     device=self.policy_iteration.device, sequential_num=batch_num,
                     clip_sequential=False, **kwargs)
+                batch_returns = torch.zeros(0, device=self.policy_iteration.device)
                 minibatches = np.ceil(batch_size/minibatch_size).astype(int) if batch_size is not None else 1
                 for minibatch_num in range(minibatches):
                     # Load minibatch
@@ -1022,7 +1089,7 @@ class PPO(nn.Module):
                     loss.backward()  # Longest computation
 
                     # Update moving return mean
-                    batch_returns = torch.cat((batch_returns, (advantages-state_vals).mean(keepdim=True, dim=-1) * accumulation_frac), dim=0)
+                    batch_returns = torch.cat((batch_returns, advantages+state_vals), dim=0)
 
                     # Scale and record
                     batch_losses['Total'] += loss.detach()
@@ -1030,15 +1097,16 @@ class PPO(nn.Module):
                     batch_losses['critic'] += loss_critic.detach().mean() * accumulation_frac
                     batch_losses['entropy'] += loss_entropy.detach().mean() * accumulation_frac
                     batch_losses['KL'] += loss_kl.detach().mean() * accumulation_frac
-                    # batch_statistics['Advantage Mean'] += self.return_standardization.mean.mean().item() * accumulation_frac
-                    # batch_statistics['Advantage STD'] += self.return_standardization.std.mean().item() * accumulation_frac
+                    batch_statistics['Moving Return Mean'] += self.return_standardization.mean.mean().item() * accumulation_frac
+                    batch_statistics['Moving Return STD'] += self.return_standardization.std.mean().item() * accumulation_frac
+                    batch_statistics['Moving Reward Mean'] += self.reward_standardization.mean.mean().item() * accumulation_frac
+                    batch_statistics['Moving Reward STD'] += self.reward_standardization.std.mean().item() * accumulation_frac
+                    batch_statistics['Return Mean'] += (advantages+state_vals).detach().mean().item() * accumulation_frac
+                    batch_statistics['Return STD'] += (advantages+state_vals).detach().std().item() * accumulation_frac
                     batch_statistics['Advantage Mean'] += advantages.detach().mean().item() * accumulation_frac
                     batch_statistics['Advantage STD'] += advantages.detach().std().item() * accumulation_frac
                     batch_statistics['Log STD'] += self.get_log_std() * accumulation_frac
                     batch_statistics['Explained Variance'] += exp_var.detach().item() * accumulation_frac
-
-                # Update moving return mean
-                # if standardize_returns: self.return_standardization.update(batch_returns)
                 
                 # Record
                 for k, v in batch_losses.items(): total_losses[k].append(v)
@@ -1060,6 +1128,11 @@ class PPO(nn.Module):
                         self.synchronize('learners')
                         synchronized = True
                     else: synchronized = False
+
+                # Update moving return mean
+                if standardize_returns:
+                    self.return_standardization.update(batch_returns)
+                    self.synchronize('learners', sync_list=self.return_standardization.parameters())
 
                 # Update KL beta
                 # NOTE: Same as Torch KLPENPPOLoss implementation
@@ -1160,19 +1233,16 @@ class PPO(nn.Module):
         advantages_mean, advantages_std = advantages.mean(), advantages.std() + 1e-8
         normalized_advantages = (advantages - advantages_mean) / advantages_std
         # Clip advantages
-        normalized_advantages =  normalized_advantages.clamp(
-            normalized_advantages.quantile(.05), normalized_advantages.quantile(.95))
+        # normalized_advantages =  normalized_advantages.clamp(
+        #     normalized_advantages.quantile(.05), normalized_advantages.quantile(.95))
 
         # Get normalized returns/rewards (sensitive to minibatch)
         # NOTE: Action STD explosion/instability points to a normalization and/or critic fitting issue
         #       or, possibly, the returns are too homogeneous - i.e. the problem is solved
-        # normalized_rewards = self.return_standardization.apply(rewards)  # , mean=False
+        normalized_rewards = self.return_standardization.apply(rewards)  # , mean=False
 
         # Evaluate actions and states
         _, action_logs_new, dist_entropy, state_vals_new = self.actor_critic(*states, sample=True, action=actions, entropy=True, critic=True)
-        # dist_entropy = -action_logs_new  # Approximation
-
-        # Backward NAN warning from too-low action log probability
         # action_logs_new = action_logs_new.clamp(-20, 0)
         
         # Calculate PPO loss
@@ -1190,13 +1260,18 @@ class PPO(nn.Module):
         # loss_kl = ((action_logs - action_logs_new)  # * action_logs.exp()).sum(-1)  # Approximation
         # Continuous (http://joschu.net/blog/kl-approx.html)
         loss_kl = (log_ratios.exp() - 1) - log_ratios
+        # Mask and scale where needed (for replay)
+        # loss_kl[~new_memories] = 0
+        # loss_kl = loss_kl * loss_kl.shape[0] / new_memories.sum()
 
         # Calculate critic loss
         # unclipped_critic = (state_vals_new - normalized_rewards).square()
-        unclipped_critic = F.smooth_l1_loss(state_vals_new, rewards)
+        criteria = F.smooth_l1_loss
+        # criteria = F.mse_loss
+        unclipped_critic = criteria(state_vals_new, normalized_rewards)
         clipped_state_vals_new = torch.clamp(state_vals_new, state_vals-self.epsilon_critic, state_vals+self.epsilon_critic)
         # clipped_critic = (clipped_state_vals_new - normalized_rewards).square()
-        clipped_critic = F.smooth_l1_loss(clipped_state_vals_new, rewards, reduction='none')
+        clipped_critic = criteria(clipped_state_vals_new, normalized_rewards, reduction='none')
         loss_critic = torch.max(unclipped_critic, clipped_critic)
         # if torch.rand(1) < .03:
         #     print(
@@ -1206,15 +1281,12 @@ class PPO(nn.Module):
         #         f' - {normalized_rewards.std().detach().item():.3f}')
 
         # Calculate explained variance
-        exp_var = (1-(rewards-state_vals_new).var() / rewards.var()).clamp(min=-1)
+        exp_var = (1-(normalized_rewards-state_vals_new).var() / normalized_rewards.var()).clamp(min=-1)
 
         # Calculate entropy bonus
         # NOTE: Not included in training grad if action_std is constant
+        # dist_entropy = -action_logs_new  # Approximation
         loss_entropy = -dist_entropy
-
-        # Mask and scale where needed
-        # loss_kl[~new_memories] = 0
-        # loss_kl = loss_kl * loss_kl.shape[0] / new_memories.sum()
 
         # Construct final loss
         loss = (

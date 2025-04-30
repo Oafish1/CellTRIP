@@ -252,13 +252,13 @@ class Worker:
         # Flush buffer
         self.memory.flush_buffer()
 
-        # Synchronize reward normalization
-        self.memory.feed_new(self.policy.reward_standardization)
-        self.policy.synchronize('learners')
-
         # Compute GAE
         # self.memory.recompute_state_vals(self.policy)  # Technically better when replay used, but takes a ton of time
-        self.memory.compute_advantages(moving_standardization=self.policy.reward_standardization)
+        self.memory.compute_advantages()  # moving_standardization=self.policy.reward_standardization
+
+        # Synchronize reward normalization
+        # self.memory.feed_new(self.policy.reward_standardization)
+        # self.policy.synchronize('learners')
 
         # Perform update
         with torch.autograd.detect_anomaly():

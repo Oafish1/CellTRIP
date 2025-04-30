@@ -1,3 +1,12 @@
+### 1.0.0+2025.4.29
+- Add `BufferStandardization` class
+- Add `noise_std` parameter to `EnvironmentBase` to add noise to feature observations per episode
+- Change default environment weights and handling
+- Enhance modularity of `EnvironmentBase` get and set functions
+- Extensive hyperparameter tuning
+- Move arguments to more intuitive and centralized locations for standardization
+- Properly implement PopArt
+
 ### 1.0.0+2025.4.28
 - Add log probability clipping to avoid `nan` values during training
 - Add partial training case to logfile concatenation logic

@@ -16,13 +16,14 @@ class EnvironmentBase:
         dim=16,
         pos_bound=10,
         pos_rand_bound=5,
-        vel_bound=torch.inf,
+        vel_bound=1,
         vel_rand_bound=1,
         action_bound=1,
         delta=.1,
         # Targets
         input_modalities=None,  # Which modalities are given as input
         target_modalities=None,  # Which modalities are targets
+        noise_std=.1,  # Noise to apply to input modalities
         # Rewards
         reward_distance=None,
         reward_origin=None,
@@ -55,6 +56,7 @@ class EnvironmentBase:
             'velocity': terminate_velocity}
         self.vel_threshold = vel_threshold
         self.epsilon = epsilon
+        self.noise_std = noise_std
         self.max_timesteps = max_timesteps
         self.min_timesteps = min_timesteps
         self.latency = latency
@@ -134,6 +136,7 @@ class EnvironmentBase:
         self.pos = self.pos.to(self.device)
         self.vel = self.vel.to(self.device)
         self.modalities = [m.to(self.device) for m in self.modalities]
+        self.noise = [m.to(self.device) for m in self.noise]
         return self
 
     ### State functions
@@ -149,13 +152,16 @@ class EnvironmentBase:
         # Distance reward (Emulate combined intra-modal distances)
         if self.reward_scales['reward_distance'] != 0:
             reward_distance = (self.get_distance_match()+self.epsilon).log()
+            # reward_distance = self.get_distance_match()
         else: reward_distance = torch.zeros(actions.shape[0], device=self.device)
         # Origin penalty
-        if self.reward_scales['reward_origin'] != 0: reward_origin = (self.get_distance_from_origin()+self.epsilon).log()
+        if self.reward_scales['reward_origin'] != 0:
+            # reward_origin = (self.get_distance_from_origin()+self.epsilon).log()
+            reward_origin = self.get_distance_from_origin()
         else: reward_origin = torch.zeros(actions.shape[0], device=self.device)
         # Velocity penalty
         # if self.reward_scales['penalty_velocity'] != 0: penalty_velocity = (self.vel.square().mean(dim=1)+self.epsilon.log()
-        if self.reward_scales['penalty_velocity'] != 0: penalty_velocity = self.vel.square().mean(dim=1)+self.epsilon
+        if self.reward_scales['penalty_velocity'] != 0: penalty_velocity = self.vel.square().mean(dim=1)
         else: penalty_velocity = torch.zeros(actions.shape[0], device=self.device)
 
         ### Step positions
@@ -184,9 +190,11 @@ class EnvironmentBase:
         # Distance reward
         if self.reward_scales['reward_distance'] != 0:
             reward_distance -= (self.get_distance_match()+self.epsilon).log()
+            # reward_distance -= self.get_distance_match()
         # Origin reward
         if self.reward_scales['reward_origin'] != 0:
-            reward_origin -= (self.get_distance_from_origin()+self.epsilon).log()
+            # reward_origin -= (self.get_distance_from_origin()+self.epsilon).log()
+            reward_origin -= self.get_distance_from_origin()
         # Velocity penalty (Apply to ending velocity)
         # penalty_velocity = -self.vel.square().mean(dim=1)  #  * finished
         # penalty_velocity = (old_vel.square() - self.vel.square()).mean(dim=1)
@@ -216,10 +224,10 @@ class EnvironmentBase:
         #         if top_step == out_step: return 1
         #         return np.clip((step - top_step) / (out_step - top_step), 1, 0)
 
-        reward_distance     *=  self.reward_scales['reward_distance']    * 1e0
-        reward_origin       *=  self.reward_scales['reward_origin']      * 1e0
+        reward_distance     *=  self.reward_scales['reward_distance']    * 1e0          # Raw 1e0, Log 1e0
+        reward_origin       *=  self.reward_scales['reward_origin']      * 1e0          # Raw 1e0, Log 1e0
         penalty_bound       *=  self.reward_scales['penalty_bound']      * 1e1*delta
-        penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e1
+        penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e1          # Raw 1e1, Log 1e0
         penalty_action      *=  self.reward_scales['penalty_action']     * 1e-1*delta
         # self.steps += 1
 
@@ -248,6 +256,9 @@ class EnvironmentBase:
                 torch.tensor(m, device=self.device)
                 for m in modalities])
             self.keys = adata_obs[0].index.to_numpy()
+
+        # Generate noise
+        self.noise = [self.noise_std*torch.randn_like(m, device=self.device) for m in self.modalities]
 
         # Assign random positions and velocities
         self.pos = self.pos_rand_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
@@ -338,15 +349,17 @@ class EnvironmentBase:
 
         for target in targets:
             if target in self.dist: continue
-            m = self.modalities[target]
+            m = self.modalities[target]  # + self.noise[target]
             # NOTE: Only scaled for `self.dist` calculation
             m_dist = _utility.distance.euclidean_distance(m, scaled=True)
             self.dist[target] = m_dist
 
     def set_modalities(self, modalities):
-        # Set modalities and reset pre-calculated inter-node dist
+        # Set modalities
         self.modalities = modalities
-        self.calculate_dist(self.target_modalities)
+
+        # Reset pre-calculated inter-node dist
+        # self.calculate_dist(self.target_modalities)
 
         # Assert all modalities share the first dimension and reset num_nodes
         assert all(m.shape[0] == self.modalities[0].shape[0] for m in self.modalities)
@@ -385,19 +398,20 @@ class EnvironmentBase:
     def get_keys(self):
         return self.keys
 
-    def get_target_modalities(self):
-        return [m for i, m in enumerate(self.modalities) if i in self.target_modalities]
+    def get_target_modalities(self, **kwargs):
+        return self.get_modalities(**kwargs, _indices=self.target_modalities)
 
-    def get_return_modalities(self):
-        return [m for i, m in enumerate(self.modalities) if i in self.input_modalities]
+    def get_input_modalities(self, **kwargs):
+        return self.get_modalities(**kwargs, _indices=self.input_modalities)
 
-    def get_modalities(self):
-        return self.modalities
+    def get_modalities(self, noise=False, _indices=None):
+        if _indices is None: _indices = list(range(len(self.modalities)))
+        return [m+n if noise else m for i, (m, n) in enumerate(zip(self.modalities, self.noise)) if i in _indices]
 
     def get_state(self, include_modalities=False, include_timestep=False):
         cat = (self.pos, self.vel)
         if include_timestep: cat += (torch.tensor(self.timestep, device=self.device).expand((self.num_nodes, 1)),)
-        if include_modalities: cat += (*self.get_return_modalities(),)
+        if include_modalities: cat += (*self.get_input_modalities(noise=True),)
         return torch.cat(cat, dim=-1)
         
     def set_state(self, state):

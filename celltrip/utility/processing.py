@@ -719,8 +719,8 @@ def sample_and_cast(
     if larger_size is not None:  #  and larger_data is not None
         if sequential_num is not None:
             min_idx = sequential_num * smaller_size
-            max_idx = min(larger_size-1, (sequential_num+1)*smaller_size)
-            if clip_sequential: smaller_size = max_idx - min_idx + 1
+            max_idx = min(larger_size, (sequential_num+1)*smaller_size)
+            if clip_sequential: smaller_size = max_idx - min_idx
             # smaller_idx = np.arange(min_idx, min(max_idx, larger_size))
             smaller_idx = slice(min_idx, max_idx)
         else: smaller_idx = np.random.choice(larger_size, smaller_size, replace=False)
