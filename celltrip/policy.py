@@ -411,15 +411,21 @@ class EntitySelfAttentionLite(nn.Module):
         positional_dim,
         modal_dims,
         output_dim,
-        log_std_init=-1,
-        hidden_dim=128,  # 256
-        embed_dim=16,  # 32
-        heads=4,  # 8
-        blocks=2,  # 4
+        log_std_init=0,
+        hidden_dim=256,
+        embed_dim=32,
+        heads=8,
+        blocks=4,
+        # hidden_dim=128,
+        # embed_dim=16,
+        # heads=4,
+        # blocks=2,
         activation=nn.ReLU,
-        independent_critic=False,
+        independent_critic=True,
+        # independent_critic=False,
         **kwargs,
     ):
+        # TODO: Implement https://github.com/shibhansh/loss-of-plasticity/blob/main/lop/algos/cbp_linear.py#L83
         super().__init__(**kwargs)
 
         # Parameters
@@ -529,7 +535,7 @@ class EntitySelfAttentionLite(nn.Module):
             # Attention
             for block in self.critic_residual_attention_blocks:
                 self_embeds = block(self_embeds, kv=node_embeds, mask=mask)
-            actor_self_embeds = self_embeds
+            critic_self_embeds = self_embeds
         else: critic_self_embeds = actor_self_embeds
 
         # NOTE: fit_and_strip breaks compatibility on batch-batch native programs (Grouped batches)
@@ -700,21 +706,22 @@ class PPO(nn.Module):
             reproducible_strategy='mean',
             # Weights
             epsilon_ppo=.2,
-            epsilon_critic=torch.inf,  # Formerly .1
+            epsilon_critic=torch.inf,
             critic_weight=.5,
-            entropy_weight=1e-2,
+            entropy_weight=0.,  # 1e-2
             kl_beta_init=0.,
             kl_beta_increment=(.5, 2),
             kl_target=.03,
             kl_early_stop=False,
-            grad_clip=.5,
+            grad_clip=4,
             # Optimizers
             log_std_lr=3e-4,
             actor_lr=3e-4,
             critic_lr=3e-4,  # Not really needed
-            weight_decay=0,
-            betas=(.9, .999),  # (.997, .997),
-            # lr_iters=200,
+            return_beta=3e-3,
+            weight_decay=1e-3,
+            betas=(.99, .99),
+            lr_iters=None,
             lr_gamma=1,
             # Backward
             update_iterations=1,  # 10*int(32*4*200/(64*200)), MIGHT WANT TO CHANGE, CHANGED FROM 80
@@ -778,8 +785,8 @@ class PPO(nn.Module):
             {'params': self.actor_params, 'lr': actor_lr},
             {'params': self.critic_params, 'lr': critic_lr}],
             betas=betas, weight_decay=weight_decay)
-        # self.scheduler = torch.optim.lr_scheduler.PolynomialLR(self.optimizer, total_iters=lr_iters)
-        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
+        if lr_iters is not None: self.scheduler = torch.optim.lr_scheduler.PolynomialLR(self.optimizer, total_iters=lr_iters)
+        else: self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
 
         # Old policy
         self.actor_critic_old = model(positional_dim, modal_dims, output_dim, log_std_init=log_std_init, **kwargs)
@@ -807,7 +814,7 @@ class PPO(nn.Module):
 
         # PopArt
         self.reward_standardization = ArtStandardization(beta=.5)
-        self.return_standardization = PopArtStandardization(self.actor_critic.critic_decider[-1], beta=3e-4)
+        self.return_standardization = PopArtStandardization(self.actor_critic.critic_decider[-1], beta=return_beta)
         
 
         # Initialize
@@ -937,7 +944,7 @@ class PPO(nn.Module):
                         for i, feat_tensors in enumerate(feature_embeds_sub)]
 
         # Unstandardize state_val
-        state_val = self.return_standardization.remove(state_val)  # , mean=False
+        state_val = self.return_standardization.remove(state_val)
         
         # Record
         # NOTE: `reward` and `is_terminal` are added outside of the class, calculated
@@ -1222,6 +1229,7 @@ class PPO(nn.Module):
         state_vals,
         advantages=None,
         rewards=None):
+        # TODO: Maybe implement PFO https://github.com/CLAIRE-Labo/no-representation-no-trust
         if advantages is not None:
             # Get inferred rewards
             rewards = advantages + state_vals
@@ -1232,7 +1240,7 @@ class PPO(nn.Module):
         # Get normalized advantages
         advantages_mean, advantages_std = advantages.mean(), advantages.std() + 1e-8
         normalized_advantages = (advantages - advantages_mean) / advantages_std
-        # Clip advantages
+        # Clip advantages for stability
         # normalized_advantages =  normalized_advantages.clamp(
         #     normalized_advantages.quantile(.05), normalized_advantages.quantile(.95))
 
@@ -1247,7 +1255,7 @@ class PPO(nn.Module):
         
         # Calculate PPO loss
         log_ratios = action_logs_new - action_logs
-        # log_ratios = log_ratios.clamp(-20, 20)
+        # log_ratios = log_ratios.clamp(-20, 2)
         ratios = log_ratios.exp()
         unclipped_ppo = ratios * normalized_advantages
         clipped_ppo = ratios.clamp(1-self.epsilon_ppo, 1+self.epsilon_ppo) * normalized_advantages
@@ -1281,7 +1289,7 @@ class PPO(nn.Module):
         #         f' - {normalized_rewards.std().detach().item():.3f}')
 
         # Calculate explained variance
-        exp_var = (1-(normalized_rewards-state_vals_new).var() / normalized_rewards.var()).clamp(min=-1)
+        exp_var = (1- (normalized_rewards-state_vals_new).var() / normalized_rewards.var()).clamp(min=-1)
 
         # Calculate entropy bonus
         # NOTE: Not included in training grad if action_std is constant

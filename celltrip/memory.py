@@ -20,7 +20,7 @@ class AdvancedMemoryBuffer:
         flush_on_record=True,
         # Propagate
         gae_lambda=.95,
-        gamma=.995,
+        gamma=.99,
         # Sampling
         replay_frac=0,
         max_samples_per_state=np.inf,

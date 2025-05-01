@@ -3451,7 +3451,7 @@ typedef struct {
   PyObject *__pyx_n_s_zeros_like;
   PyObject *__pyx_n_s_zip;
   PyObject *__pyx_float__95;
-  PyObject *__pyx_float__995;
+  PyObject *__pyx_float__99;
   PyObject *__pyx_float_1eneg_8;
   PyObject *__pyx_int_0;
   PyObject *__pyx_int_1;
@@ -3943,7 +3943,7 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_n_s_zeros_like);
   Py_CLEAR(clear_module_state->__pyx_n_s_zip);
   Py_CLEAR(clear_module_state->__pyx_float__95);
-  Py_CLEAR(clear_module_state->__pyx_float__995);
+  Py_CLEAR(clear_module_state->__pyx_float__99);
   Py_CLEAR(clear_module_state->__pyx_float_1eneg_8);
   Py_CLEAR(clear_module_state->__pyx_int_0);
   Py_CLEAR(clear_module_state->__pyx_int_1);
@@ -4413,7 +4413,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_n_s_zeros_like);
   Py_VISIT(traverse_module_state->__pyx_n_s_zip);
   Py_VISIT(traverse_module_state->__pyx_float__95);
-  Py_VISIT(traverse_module_state->__pyx_float__995);
+  Py_VISIT(traverse_module_state->__pyx_float__99);
   Py_VISIT(traverse_module_state->__pyx_float_1eneg_8);
   Py_VISIT(traverse_module_state->__pyx_int_0);
   Py_VISIT(traverse_module_state->__pyx_int_1);
@@ -4893,7 +4893,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_n_s_zeros_like __pyx_mstate_global->__pyx_n_s_zeros_like
 #define __pyx_n_s_zip __pyx_mstate_global->__pyx_n_s_zip
 #define __pyx_float__95 __pyx_mstate_global->__pyx_float__95
-#define __pyx_float__995 __pyx_mstate_global->__pyx_float__995
+#define __pyx_float__99 __pyx_mstate_global->__pyx_float__99
 #define __pyx_float_1eneg_8 __pyx_mstate_global->__pyx_float_1eneg_8
 #define __pyx_int_0 __pyx_mstate_global->__pyx_int_0
 #define __pyx_int_1 __pyx_mstate_global->__pyx_int_1
@@ -5020,9 +5020,9 @@ static PyObject *__pyx_pf_8celltrip_6memory___defaults__(CYTHON_UNUSED PyObject 
   __Pyx_INCREF(((PyObject*)__pyx_float__95));
   __Pyx_GIVEREF(((PyObject*)__pyx_float__95));
   if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 3, ((PyObject*)__pyx_float__95))) __PYX_ERR(0, 14, __pyx_L1_error);
-  __Pyx_INCREF(((PyObject*)__pyx_float__995));
-  __Pyx_GIVEREF(((PyObject*)__pyx_float__995));
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 4, ((PyObject*)__pyx_float__995))) __PYX_ERR(0, 14, __pyx_L1_error);
+  __Pyx_INCREF(((PyObject*)__pyx_float__99));
+  __Pyx_GIVEREF(((PyObject*)__pyx_float__99));
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 4, ((PyObject*)__pyx_float__99))) __PYX_ERR(0, 14, __pyx_L1_error);
   __Pyx_INCREF(((PyObject *)__pyx_int_0));
   __Pyx_GIVEREF(((PyObject *)__pyx_int_0));
   if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 5, ((PyObject *)__pyx_int_0))) __PYX_ERR(0, 14, __pyx_L1_error);
@@ -5140,7 +5140,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
     values[3] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)Py_True)));
     values[4] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)Py_True)));
     values[5] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_float__95)));
-    values[6] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_float__995)));
+    values[6] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_float__99)));
     values[7] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)__pyx_int_0)));
     values[8] = __Pyx_Arg_NewRef_FASTCALL(__pyx_dynamic_args->__pyx_arg_max_samples_per_state);
     values[9] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)Py_False)));
@@ -27173,7 +27173,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
 static CYTHON_SMALL_CODE int __Pyx_InitConstants(void) {
   if (__Pyx_CreateStringTabAndInitStrings() < 0) __PYX_ERR(0, 1, __pyx_L1_error);
   __pyx_float__95 = PyFloat_FromDouble(.95); if (unlikely(!__pyx_float__95)) __PYX_ERR(0, 1, __pyx_L1_error)
-  __pyx_float__995 = PyFloat_FromDouble(.995); if (unlikely(!__pyx_float__995)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_float__99 = PyFloat_FromDouble(.99); if (unlikely(!__pyx_float__99)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_float_1eneg_8 = PyFloat_FromDouble(1e-8); if (unlikely(!__pyx_float_1eneg_8)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_0 = PyInt_FromLong(0); if (unlikely(!__pyx_int_0)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_1 = PyInt_FromLong(1); if (unlikely(!__pyx_int_1)) __PYX_ERR(0, 1, __pyx_L1_error)

@@ -23,8 +23,10 @@ class EnvironmentBase:
         # Targets
         input_modalities=None,  # Which modalities are given as input
         target_modalities=None,  # Which modalities are targets
-        noise_std=.1,  # Noise to apply to input modalities
+        noise_std=0,  # Noise to apply to input modalities
+        target_noise=True,
         # Rewards
+        compute_rewards=True,
         reward_distance=None,
         reward_origin=None,
         penalty_bound=None,
@@ -32,7 +34,7 @@ class EnvironmentBase:
         penalty_action=None,
         epsilon=1e-5,  # Limit to max rew of ~ln(2/3 - 1e-5) = 11.11 * coeff
         # Early stopping
-        max_timesteps=500,
+        max_timesteps=1000,
         min_timesteps=0,
         terminate_time=True,
         terminate_velocity=False,
@@ -57,6 +59,8 @@ class EnvironmentBase:
         self.vel_threshold = vel_threshold
         self.epsilon = epsilon
         self.noise_std = noise_std
+        self.target_noise = target_noise
+        self.compute_rewards = compute_rewards
         self.max_timesteps = max_timesteps
         self.min_timesteps = min_timesteps
         self.latency = latency
@@ -118,9 +122,9 @@ class EnvironmentBase:
             self.reward_scales = {
                 'reward_distance': 1,
                 'reward_origin': 0,
-                'penalty_bound': 1,
-                'penalty_velocity': 1,
-                'penalty_action': 1,
+                'penalty_bound': 0,
+                'penalty_velocity': 0,
+                'penalty_action': 0,
             }
         else:
             # Otherwise, set `None` rewards to zero
@@ -149,20 +153,21 @@ class EnvironmentBase:
         # assert actions.shape == self.vel.shape
 
         ### Pre-step calculations
-        # Distance reward (Emulate combined intra-modal distances)
-        if self.reward_scales['reward_distance'] != 0:
-            reward_distance = (self.get_distance_match()+self.epsilon).log()
-            # reward_distance = self.get_distance_match()
-        else: reward_distance = torch.zeros(actions.shape[0], device=self.device)
-        # Origin penalty
-        if self.reward_scales['reward_origin'] != 0:
-            # reward_origin = (self.get_distance_from_origin()+self.epsilon).log()
-            reward_origin = self.get_distance_from_origin()
-        else: reward_origin = torch.zeros(actions.shape[0], device=self.device)
-        # Velocity penalty
-        # if self.reward_scales['penalty_velocity'] != 0: penalty_velocity = (self.vel.square().mean(dim=1)+self.epsilon.log()
-        if self.reward_scales['penalty_velocity'] != 0: penalty_velocity = self.vel.square().mean(dim=1)
-        else: penalty_velocity = torch.zeros(actions.shape[0], device=self.device)
+        if self.compute_rewards:
+            # Distance reward (Emulate combined intra-modal distances)
+            if self.reward_scales['reward_distance'] != 0:
+                reward_distance = (self.get_distance_match()+self.epsilon).log()  # * (1 / (1 + self.pos.mean(dim=0).square().mean()))
+            else: reward_distance = torch.zeros(actions.shape[0], device=self.device)
+            # Origin penalty
+            if self.reward_scales['reward_origin'] != 0:
+                reward_origin = (self.get_distance_from_origin()+self.epsilon).log()
+                # reward_origin = self.get_distance_from_origin()
+            else: reward_origin = torch.zeros(actions.shape[0], device=self.device)
+            # Velocity penalty
+            if self.reward_scales['penalty_velocity'] != 0:
+                penalty_velocity = (self.vel.square().mean(dim=1)+self.epsilon).log()
+                # penalty_velocity = self.vel.square().mean(dim=1)
+            else: penalty_velocity = torch.zeros(actions.shape[0], device=self.device)
 
         ### Step positions
         # Old storage
@@ -187,49 +192,39 @@ class EnvironmentBase:
         # Finished
         self.timestep += 1
         finished = self.finished()
-        # Distance reward
-        if self.reward_scales['reward_distance'] != 0:
-            reward_distance -= (self.get_distance_match()+self.epsilon).log()
-            # reward_distance -= self.get_distance_match()
-        # Origin reward
-        if self.reward_scales['reward_origin'] != 0:
-            # reward_origin -= (self.get_distance_from_origin()+self.epsilon).log()
-            reward_origin -= self.get_distance_from_origin()
-        # Velocity penalty (Apply to ending velocity)
-        # penalty_velocity = -self.vel.square().mean(dim=1)  #  * finished
-        # penalty_velocity = (old_vel.square() - self.vel.square()).mean(dim=1)
-        if self.reward_scales['penalty_velocity'] != 0:
-            # penalty_velocity -= (self.vel.square().mean(dim=1)+self.epsilon).log()
-            penalty_velocity -= self.vel.square().mean(dim=1)
-        # Boundary penalty
-        # penalty_bound = -(bound_hit_mask*~old_bound_hit_mask).sum(dim=1).float()
-        penalty_bound = torch.zeros(self.pos.shape[0], device=self.device)
-        penalty_bound[bound_hit_mask.sum(dim=1) > 0] = -1
-        # Action penalty (Smooth movements)
-        penalty_action = -actions.square().mean(dim=1)
-        # if finished: print(reason)
-        # print(actions)
+        if self.compute_rewards:
+            # Distance reward
+            if self.reward_scales['reward_distance'] != 0:
+                reward_distance -= (self.get_distance_match()+self.epsilon).log()
+            # Origin reward
+            if self.reward_scales['reward_origin'] != 0:
+                reward_origin -= (self.get_distance_from_origin()+self.epsilon).log()
+            # Velocity penalty (Apply to ending velocity)
+            if self.reward_scales['penalty_velocity'] != 0:
+                penalty_velocity -= (self.vel.square().mean(dim=1)+self.epsilon).log()
+            # Boundary penalty
+            # penalty_bound = -(bound_hit_mask*~old_bound_hit_mask).sum(dim=1).float()
+            penalty_bound = torch.zeros(self.pos.shape[0], device=self.device)
+            penalty_bound[bound_hit_mask.sum(dim=1) > 0] = -1
+            # Action penalty (Smooth movements)
+            penalty_action = -actions.square().mean(dim=1)
 
-        ### Management
-        if self.get_distance_match().mean() < self.best: self.lapses += delta
-        else: self.best = self.get_distance_match().mean(); self.lapses = 0
+            ### Management
+            if self.get_distance_match().mean() < self.best: self.lapses += delta
+            else: self.best = self.get_distance_match().mean(); self.lapses = 0
 
-        # Scale rewards
-        # def get_coef_from_step(step, in_step, top_step, out_step=None, factor=5000):
-        #     step = step / factor
-        #     if step < top_step or out_step is None:
-        #         if in_step == top_step: return 1
-        #         return np.clip((step - in_step) / (top_step - in_step), 0, 1)
-        #     else:
-        #         if top_step == out_step: return 1
-        #         return np.clip((step - top_step) / (out_step - top_step), 1, 0)
-
-        reward_distance     *=  self.reward_scales['reward_distance']    * 1e0          # Raw 1e0, Log 1e0
-        reward_origin       *=  self.reward_scales['reward_origin']      * 1e0          # Raw 1e0, Log 1e0
-        penalty_bound       *=  self.reward_scales['penalty_bound']      * 1e1*delta
-        penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e1          # Raw 1e1, Log 1e0
-        penalty_action      *=  self.reward_scales['penalty_action']     * 1e-1*delta
-        # self.steps += 1
+            reward_distance     *=  self.reward_scales['reward_distance']    * 1e0          # Raw 1e0, Log 1e0
+            reward_origin       *=  self.reward_scales['reward_origin']      * 1e0          # Raw 1e0, Log 1e0
+            penalty_bound       *=  self.reward_scales['penalty_bound']      * 1e1*delta
+            penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e0          # Raw 1e1, Log 1e0
+            penalty_action      *=  self.reward_scales['penalty_action']     * 1e-1*delta
+            # self.steps += 1
+        else:
+            reward_distance = torch.zeros(self.num_nodes, device=self.device)
+            reward_origin = torch.zeros(self.num_nodes, device=self.device)
+            penalty_bound = torch.zeros(self.num_nodes, device=self.device)
+            penalty_velocity = torch.zeros(self.num_nodes, device=self.device)
+            penalty_action = torch.zeros(self.num_nodes, device=self.device)
 
         # Compute total reward
         rwd = (
@@ -349,7 +344,8 @@ class EnvironmentBase:
 
         for target in targets:
             if target in self.dist: continue
-            m = self.modalities[target]  # + self.noise[target]
+            m = self.modalities[target]
+            if self.target_noise: m += self.noise[target]
             # NOTE: Only scaled for `self.dist` calculation
             m_dist = _utility.distance.euclidean_distance(m, scaled=True)
             self.dist[target] = m_dist

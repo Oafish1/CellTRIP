@@ -1,3 +1,12 @@
+### 1.0.0+2025.4.30
+- Add flush iterations to config
+- Add proper Adam and L2 regularization
+- Add s3 upload functionality in data notebook
+- Additional record log case handling
+- Change distance reward formulation to be proportional to mean origin closeness
+- Fix for independent critic
+- More hyperparameter tuning
+
 ### 1.0.0+2025.4.29
 - Add `BufferStandardization` class
 - Add `noise_std` parameter to `EnvironmentBase` to add noise to feature observations per episode

@@ -437,7 +437,7 @@ def train_celltrip(
     max_timesteps=2_000_000_000,
     update_timesteps=100_000,
     delayed_rollout_flush=True,
-    flush_iterations=None,
+    flush_iterations=50,
     checkpoint_iterations=50,
     checkpoint_dir='./checkpoints',
     checkpoint_name=None,
