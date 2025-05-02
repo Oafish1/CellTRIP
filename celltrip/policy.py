@@ -412,17 +412,25 @@ class EntitySelfAttentionLite(nn.Module):
         modal_dims,
         output_dim,
         log_std_init=0,
-        hidden_dim=256,
-        embed_dim=32,
-        heads=8,
-        blocks=4,
+        # Deep
+        # hidden_dim=256,
+        # embed_dim=32,
+        # heads=8,
+        # blocks=4,
+        # Basic
         # hidden_dim=128,
         # embed_dim=16,
         # heads=4,
         # blocks=2,
+        # Barebones
+        hidden_dim=64,
+        embed_dim=8,
+        heads=2,
+        blocks=1,
+        # Options
         activation=nn.ReLU,
-        independent_critic=True,
-        # independent_critic=False,
+        # independent_critic=True,
+        independent_critic=False,
         **kwargs,
     ):
         # TODO: Implement https://github.com/shibhansh/loss-of-plasticity/blob/main/lop/algos/cbp_linear.py#L83
@@ -463,10 +471,11 @@ class EntitySelfAttentionLite(nn.Module):
         # Deciders
         self.actions = nn.Parameter(torch.eye(output_dim), requires_grad=False)
         self.action_embed = nn.Sequential(
-            nn.Linear(output_dim, hidden_dim), activation(),
-            nn.Linear(hidden_dim, embed_dim), activation())
+            nn.Linear(output_dim, embed_dim), activation())
         self.actor_decider = nn.Sequential(
             activation(), nn.Linear(hidden_dim, embed_dim))
+        # self.actor_decider = nn.Sequential(
+        #     activation(), nn.Linear(hidden_dim, output_dim), nn.Tanh())
         self.critic_decider = nn.Sequential(
             activation(), nn.Linear(hidden_dim, 1))
     
@@ -511,8 +520,10 @@ class EntitySelfAttentionLite(nn.Module):
                 feature_embeds_ret.append((self_feat_embeds, node_feat_embeds))
             # Self embeddings
             self_embeds = self.self_embed(self_pos_embeds+self_feat_embeds)
+            # self_embeds = self.self_embed(self_pos_embeds)
             # Node embeddings
             node_embeds = self.node_embed(node_pos_embeds+node_feat_embeds)
+            # node_embeds = self.self_embed(node_pos_embeds)
             # Attention
             for block in self.residual_attention_blocks:
                 self_embeds = block(self_embeds, kv=node_embeds, mask=mask)
@@ -550,16 +561,19 @@ class EntitySelfAttentionLite(nn.Module):
         # Decisions, samples, and returns
         ret = ()
         if actor:  # action_means
+            # Dot Method
             self_action_embeds = self.actor_decider(actor_self_embeds)
             action_embeds = self.action_embed(self.actions)
             # Norms
             # NOTE: Norm causes NAN, could use eps but might as well remove to avoid vanish
-            # self_action_embeds = self_action_embeds  / self_action_embeds.norm(p=2, keepdim=True, dim=-1)
-            # action_embeds = action_embeds   / action_embeds.norm(p=2, keepdim=True, dim=-1)
+            self_action_embeds = self_action_embeds  / (self_action_embeds.norm(p=2, keepdim=True, dim=-1) + 1e-8)
+            action_embeds = action_embeds   / (action_embeds.norm(p=2, keepdim=True, dim=-1) + 1e-8)
             # Dot/cosine
             if self_action_embeds.dim() > 2:
                 action_means = torch.einsum('bik,jk->bij', self_action_embeds, action_embeds)
             else: action_means = torch.einsum('ik,jk->ij', self_action_embeds, action_embeds)
+            # Regular method
+            # action_means = self.actor_decider(actor_self_embeds)
             ret += (action_means,)
             if sample: ret += self.select_action(action_means, action=action, return_entropy=entropy)  # action, action_log, dist_entropy
         if critic: ret += (self.critic_decider(critic_self_embeds).squeeze(-1),)  # state_vals
@@ -708,7 +722,7 @@ class PPO(nn.Module):
             epsilon_ppo=.2,
             epsilon_critic=torch.inf,
             critic_weight=.5,
-            entropy_weight=0.,  # 1e-2
+            entropy_weight=0,
             kl_beta_init=0.,
             kl_beta_increment=(.5, 2),
             kl_target=.03,
@@ -717,20 +731,20 @@ class PPO(nn.Module):
             # Optimizers
             log_std_lr=3e-4,
             actor_lr=3e-4,
-            critic_lr=3e-4,  # Not really needed
+            critic_lr=3e-4,
             return_beta=3e-3,
-            weight_decay=1e-3,
-            betas=(.99, .99),
+            weight_decay=0,
+            betas=(.9, .999), # (.99, .99),
             lr_iters=None,
             lr_gamma=1,
             # Backward
-            update_iterations=1,  # 10*int(32*4*200/(64*200)), MIGHT WANT TO CHANGE, CHANGED FROM 80
+            update_iterations=1,
             sync_iterations=1,
             pool_size=None,
-            epoch_size=100_000,
+            epoch_size=3*2150*500,
             batch_size=100_000,
             minibatch_size=None,
-            load_level='minibatch',  # TODO: Allow for loading at batch
+            load_level='minibatch',  # TODO: Allow for loading at batch with compression
             cast_level='minibatch',
             **kwargs,
     ):
@@ -1014,16 +1028,28 @@ class PPO(nn.Module):
         assert cast_level >= load_level, 'Cannot cast without first loading'
 
         # Determine level sizes
-        denominator = self.get_world_size('learners') if sync_iterations == 1 else 1  # Adjust sizes if gradients synchronized across GPUs
         memory_size = len(memory)
+        
+        # Pool size
         pool_size = self.pool_size
         if pool_size is not None: pool_size = min(pool_size, memory_size)
+        
+        # Epoch size
         epoch_size = self.epoch_size if not (self.epoch_size is None and pool_size is not None) else pool_size
         if epoch_size is not None and pool_size is not None: epoch_size = int(min(epoch_size, pool_size))
-        epoch_size = np.ceil(epoch_size / denominator).astype(int)
+        # epoch_size = np.ceil(epoch_size / denominator).astype(int)
+        
+        # Batch size
         batch_size = self.batch_size if not (self.batch_size is None and epoch_size is not None) else epoch_size
         if batch_size is not None and epoch_size is not None: batch_size = int(min(batch_size, epoch_size))
-        batch_size = np.ceil(batch_size / denominator).astype(int)
+        # batch_size = np.ceil(batch_size / denominator).astype(int)
+
+        # Level adjustment
+        denominator = self.get_world_size('learners') if sync_iterations == 1 else 1  # Adjust sizes if gradients synchronized across GPUs
+        if epoch_size is not None: epoch_size = np.ceil(epoch_size / denominator).astype(int)
+        if batch_size is not None: batch_size = np.ceil(batch_size / denominator).astype(int)
+
+        # Minibatch size
         minibatch_size = self.minibatch_size if not (self.minibatch_size is None and batch_size is not None) else batch_size
         if minibatch_size is not None and batch_size is not None: minibatch_size = int(min(minibatch_size, batch_size))
         # print(f'{pool_size} - {epoch_size} - {batch_size} - {minibatch_size}')

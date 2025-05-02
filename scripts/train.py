@@ -126,6 +126,7 @@ def train(config):
     initializers = celltrip.train.get_initializers(
         input_files=config.input_files, merge_files=config.merge_files,
         backed=config.backed, dataloader_kwargs=dataloader_kwargs,
+        # policy_kwargs={'minibatch_size': 10_000},
         environment_kwargs=environment_kwargs)
 
     # Stages

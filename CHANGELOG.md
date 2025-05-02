@@ -1,3 +1,10 @@
+### 1.0.0+2025.5.1
+- Fix bug with batch size calculation
+- Much hyperparameter tuning
+- Revise reward structure and add many alternate configs and stopping criterion
+- Simplify model and add alternate output calculation
+- Switch environment to spherical bounds - more consistent with reality
+
 ### 1.0.0+2025.4.30
 - Add flush iterations to config
 - Add proper Adam and L2 regularization

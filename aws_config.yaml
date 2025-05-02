@@ -9,7 +9,7 @@ docker:
     pull_before_run: False
     run_options:
         - --ulimit nofile=65536:65536
-idle_timeout_minutes: 0
+idle_timeout_minutes: 10
 
 # AWS config
 provider:

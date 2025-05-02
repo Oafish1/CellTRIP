@@ -14,8 +14,8 @@ class EnvironmentBase:
         *modalities_or_dataloader,
         # Creation
         dim=16,
-        pos_bound=10,
-        pos_rand_bound=5,
+        pos_bound=5,
+        pos_rand_bound=1,
         vel_bound=1,
         vel_rand_bound=1,
         action_bound=1,
@@ -34,9 +34,10 @@ class EnvironmentBase:
         penalty_action=None,
         epsilon=1e-5,  # Limit to max rew of ~ln(2/3 - 1e-5) = 11.11 * coeff
         # Early stopping
-        max_timesteps=1000,
+        max_timesteps=500,
         min_timesteps=0,
         terminate_time=True,
+        terminate_bound=False,
         terminate_velocity=False,
         vel_threshold=1e-3,
         latency=5,
@@ -55,7 +56,8 @@ class EnvironmentBase:
         self.delta = delta
         self.termination_conds = {
             'time': terminate_time,
-            'velocity': terminate_velocity}
+            'velocity': terminate_velocity,
+            'bound': terminate_bound}
         self.vel_threshold = vel_threshold
         self.epsilon = epsilon
         self.noise_std = noise_std
@@ -155,18 +157,20 @@ class EnvironmentBase:
         ### Pre-step calculations
         if self.compute_rewards:
             # Distance reward (Emulate combined intra-modal distances)
-            if self.reward_scales['reward_distance'] != 0:
-                reward_distance = (self.get_distance_match()+self.epsilon).log()  # * (1 / (1 + self.pos.mean(dim=0).square().mean()))
+            # get_reward_distance = lambda: self.get_distance_match()
+            # get_reward_distance = lambda: (self.get_distance_match()+self.epsilon).log()
+            get_reward_distance = lambda: 1 / (1+self.get_distance_match())
+            if self.reward_scales['reward_distance'] != 0: reward_distance = get_reward_distance()
             else: reward_distance = torch.zeros(actions.shape[0], device=self.device)
             # Origin penalty
-            if self.reward_scales['reward_origin'] != 0:
-                reward_origin = (self.get_distance_from_origin()+self.epsilon).log()
-                # reward_origin = self.get_distance_from_origin()
+            get_reward_origin = lambda: self.get_distance_from_origin()
+            # get_reward_origin = lambda: (self.get_distance_from_origin()+self.epsilon).log()
+            if self.reward_scales['reward_origin'] != 0: reward_origin = get_reward_origin()
             else: reward_origin = torch.zeros(actions.shape[0], device=self.device)
             # Velocity penalty
-            if self.reward_scales['penalty_velocity'] != 0:
-                penalty_velocity = (self.vel.square().mean(dim=1)+self.epsilon).log()
-                # penalty_velocity = self.vel.square().mean(dim=1)
+            get_penalty_velocity = lambda: self.vel.square().mean(dim=1)
+            # get_penalty_velocity = lambda: (self.vel.square().mean(dim=1)+self.epsilon).log()
+            if self.reward_scales['penalty_velocity'] != 0: penalty_velocity = get_penalty_velocity()
             else: penalty_velocity = torch.zeros(actions.shape[0], device=self.device)
 
         ### Step positions
@@ -174,17 +178,24 @@ class EnvironmentBase:
         # old_vel = self.vel.clone()
         # old_bound_hit_mask = self.pos.abs() == self.pos_bound
         # Clamp actions
-        actions = actions.clamp(-self.action_bound, self.action_bound)
+        # actions = actions.clamp(-self.action_bound, self.action_bound)
         # Add velocity
         self.add_velocities(delta * actions)
         # Iterate positions
         self.pos = self.pos + delta * self.vel
         # Clip by bounds
-        self.pos = torch.clamp(self.pos, -self.pos_bound, self.pos_bound)
-        # Erase velocity of bound-hits
-        bound_hit_mask = self.pos.abs() == self.pos_bound
-        self.vel[bound_hit_mask] = 0
+        # self.pos = torch.clamp(self.pos, -self.pos_bound, self.pos_bound)
+        # Adjust nodes on bound-hits
+        # bound_hit_mask = self.pos.abs() == self.pos_bound
         # self.pos[bound_hit_mask.sum(dim=1) > 0] = 0  # Send to center
+        # self.vel[bound_hit_mask] = 0  # Kill velocity
+        # self.vel[bound_hit_mask] = -self.vel[bound_hit_mask]  # Bounce
+        # Out of bounds
+        oob = self.pos.norm(dim=-1)-self.pos_bound
+        oob[oob < 0] = 0
+        self.vel[oob > 0] = 0
+        self.pos[oob > 0] = self.pos_bound * self.pos[oob > 0] / self.pos[oob > 0].norm(keepdim=True, dim=-1)
+        reward_distance[oob > 0] = 0
         # Reset cache
         self.reset_cache()
 
@@ -194,18 +205,14 @@ class EnvironmentBase:
         finished = self.finished()
         if self.compute_rewards:
             # Distance reward
-            if self.reward_scales['reward_distance'] != 0:
-                reward_distance -= (self.get_distance_match()+self.epsilon).log()
+            # if self.reward_scales['reward_distance'] != 0: reward_distance -= get_reward_distance()
             # Origin reward
-            if self.reward_scales['reward_origin'] != 0:
-                reward_origin -= (self.get_distance_from_origin()+self.epsilon).log()
+            if self.reward_scales['reward_origin'] != 0: reward_origin -= get_reward_origin()
             # Velocity penalty (Apply to ending velocity)
-            if self.reward_scales['penalty_velocity'] != 0:
-                penalty_velocity -= (self.vel.square().mean(dim=1)+self.epsilon).log()
+            if self.reward_scales['penalty_velocity'] != 0: penalty_velocity -= get_penalty_velocity()
             # Boundary penalty
-            # penalty_bound = -(bound_hit_mask*~old_bound_hit_mask).sum(dim=1).float()
             penalty_bound = torch.zeros(self.pos.shape[0], device=self.device)
-            penalty_bound[bound_hit_mask.sum(dim=1) > 0] = -1
+            # penalty_bound[oob > 0] = -1
             # Action penalty (Smooth movements)
             penalty_action = -actions.square().mean(dim=1)
 
@@ -216,7 +223,7 @@ class EnvironmentBase:
             reward_distance     *=  self.reward_scales['reward_distance']    * 1e0          # Raw 1e0, Log 1e0
             reward_origin       *=  self.reward_scales['reward_origin']      * 1e0          # Raw 1e0, Log 1e0
             penalty_bound       *=  self.reward_scales['penalty_bound']      * 1e1*delta
-            penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e0          # Raw 1e1, Log 1e0
+            penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e1          # Raw 1e1, Log 1e0
             penalty_action      *=  self.reward_scales['penalty_action']     * 1e-1*delta
             # self.steps += 1
         else:
@@ -256,8 +263,15 @@ class EnvironmentBase:
         self.noise = [self.noise_std*torch.randn_like(m, device=self.device) for m in self.modalities]
 
         # Assign random positions and velocities
-        self.pos = self.pos_rand_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
-        self.vel = self.vel_rand_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
+        direction = 2*torch.rand((self.num_nodes, self.dim), device=self.device)-1
+        direction /= direction.norm(keepdim=True, dim=-1)
+        magnitude = self.pos_rand_bound * torch.rand((self.num_nodes, 1), device=self.device)
+        self.pos = magnitude * direction
+        direction /= direction.norm(keepdim=True, dim=-1)
+        magnitude = self.vel_rand_bound * torch.rand((self.num_nodes, 1), device=self.device)
+        self.vel = magnitude * direction
+        # self.pos = self.pos_rand_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
+        # self.vel = self.vel_rand_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
 
         # Reset timestep
         self.timestep = 0
@@ -279,8 +293,11 @@ class EnvironmentBase:
         else:
             self.vel[node_ids] = self.vel[node_ids] + velocities
 
-        # Clip by bounds
-        self.vel = torch.clamp(self.vel, -self.vel_bound, self.vel_bound)
+        # Clamp
+        vel_norm = self.vel.norm(dim=-1)
+        fast_mask = vel_norm > self.vel_bound
+        self.vel[fast_mask] = self.vel_bound * self.vel[fast_mask] / vel_norm[fast_mask].unsqueeze(-1)
+        # self.vel = torch.clamp(self.vel, -self.vel_bound, self.vel_bound)
 
     ### Evaluation functions
     def get_distance_match(self, targets=None):
@@ -325,7 +342,7 @@ class EnvironmentBase:
         # Min threshold for stop
         if self.timestep < self.min_timesteps: return False  # , 'min_thresh', 0.
         # Boundary stop
-        # if (self.pos.abs() == self.pos_bound).any(): return True, 'bound', 0.
+        if self.termination_conds['bound'] and (self.pos.abs() == self.pos_bound).any(): return True, 'bound', 0.
         # Latency stop
         # if self.lapses >= self.latency: return True, 'lat', 0.
         # Velocity stop
@@ -405,7 +422,7 @@ class EnvironmentBase:
         return [m+n if noise else m for i, (m, n) in enumerate(zip(self.modalities, self.noise)) if i in _indices]
 
     def get_state(self, include_modalities=False, include_timestep=False):
-        cat = (self.pos, self.vel)
+        cat = (self.pos, self.vel)  # (self.pos/self.pos_bound, self.vel/self.vel_bound)
         if include_timestep: cat += (torch.tensor(self.timestep, device=self.device).expand((self.num_nodes, 1)),)
         if include_modalities: cat += (*self.get_input_modalities(noise=True),)
         return torch.cat(cat, dim=-1)
