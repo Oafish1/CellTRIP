@@ -674,12 +674,12 @@ def split_state(
     return ret
 
 
-def recursive_tensor_func(input, func):
+def recursive_tensor_func(input_data, func):
     "Applies function to tensors recursively"
-    if type(input) == torch.Tensor:
-        return func(input)
+    if type(input_data) == torch.Tensor:
+        return func(input_data)
     
-    return [recursive_tensor_func(member, func) for member in input]
+    return [recursive_tensor_func(member, func) for member in input_data]
 
 
 def dict_map(dict, func, inplace=False):

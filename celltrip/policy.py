@@ -411,20 +411,21 @@ class EntitySelfAttentionLite(nn.Module):
         positional_dim,
         modal_dims,
         output_dim,
+        # Parameters
         log_std_init=0,
         # Deep
         # hidden_dim=256,
-        # embed_dim=32,
+        # # embed_dim=32,
         # heads=8,
         # blocks=4,
         # Basic
         # hidden_dim=128,
-        # embed_dim=16,
+        # # embed_dim=16,
         # heads=4,
         # blocks=2,
         # Barebones
         hidden_dim=64,
-        embed_dim=8,
+        # embed_dim=8,
         heads=2,
         blocks=1,
         # Options
@@ -439,7 +440,6 @@ class EntitySelfAttentionLite(nn.Module):
         # Parameters
         self.positional_dim = positional_dim
         self.output_dim = output_dim
-        self.log_std = nn.Parameter(torch.tensor(log_std_init, dtype=torch.float))
         self.heads = heads
         self.independent_critic = independent_critic
 
@@ -468,20 +468,32 @@ class EntitySelfAttentionLite(nn.Module):
                 activation(), nn.Linear(hidden_dim, hidden_dim), activation())
             self.critic_residual_attention_blocks = nn.ModuleList([
                 ResidualAttentionBlock(hidden_dim, heads, activation=activation) for _ in range(blocks)])
-        # Deciders
-        self.actions = nn.Parameter(torch.eye(output_dim), requires_grad=False)
-        self.action_embed = nn.Sequential(
-            nn.Linear(output_dim, embed_dim), activation())
-        self.actor_decider = nn.Sequential(
-            activation(), nn.Linear(hidden_dim, embed_dim))
+            
+        # Dot method
+        # self.actions = nn.Parameter(torch.eye(output_dim), requires_grad=False)
+        # self.action_embed = nn.Sequential(
+        #     nn.Linear(output_dim, embed_dim), activation())
         # self.actor_decider = nn.Sequential(
-        #     activation(), nn.Linear(hidden_dim, output_dim), nn.Tanh())
+        #     activation(), nn.Linear(hidden_dim, embed_dim))
+        
+        # General method
+        # self.actor_decider = ContinuousActions(hidden_dim, output_dim, activation=activation, log_std_init=log_std_init)
+        self.actor_decider = DiscreteActions(hidden_dim, output_dim*(3,), activation=activation)
+        
+        # Magnitude method
+        # self.actor_decider_direction = nn.Sequential(
+        #     activation(), nn.Linear(hidden_dim, output_dim))  # , nn.Tanh()
+        # self.actor_decider_magnitude = nn.Sequential(
+        #     activation(), nn.Linear(hidden_dim, 1), nn.Sigmoid())
+
+        # Critic
         self.critic_decider = nn.Sequential(
+            # activation(), nn.Linear(hidden_dim, hidden_dim),
             activation(), nn.Linear(hidden_dim, 1))
     
     def forward(
             self, self_entities, node_entities=None, mask=None,
-            actor=True, sample=False, action=None, entropy=False, critic=False,
+            actor=True, action=None, entropy=False, critic=False,
             feature_embeds=None, return_feature_embeds=False,
             squeeze=True, fit_and_strip=True):
         # Formatting
@@ -562,45 +574,104 @@ class EntitySelfAttentionLite(nn.Module):
         ret = ()
         if actor:  # action_means
             # Dot Method
-            self_action_embeds = self.actor_decider(actor_self_embeds)
-            action_embeds = self.action_embed(self.actions)
-            # Norms
-            # NOTE: Norm causes NAN, could use eps but might as well remove to avoid vanish
-            self_action_embeds = self_action_embeds  / (self_action_embeds.norm(p=2, keepdim=True, dim=-1) + 1e-8)
-            action_embeds = action_embeds   / (action_embeds.norm(p=2, keepdim=True, dim=-1) + 1e-8)
-            # Dot/cosine
-            if self_action_embeds.dim() > 2:
-                action_means = torch.einsum('bik,jk->bij', self_action_embeds, action_embeds)
-            else: action_means = torch.einsum('ik,jk->ij', self_action_embeds, action_embeds)
+            # self_action_embeds = self.actor_decider(actor_self_embeds)
+            # action_embeds = self.action_embed(self.actions)
+            # # Norms
+            # # NOTE: Norm causes NAN, could use eps but might as well remove to avoid vanish
+            # self_action_embeds = self_action_embeds  / (self_action_embeds.norm(p=2, keepdim=True, dim=-1) + 1e-8)
+            # action_embeds = action_embeds   / (action_embeds.norm(p=2, keepdim=True, dim=-1) + 1e-8)
+            # # Dot/cosine
+            # if self_action_embeds.dim() > 2:
+            #     action_means = torch.einsum('bik,jk->bij', self_action_embeds, action_embeds)
+            # else: action_means = torch.einsum('ik,jk->ij', self_action_embeds, action_embeds)
+
             # Regular method
-            # action_means = self.actor_decider(actor_self_embeds)
-            ret += (action_means,)
-            if sample: ret += self.select_action(action_means, action=action, return_entropy=entropy)  # action, action_log, dist_entropy
+            ret += self.actor_decider(actor_self_embeds, action=action, return_entropy=entropy)  # action, action_log, dist_entropy
+            
+            # Magnitude method
+            # action_direction = self.actor_decider_direction(actor_self_embeds)
+            # action_direction = action_direction / action_direction.norm(keepdim=True, dim=-1)  # Get direction unit
+            # action_magnitude = self.actor_decider_magnitude(actor_self_embeds)
+            # action_means = action_magnitude * action_direction
+            # # action_direction = np.sqrt(action_direction.shape[-1]) * action_direction / action_direction.std(keepdim=True, dim=-1)  # Get into comparable range for sampling
+            # # action_means = torch.concat((action_direction, action_magnitude), dim=-1)
         if critic: ret += (self.critic_decider(critic_self_embeds).squeeze(-1),)  # state_vals
         if squeeze and self_entities.dim() > 2 and not fit_and_strip:
             ret = tuple(t.flatten(0, 1) for t in ret)
         if return_feature_embeds: ret += feature_embeds_ret,
         return ret
     
-    def select_action(self, actions, *, action=None, return_entropy=False):
+
+class DiscreteActions(nn.Module):
+    # Discretized based on advice from https://arxiv.org/pdf/2004.00980
+    def __init__(self, input_dim, output_dims, activation=nn.ReLU, **kwargs):
+        super().__init__(**kwargs)
+
+        # Heads
+        self.deciders = nn.ModuleList([
+            nn.Sequential(activation(), nn.Linear(input_dim, output_dim)) for output_dim in output_dims])
+        
+    def forward(self, logits, *, action=None, return_entropy=False):
+        # Calculate actions
+        actions = torch.stack([decider(logits) for decider in self.deciders], dim=-2)
+
+        # Format
+        set_action = action is not None
+
+        # Define normal distribution
+        dist = torch.distributions.Categorical(logits=actions)  # /np.sqrt(actions.shape[-1])
+
+        # Sample
+        if not set_action: action = dist.sample()
+        action_log = dist.log_prob(action).sum(dim=-1)  # Multiply independent probabilities
+        if return_entropy: entropy = dist.entropy().sum(dim=-1)
+
+        # Return
+        ret = ()
+        if not set_action: ret += action,
+        ret += action_log,
+        if return_entropy: ret += entropy,
+        return ret
+
+
+class ContinuousActions(nn.Module):
+    def __init__(self, input_dim, output_dim, activation=nn.ReLU, log_std_init=0, **kwargs):
+        super().__init__(**kwargs)
+
+        # Params
+        self.log_std = nn.Parameter(torch.tensor(log_std_init, dtype=torch.float))
+        
+        # Heads
+        self.decider = nn.Sequential(
+            # activation(), nn.Linear(hidden_dim, hidden_dim),
+            activation(), nn.Linear(input_dim, output_dim))
+        
+    def forward(self, logits, *, action=None, return_entropy=False):
+        # Calculate actions
+        actions = self.decider(logits)
+
         # Format
         set_action = action is not None
 
         # Select continuous action
-        if self.training: scale_tril = torch.diag(self.log_std.exp().expand((self.output_dim,)))  # .unsqueeze(dim=0)
-        else: scale_tril = torch.zeros((self.output_dim, self.output_dim), device=self.log_std.device)
+        # if self.training: scale_tril = torch.diag(self.log_std.exp().expand((actions.shape[-1],)))  # .unsqueeze(dim=0)
+        # else: scale_tril = torch.zeros((self.output_dim, self.output_dim), device=self.log_std.device)
         # scale_tril = torch.zeros((self.output_dim, self.output_dim), device=self.log_std.device)
-        dist = MultivariateNormal(
-            loc=actions,
-            # covariance_matrix=torch.diag(self.action_std.square().expand((self.output_dim,))).unsqueeze(dim=0),
-            # TODO: Double check no square here b/c Cholesky
-            scale_tril=scale_tril,  # Speeds up computation compared to using cov matrix
-            validate_args=False)  # Speeds up computation
+        # dist = MultivariateNormal(
+        #     loc=actions,
+        #     # covariance_matrix=torch.diag(self.action_std.square().expand((self.output_dim,))).unsqueeze(dim=0),
+        #     # TODO: Double check no square here b/c Cholesky
+        #     scale_tril=scale_tril,  # Speeds up computation compared to using cov matrix
+        #     validate_args=False)  # Speeds up computation
+
+        # Define normal distribution
+        # NOTE: Scaled by sqrt(num_features)
+        dist = torch.distributions.Normal(loc=actions, scale=self.log_std.exp())  # /np.sqrt(actions.shape[-1])
 
         # Sample
         if not set_action: action = dist.sample()
-        action_log = dist.log_prob(action)
-        if return_entropy: entropy = dist.entropy()
+        action_log = dist.log_prob(action).sum(dim=-1)  # Multiply independent probabilities
+        if return_entropy: entropy = dist.entropy().sum(dim=-1)
 
         # Return
         ret = ()
@@ -721,31 +792,32 @@ class PPO(nn.Module):
             # Weights
             epsilon_ppo=.2,
             epsilon_critic=torch.inf,
-            critic_weight=.5,
-            entropy_weight=0,
+            critic_weight=1.,
+            entropy_weight=1e-2,
             kl_beta_init=0.,
             kl_beta_increment=(.5, 2),
             kl_target=.03,
             kl_early_stop=False,
-            grad_clip=4,
+            grad_clip=.5,
             # Optimizers
-            log_std_lr=3e-4,
-            actor_lr=3e-4,
-            critic_lr=3e-4,
+            # log_std_lr=3e-4,
+            # actor_lr=3e-4,
+            # critic_lr=3e-4,
+            lr=3e-4,
             return_beta=3e-3,
-            weight_decay=0,
-            betas=(.9, .999), # (.99, .99),
+            weight_decay=1e-5,
+            betas=(.99, .99),  # (.9, .999)
             lr_iters=None,
             lr_gamma=1,
             # Backward
-            update_iterations=1,
+            update_iterations=30,  # was 5
             sync_iterations=1,
-            pool_size=None,
-            epoch_size=3*2150*500,
-            batch_size=100_000,
-            minibatch_size=None,
-            load_level='minibatch',  # TODO: Allow for loading at batch with compression
-            cast_level='minibatch',
+            pool_size=torch.inf,
+            epoch_size=100_000,
+            batch_size=10_000,
+            minibatch_size=torch.inf,
+            # load_level='minibatch',  # TODO: Allow for loading at batch with compression
+            # cast_level='minibatch',
             **kwargs,
     ):
         super().__init__()
@@ -784,36 +856,36 @@ class PPO(nn.Module):
         self.epoch_size = epoch_size
         self.batch_size = batch_size
         self.minibatch_size = minibatch_size
-        self.load_level = load_level
-        self.cast_level = cast_level
+        # self.load_level = load_level
+        # self.cast_level = cast_level
 
         # New policy
         self.actor_critic = model(positional_dim, modal_dims, output_dim, log_std_init=log_std_init, **kwargs)
-        self.log_std_params = list(filter(lambda kv: kv[0] in ('log_std',), self.actor_critic.named_parameters()))
-        self.critic_params = list(filter(lambda kv: kv[0].startswith('critic_'), self.actor_critic.named_parameters()))
-        claimed_params = list(map(lambda kv: kv[0], self.log_std_params)) + list(map(lambda kv: kv[0], self.critic_params))
-        self.actor_params = list(filter(lambda kv: kv[0] not in claimed_params, self.actor_critic.named_parameters()))
-        # self.optimizer = torch.optim.Adam(self.actor_critic.parameters(), lr=actor_lr)
-        self.optimizer = torch.optim.Adam([
-            {'params': self.log_std_params, 'lr': log_std_lr},
-            {'params': self.actor_params, 'lr': actor_lr},
-            {'params': self.critic_params, 'lr': critic_lr}],
-            betas=betas, weight_decay=weight_decay)
+        # self.log_std_params = list(filter(lambda kv: kv[0] in ('log_std',), self.actor_critic.named_parameters()))
+        # self.critic_params = list(filter(lambda kv: kv[0].startswith('critic_'), self.actor_critic.named_parameters()))
+        # claimed_params = list(map(lambda kv: kv[0], self.log_std_params)) + list(map(lambda kv: kv[0], self.critic_params))
+        # self.actor_params = list(filter(lambda kv: kv[0] not in claimed_params, self.actor_critic.named_parameters()))
+        # self.optimizer = torch.optim.Adam([
+        #     {'params': self.log_std_params, 'lr': log_std_lr},
+        #     {'params': self.actor_params, 'lr': actor_lr},
+        #     {'params': self.critic_params, 'lr': critic_lr}],
+        #     betas=betas, weight_decay=weight_decay)
+        self.optimizer = torch.optim.Adam(self.actor_critic.parameters(), betas=betas, lr=lr, weight_decay=weight_decay)
         if lr_iters is not None: self.scheduler = torch.optim.lr_scheduler.PolynomialLR(self.optimizer, total_iters=lr_iters)
         else: self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
 
         # Old policy
         self.actor_critic_old = model(positional_dim, modal_dims, output_dim, log_std_init=log_std_init, **kwargs)
-        log_std_params = list(filter(lambda kv: kv[0] in ('log_std',), self.actor_critic_old.named_parameters()))
-        critic_params = list(filter(lambda kv: kv[0].startswith('critic_'), self.actor_critic_old.named_parameters()))
-        claimed_params = list(map(lambda kv: kv[0], log_std_params)) + list(map(lambda kv: kv[0], critic_params))
-        actor_params = list(filter(lambda kv: kv[0] not in claimed_params, self.actor_critic_old.named_parameters()))
-        # self.optimizer_old = torch.optim.Adam(self.actor_critic_old.parameters(), lr=actor_lr)
-        self.optimizer_old = torch.optim.Adam([
-            {'params': log_std_params, 'lr': log_std_lr},
-            {'params': actor_params, 'lr': actor_lr},
-            {'params': critic_params, 'lr': critic_lr}],
-            betas=betas, weight_decay=weight_decay)
+        # log_std_params = list(filter(lambda kv: kv[0] in ('log_std',), self.actor_critic_old.named_parameters()))
+        # critic_params = list(filter(lambda kv: kv[0].startswith('critic_'), self.actor_critic_old.named_parameters()))
+        # claimed_params = list(map(lambda kv: kv[0], log_std_params)) + list(map(lambda kv: kv[0], critic_params))
+        # actor_params = list(filter(lambda kv: kv[0] not in claimed_params, self.actor_critic_old.named_parameters()))
+        # self.optimizer_old = torch.optim.Adam([
+        #     {'params': log_std_params, 'lr': log_std_lr},
+        #     {'params': actor_params, 'lr': actor_lr},
+        #     {'params': critic_params, 'lr': critic_lr}],
+        #     betas=betas, weight_decay=weight_decay)
+        self.optimizer_old = torch.optim.Adam(self.actor_critic_old.parameters(), betas=betas, lr=lr, weight_decay=weight_decay)
 
         # Non-grad params
         self.policy_iteration = nn.Parameter(torch.tensor(0.), requires_grad=False)
@@ -856,9 +928,6 @@ class PPO(nn.Module):
     #     ret = super().to(device)
     #     self.device = self.policy_iteration.device
     #     return ret
-
-    def get_log_std(self):
-        return self.actor_critic.log_std.detach().item()
 
     def get_policy_iteration(self):
         return int(self.policy_iteration.item())
@@ -943,8 +1012,8 @@ class PPO(nn.Module):
                 idx=np.arange(start_idx, min(start_idx+forward_batch_size, compressed_state.shape[0])),
                 **self.split_args)
             if not terminal:
-                _, action_sub, action_log_sub, state_val_sub, feature_embeds_sub = self.actor_critic(
-                    *state, sample=True, critic=True, feature_embeds=feature_embeds_arg, return_feature_embeds=True)
+                action_sub, action_log_sub, state_val_sub, feature_embeds_sub = self.actor_critic(
+                    *state, critic=True, feature_embeds=feature_embeds_arg, return_feature_embeds=True)
                 action = torch.concat((action, action_sub), dim=0)
                 action_log = torch.concat((action_log, action_log_sub), dim=0)
             else: state_val_sub, feature_embeds_sub = self.actor_critic(
@@ -1022,85 +1091,82 @@ class PPO(nn.Module):
         use_collective = col.is_group_initialized('default')
 
         # Batch parameters
-        level_dict = {'pool': 0, 'epoch': 1, 'batch': 2, 'minibatch': 3}
-        load_level = level_dict[self.load_level]
-        cast_level = level_dict[self.cast_level]
-        assert cast_level >= load_level, 'Cannot cast without first loading'
+        # level_dict = {'pool': 0, 'epoch': 1, 'batch': 2, 'minibatch': 3}
+        # load_level = level_dict[self.load_level]
+        # cast_level = level_dict[self.cast_level]
+        # assert cast_level >= load_level, 'Cannot cast without first loading'
 
         # Determine level sizes
         memory_size = len(memory)
         
         # Pool size
         pool_size = self.pool_size
-        if pool_size is not None: pool_size = min(pool_size, memory_size)
+        # if pool_size is not None:
+        pool_size = min(pool_size, memory_size)
         
         # Epoch size
         epoch_size = self.epoch_size if not (self.epoch_size is None and pool_size is not None) else pool_size
-        if epoch_size is not None and pool_size is not None: epoch_size = int(min(epoch_size, pool_size))
-        # epoch_size = np.ceil(epoch_size / denominator).astype(int)
+        # if epoch_size is not None and pool_size is not None:
+        epoch_size = int(min(epoch_size, pool_size))
         
         # Batch size
         batch_size = self.batch_size if not (self.batch_size is None and epoch_size is not None) else epoch_size
-        if batch_size is not None and epoch_size is not None: batch_size = int(min(batch_size, epoch_size))
-        # batch_size = np.ceil(batch_size / denominator).astype(int)
+        # if batch_size is not None and epoch_size is not None:
+        batch_size = int(min(batch_size, epoch_size))
 
         # Level adjustment
         denominator = self.get_world_size('learners') if sync_iterations == 1 else 1  # Adjust sizes if gradients synchronized across GPUs
-        if epoch_size is not None: epoch_size = np.ceil(epoch_size / denominator).astype(int)
-        if batch_size is not None: batch_size = np.ceil(batch_size / denominator).astype(int)
+        # if epoch_size is not None:
+        epoch_size = np.ceil(epoch_size / denominator).astype(int)
+        # if batch_size is not None:
+        batch_size = np.ceil(batch_size / denominator).astype(int)
 
         # Minibatch size
         minibatch_size = self.minibatch_size if not (self.minibatch_size is None and batch_size is not None) else batch_size
         if minibatch_size is not None and batch_size is not None: minibatch_size = int(min(minibatch_size, batch_size))
         # print(f'{pool_size} - {epoch_size} - {batch_size} - {minibatch_size}')
 
-        # Cap at max size to reduce redundancy for sequential samples
-        # NOTE: Pool->epoch is the only non-sequential sample, and is thus not included here
-        # max_unique_memories = batch_size * update_iterations
-        # epoch_size = min(epoch_size, max_unique_memories)
-
-        # Update moving return mean
-        # if standardize_returns:
-        #     # TODO: Clean this up if it works
-        #     advantages = torch.concat([memory.storage['advantages'][i] for i in range(memory.get_steps()) if memory.storage['staleness'][i]==0]).to(self.policy_iteration.device)
-        #     state_vals = torch.concat([memory.storage['state_vals'][i] for i in range(memory.get_steps()) if memory.storage['staleness'][i]==0]).to(self.policy_iteration.device)
-        #     self.return_standardization.update(advantages - state_vals)
-
         # Load pool
         total_losses = defaultdict(lambda: [])
         total_statistics = defaultdict(lambda: [])
-        pool_data = _utility.processing.sample_and_cast(
-            memory, None, None, pool_size,
-            current_level=0, load_level=load_level, cast_level=cast_level,
-            device=self.policy_iteration.device, **kwargs)
+        # pool_data = _utility.processing.sample_and_cast(
+        #     memory, None, None, pool_size,
+        #     current_level=0, load_level=load_level, cast_level=cast_level,
+        #     device=self.policy_iteration.device, **kwargs)
+        pool_idx = np.random.choice(memory_size, pool_size, replace=False) if pool_size < memory_size else memory_size
 
         # Train
         iterations = 0; synchronized = True; escape = False
         while True:
             # Load epoch
-            epoch_data = _utility.processing.sample_and_cast(
-                memory, pool_data, pool_size, epoch_size,
-                current_level=1, load_level=load_level, cast_level=cast_level,
-                device=self.policy_iteration.device, **kwargs)
+            # epoch_data = _utility.processing.sample_and_cast(
+            #     memory, pool_data, pool_size, epoch_size,
+            #     current_level=1, load_level=load_level, cast_level=cast_level,
+            #     device=self.policy_iteration.device, **kwargs)
+            epoch_idx = np.random.choice(pool_idx, epoch_size, replace=False)  # Also shuffles
             batches = np.ceil(epoch_size/batch_size).astype(int) if epoch_size is not None else 1
             for batch_num in range(batches):
                 # Load batch
                 batch_losses = defaultdict(lambda: 0)
                 batch_statistics = defaultdict(lambda: 0)
-                batch_data = _utility.processing.sample_and_cast(
-                    memory, epoch_data, epoch_size, batch_size,
-                    current_level=2, load_level=load_level, cast_level=cast_level,
-                    device=self.policy_iteration.device, sequential_num=batch_num,
-                    clip_sequential=False, **kwargs)
+                # batch_data = _utility.processing.sample_and_cast(
+                #     memory, epoch_data, epoch_size, batch_size,
+                #     current_level=2, load_level=load_level, cast_level=cast_level,
+                #     device=self.policy_iteration.device, sequential_num=batch_num,
+                #     clip_sequential=False, **kwargs)
+                batch_idx = epoch_idx[batch_num*batch_size:(batch_num+1)*batch_size]
                 batch_returns = torch.zeros(0, device=self.policy_iteration.device)
                 minibatches = np.ceil(batch_size/minibatch_size).astype(int) if batch_size is not None else 1
                 for minibatch_num in range(minibatches):
                     # Load minibatch
-                    minibatch_data, minibatch_actual_size = _utility.processing.sample_and_cast(
-                        memory, batch_data, batch_size, minibatch_size,
-                        current_level=3, load_level=load_level, cast_level=cast_level,
-                        device=self.policy_iteration.device, sequential_num=minibatch_num,
-                        clip_sequential=True, **kwargs)
+                    # minibatch_data, minibatch_actual_size = _utility.processing.sample_and_cast(
+                    #     memory, batch_data, batch_size, minibatch_size,
+                    #     current_level=3, load_level=load_level, cast_level=cast_level,
+                    #     device=self.policy_iteration.device, sequential_num=minibatch_num,
+                    #     clip_sequential=True, **kwargs)
+                    minibatch_idx = batch_idx[minibatch_num*minibatch_size:(minibatch_num+1)*minibatch_size]
+                    minibatch_data = memory[minibatch_idx]
+                    minibatch_data = _utility.processing.dict_map_recursive_tensor_idx_to(minibatch_data, None, self.policy_iteration.device)
 
                     # Get subset data
                     states = minibatch_data['states']
@@ -1117,7 +1183,8 @@ class PPO(nn.Module):
                     exp_var, = statistics
 
                     # Scale and calculate gradient
-                    accumulation_frac = minibatch_actual_size / batch_size
+                    # accumulation_frac = minibatch_actual_size / batch_size
+                    accumulation_frac = minibatch_idx.shape[0] / batch_size
                     loss = loss * accumulation_frac
                     loss.backward()  # Longest computation
 
@@ -1132,13 +1199,13 @@ class PPO(nn.Module):
                     batch_losses['KL'] += loss_kl.detach().mean() * accumulation_frac
                     batch_statistics['Moving Return Mean'] += self.return_standardization.mean.mean().item() * accumulation_frac
                     batch_statistics['Moving Return STD'] += self.return_standardization.std.mean().item() * accumulation_frac
-                    batch_statistics['Moving Reward Mean'] += self.reward_standardization.mean.mean().item() * accumulation_frac
-                    batch_statistics['Moving Reward STD'] += self.reward_standardization.std.mean().item() * accumulation_frac
+                    # batch_statistics['Moving Reward Mean'] += self.reward_standardization.mean.mean().item() * accumulation_frac
+                    # batch_statistics['Moving Reward STD'] += self.reward_standardization.std.mean().item() * accumulation_frac
                     batch_statistics['Return Mean'] += (advantages+state_vals).detach().mean().item() * accumulation_frac
                     batch_statistics['Return STD'] += (advantages+state_vals).detach().std().item() * accumulation_frac
-                    batch_statistics['Advantage Mean'] += advantages.detach().mean().item() * accumulation_frac
-                    batch_statistics['Advantage STD'] += advantages.detach().std().item() * accumulation_frac
-                    batch_statistics['Log STD'] += self.get_log_std() * accumulation_frac
+                    # batch_statistics['Advantage Mean'] += advantages.detach().mean().item() * accumulation_frac
+                    # batch_statistics['Advantage STD'] += advantages.detach().std().item() * accumulation_frac
+                    # batch_statistics['Log STD'] += self.get_log_std() * accumulation_frac
                     batch_statistics['Explained Variance'] += exp_var.detach().item() * accumulation_frac
                 
                 # Record
@@ -1217,13 +1284,13 @@ class PPO(nn.Module):
             {k: np.mean([v.item() for v in vl]) for k, vl in total_losses.items()},
             {k: np.mean([v for v in vl]) for k, vl in total_statistics.items()})
 
-    def get_world_size(self, group='default'):
+    def get_world_size(self, group='default', warn=False):
         try:
             world_size = col.get_collective_group_size(group)
             if world_size == -1: raise RuntimeError
             return world_size
         except:
-            warnings.warn(f'No group "{group}" found.')
+            if warn: warnings.warn(f'No group "{group}" found.')
             return 1
 
     def synchronize(self, group='default', sync_list=None, grad=False, broadcast=None, allreduce=None):
@@ -1276,7 +1343,7 @@ class PPO(nn.Module):
         normalized_rewards = self.return_standardization.apply(rewards)  # , mean=False
 
         # Evaluate actions and states
-        _, action_logs_new, dist_entropy, state_vals_new = self.actor_critic(*states, sample=True, action=actions, entropy=True, critic=True)
+        action_logs_new, dist_entropy, state_vals_new = self.actor_critic(*states, action=actions, entropy=True, critic=True)
         # action_logs_new = action_logs_new.clamp(-20, 0)
         
         # Calculate PPO loss

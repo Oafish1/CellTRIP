@@ -24,6 +24,7 @@ class AdvancedMemoryBuffer:
         # Sampling
         replay_frac=0,
         max_samples_per_state=np.inf,
+        use_pre_concat_if_possible=True,  # Uses a bunch more memory, but much faster if choice or uniform sampling
         uniform=False,
         shuffle=False,
         # Culling
@@ -44,6 +45,7 @@ class AdvancedMemoryBuffer:
         self.replay_frac = replay_frac
         self.max_samples_per_state = max_samples_per_state
         self.shuffle = shuffle
+        self.use_pre_concat_if_possible = use_pre_concat_if_possible
         self.uniform = uniform
         self.prune = prune
         self.cull_by_episode = cull_by_episode
@@ -109,7 +111,7 @@ class AdvancedMemoryBuffer:
                         self.recorded[k1] = True
             # Cast to device
             else:
-                try: v = _utility.processing.recursive_tensor_func(v, lambda x: x.detach().to(self.device))
+                try: v = _utility.processing.recursive_tensor_func(v, lambda x: x.detach().cpu().numpy())
                 except: pass
             # Record
             self.storage[k].append(v)
@@ -121,7 +123,7 @@ class AdvancedMemoryBuffer:
             keys = self.storage['keys'][-1]
             for j, k in enumerate(keys):
                 if k not in self.persistent_storage['suffixes']:
-                    self.persistent_storage['suffixes'][k] = self.storage['states'][-1][j][-self.suffix_len:].clone()
+                    self.persistent_storage['suffixes'][k] = self.storage['states'][-1][j][-self.suffix_len:].copy()
                 # Check that keys accurately map to suffixes
                 # NOTE: Slows down memory appending a small amount
                 else:
@@ -134,8 +136,8 @@ class AdvancedMemoryBuffer:
 
             # Cut suffixes
             # Note: MUST BE CLONED otherwise stores whole unsliced tensor
-            self.storage['states'][-1] = self.storage['states'][-1][..., :-self.suffix_len].clone()
-            if self.storage['terminal_states'][-1] is not None: self.storage['terminal_states'][-1] = self.storage['terminal_states'][-1][..., :-self.suffix_len].clone()
+            self.storage['states'][-1] = self.storage['states'][-1][..., :-self.suffix_len].copy()
+            if self.storage['terminal_states'][-1] is not None: self.storage['terminal_states'][-1] = self.storage['terminal_states'][-1][..., :-self.suffix_len].copy()
 
             # Additional entries
             self.storage['propagated_rewards'].append(None)
@@ -177,59 +179,89 @@ class AdvancedMemoryBuffer:
         # Clear vars
         self.clear_var_cache()
 
+    def __getitem__(self, idx):
+        if isinstance(idx, int): idx = [idx]
+        return self.fast_sample(chosen=idx)
+
     def fast_sample(
-        self, num_memories, replay_frac=None, max_samples_per_state=None,
-        uniform=None, shuffle=None, efficient=True, round_sample=None):
+        self, num_memories=None, chosen=None, replay_frac=None, max_samples_per_state=None,
+        double_batch=True, flatten=False, use_pre_concat_if_possible=None, pad_indexer=True,
+        uniform=None, shuffle=None, round_sample=None):
         # NOTE: Shuffle should only be used when sequential sampling is taking place
+        # NOTE: Chosen returns sorted idx, flatten with double batch will duplicate node info for each sample
+        # Assertions
+        assert num_memories is not None or chosen is not None
+
         # Parameters
         if replay_frac is None: replay_frac = self.replay_frac
         if max_samples_per_state is None: max_samples_per_state = self.max_samples_per_state
+        if use_pre_concat_if_possible is None: use_pre_concat_if_possible = self.use_pre_concat_if_possible
         if uniform is None: uniform = self.uniform
         if shuffle is None: shuffle = self.shuffle
-        num_replay_memories = int(replay_frac * num_memories)
-        num_new_memories = num_memories - num_replay_memories
+
+        # Preemptively concatenate and pad
+        pre_concat = use_pre_concat_if_possible
+        if pre_concat and 'concatenated_states' not in self.variable_storage:
+            # NOTE: Technically could be compatible with no double_batch, but would be insanely large
+            concatenated_states = self._concat_states(
+                [(self._append_suffix(s, keys=k),) for k, s in zip(self.storage['keys'], self.storage['states'])],
+                double_batch=double_batch)
+            self.variable_storage['concatenated_states'] = concatenated_states
 
         # Adjust proportions if needed
-        total_new_memories = self.get_new_len(max_per_step=max_samples_per_state)
-        total_replay_memories = self.get_replay_len(max_per_step=max_samples_per_state)
-        if total_new_memories+total_replay_memories < num_memories:
-            raise RuntimeError(
-                f'Only {total_new_memories+total_replay_memories} possible samples'
-                f' with current parameters, {num_memories} requested')
-        adjusted = False
-        if total_new_memories < num_new_memories:
-            num_replay_memories += num_new_memories - total_new_memories
-            num_new_memories = total_new_memories
-            adjusted = True
-        elif total_replay_memories < num_replay_memories:
-            num_new_memories += num_replay_memories - total_replay_memories
-            num_replay_memories = total_replay_memories
-            adjusted = True
-        if adjusted:
-            new_replay_frac = num_replay_memories / (num_replay_memories+num_new_memories)
-            warnings.warn(
-                f'Current `replay_frac` ({replay_frac:.3f}) infeasible,'
-                f' adjusting to {new_replay_frac:.3f}')
+        if num_memories is not None:
+            # Set preliminary vars
+            num_replay_memories = int(replay_frac * num_memories)
+            num_new_memories = num_memories - num_replay_memories
+
+            # Calculate memory balance
+            total_new_memories = self.get_new_len(max_per_step=max_samples_per_state)
+            total_replay_memories = self.get_replay_len(max_per_step=max_samples_per_state)
+            if total_new_memories+total_replay_memories < num_memories:
+                raise RuntimeError(
+                    f'Only {total_new_memories+total_replay_memories} possible samples'
+                    f' with current parameters, {num_memories} requested')
+            adjusted = False
+            if total_new_memories < num_new_memories:
+                num_replay_memories += num_new_memories - total_new_memories
+                num_new_memories = total_new_memories
+                adjusted = True
+            elif total_replay_memories < num_replay_memories:
+                num_new_memories += num_replay_memories - total_replay_memories
+                num_replay_memories = total_replay_memories
+                adjusted = True
+            if adjusted:
+                new_replay_frac = num_replay_memories / (num_replay_memories+num_new_memories)
+                warnings.warn(
+                    f'Current `replay_frac` ({replay_frac:.3f}) infeasible,'
+                    f' adjusting to {new_replay_frac:.3f}')
 
         # Initialization
         ret = defaultdict(lambda: [])
-        # memory_indices = []
 
         # List order
         list_order = np.arange(len(self.storage['keys']))
-        if not uniform:
-            # Get random list order
-            np.random.shuffle(list_order)
-        else:
+        if chosen is not None:
+            # Chosen idx
+            memories_to_record = np.array(chosen)
+            if num_memories is None: num_memories = memories_to_record.shape[0]
+        elif uniform:
             # Uniform sampling (could also work with duplicates)
             new_memories_to_record = np.random.choice(self.get_new_len(), num_new_memories, replace=False)
             replay_memories_to_record = np.random.choice(self.get_replay_len(), num_replay_memories, replace=False)
+        else:
+            # Get random list order
+            np.random.shuffle(list_order)
 
         # Search for index
         num_replay_memories_recorded, num_new_memories_recorded = np.array(0), np.array(0)
         for list_num in list_order:
             # Check if should sample
-            if self.storage['staleness'][list_num] == 0:
+            if chosen is not None:
+                working_memories_recorded = num_new_memories_recorded
+                working_memories = num_memories
+                working_memories_to_record = memories_to_record
+            elif self.storage['staleness'][list_num] == 0:
                 working_memories_recorded = num_new_memories_recorded
                 working_memories = num_new_memories
                 if uniform: working_memories_to_record = new_memories_to_record
@@ -241,7 +273,17 @@ class AdvancedMemoryBuffer:
 
             # Choose random samples
             list_len = len(self.storage['keys'][list_num])
-            if not uniform:
+            if uniform or chosen is not None:
+                # Uniformly add
+                mask = working_memories_to_record < list_len
+                num_memories_to_add = mask.sum()
+                if num_memories_to_add == 0:
+                    working_memories_to_record -= list_len
+                    continue
+                self_idx = working_memories_to_record[mask].copy()
+                working_memories_to_record[mask] = len(self)  # Kinda hacky, but works
+                working_memories_to_record -= list_len
+            else:
                 # Greedily add
                 num_memories_to_add = min(list_len, max_samples_per_state)
                 if working_memories_recorded + num_memories_to_add > working_memories and round_sample != 'up':
@@ -253,16 +295,6 @@ class AdvancedMemoryBuffer:
                     if round_sample is None:
                         self_idx = np.random.choice(list_len, num_memories_to_add, replace=False)
                 else: self_idx = np.arange(list_len)
-            else:
-                # Uniformly add
-                mask = working_memories_to_record < list_len
-                num_memories_to_add = mask.sum()
-                if num_memories_to_add == 0:
-                    working_memories_to_record -= list_len
-                    continue
-                self_idx = working_memories_to_record[mask].copy()
-                working_memories_to_record[mask] = len(self)  # Kinda hacky, but works
-                working_memories_to_record -= list_len
 
             # Get values
             for k in self.storage:
@@ -271,16 +303,20 @@ class AdvancedMemoryBuffer:
 
                 # Special cases
                 if k == 'states':
-                    val = _utility.processing.split_state(
-                        self._append_suffix(
-                            self.storage[k][list_num],
-                            keys=self.storage['keys'][list_num]),
-                        idx=self_idx,
-                        **self.split_args)
+                    if pre_concat:
+                        # val = list_num
+                        val = (list_num, list(self_idx))
+                    else:
+                        val = _utility.processing.split_state(
+                            self._append_suffix(
+                                self.storage[k][list_num],
+                                keys=self.storage['keys'][list_num]),
+                            idx=self_idx,
+                            **self.split_args)
                     
                 # Single value case
                 elif k in ('staleness',):
-                    val = torch.tensor(len(self_idx)*[self.storage[k][list_num]], device=self.device)
+                    val = np.array(len(self_idx)*[self.storage[k][list_num]])
 
                 # Main case
                 else: 
@@ -290,7 +326,8 @@ class AdvancedMemoryBuffer:
                         raise ValueError('Make sure to run `self.compute_advantages()` before sampling.')
                     if (len(self_idx) == self.storage[k][list_num].shape[0]) and (self_idx[:-1] < self_idx[1:]).all():
                         val = self.storage[k][list_num]
-                    else: val = self.storage[k][list_num][self_idx]
+                    else:
+                        val = self.storage[k][list_num][self_idx]
 
                 # Record
                 ret[k].append(val)
@@ -312,8 +349,47 @@ class AdvancedMemoryBuffer:
 
         # Stack tensors
         for k in ret:
-            if k == 'states': ret[k] = self._concat_states(ret[k], efficient=efficient)
-            else: ret[k] = torch.concat(ret[k], dim=0)
+            if k == 'states':
+                if pre_concat:
+                    # Non-flexible
+                    # ret[k] = _utility.processing.recursive_tensor_func(
+                    #     self.variable_storage['concatenated_states'], lambda t: t[ret[k]])
+
+                    # Individually indexable and masking
+                    # c = [(0, [10, 20]), (1, [50, 60, 70]), (3, [5])]
+                    if flatten: ret[k] = [(ln, [si]) for ln, sis in ret[k] for si in sis]
+                    elif pad_indexer:
+                        # Pad idx for 0 and 2 out_states so that 1 may not be indexed, saving time in the noted area
+                        last_num = self.variable_storage['concatenated_states'][1].shape[0]
+                        for i in range(len(ret[k])-1, -1, -1):
+                            while ret[k][i][0] < last_num-1:
+                                ret[k].insert(i+1, (last_num-1, [-1]))
+                                last_num -= 1
+                            last_num = ret[k][i][0]
+
+                    indexing_arr = [np.array([list(map(lambda x: x[0], ret[k]))], dtype=np.long).T]
+                    ragged_arr = list(map(lambda x: x[1], ret[k]))
+                    max_len = max(len(l) for l in ragged_arr)
+                    indexing_arr.append(np.array([l+(max_len-len(l))*[-1] for l in ragged_arr], dtype=np.long))
+                    # indexing_arr[0] = np.broadcast_to(indexing_arr[0], indexing_arr[1].shape)
+                    # slicify = True  # len(ret[k]) > .9 * self.variable_storage['concatenated_states'][1].shape[0]
+                    # if slicify:
+                    #     # Convert to slices to avoid noted slowdown in the nearly full case
+                    #     sliced_indexing_arr_0 = _utility.general.slicify_array(indexing_arr[0].squeeze(-1))
+                    #     print(sliced_indexing_arr_0)
+                    out_states = (
+                        self.variable_storage['concatenated_states'][0][indexing_arr[0], indexing_arr[1]],
+                        self.variable_storage['concatenated_states'][1][indexing_arr[0].squeeze(-1)]  # SLOWDOWN IF INDEXED
+                        if not pad_indexer or flatten else self.variable_storage['concatenated_states'][1],
+                        # if not slicify else torch.concat([self.variable_storage['concatenated_states'][1][sl] for sl in sliced_indexing_arr_0], dim=0),
+                        self.variable_storage['concatenated_states'][2][indexing_arr[0], indexing_arr[1]].clone())
+                    out_states[2][tuple(np.argwhere(indexing_arr[1]==-1).T)] = True  # Mask ragged fillers, uses -1 as indicator
+                    ret[k] = out_states
+                    if flatten: ret[k] = [rk.squeeze(1) if i!=1 else rk for i, rk in enumerate(ret[k])]
+
+                else: ret[k] = self._concat_states(ret[k], double_batch=double_batch)
+
+            else: ret[k] = torch.from_numpy(np.concat(ret[k], axis=0)).to(torch.get_default_dtype()).to(self.device)
         # memory_indices = torch.tensor(self._index_to_flat_index(memory_indices))
 
         # Shuffle
@@ -369,7 +445,7 @@ class AdvancedMemoryBuffer:
                 next_advantages = deltas + gamma * gae_lambda * next_advantages
                 # Record
                 next_state_vals = state_vals
-                self.storage['advantages'][i] = next_advantages.clone()
+                self.storage['advantages'][i] = next_advantages.copy()
             # Compute rewards
             # Could remove this, but performance impact is minimal
             if propagated_rewards is None:
@@ -573,7 +649,7 @@ class AdvancedMemoryBuffer:
         self.clear_suffix_cache()
     
     # Utility
-    def _concat_states(self, states, efficient=False):
+    def _concat_states(self, states, double_batch=False):
         # Pad with duplicate nodes when not sufficient
         # NOTE: Inefficient, nested tensor doesn't have enough
         # functionality yet
@@ -590,21 +666,23 @@ class AdvancedMemoryBuffer:
                     for s in states],
                 dim=0) for i in range(2)]
         # elif (np.array([len(s) for s in states]) == 1).all():
-        elif efficient:
+        elif double_batch:
             # Lite case (more memory and compute efficient)
             # NOTE: Shuffle currently incompatible
             # NOTE: Screws with policy indexing, need to use batch with no minibatches 
-            # TODO: Implement for else case, with more uneven node dims
-            states = [(s[0], s[0], torch.eye(s[0].shape[0], device=self.device)) if len(s) == 1 else s for s in states]
+            states = [
+                (s[0], s[0], np.eye(s[0].shape[0])) if len(s) == 1 else s for s in states]
             max_self_shape = max(s[0].shape[0] for s in states)
             max_node_shape = max(s[1].shape[0] for s in states)
-            s0 = torch.zeros((len(states), max_self_shape, states[0][0].shape[-1]), device=self.device)
+            s0 = np.zeros((len(states), max_self_shape, states[0][0].shape[-1]))
             for i, s in enumerate(states): s = s[0]; s0[i, :s.shape[0], :s.shape[1]] = s
-            s1 = torch.zeros((len(states), max_node_shape, states[0][1].shape[-1]), device=self.device)
+            s1 = np.zeros((len(states), max_node_shape, states[0][1].shape[-1]))
             for i, s in enumerate(states): s = s[1]; s1[i, :s.shape[0], :s.shape[1]] = s
-            s2 = torch.ones((len(states), max_self_shape, max_node_shape), dtype=torch.bool, device=self.device)
+            # NOTE: The size of `s2` scales at n^2 with the number of cells being simulated, so OOM can be solved by lowering `max_nodes` in dataloader
+            s2 = np.ones((len(states), max_self_shape, max_node_shape), dtype=bool)
             for i, s in enumerate(states): s = s[2]; s2[i, :s.shape[0], :s.shape[1]] = s
             states = [s0, s1, s2]
+            states = [torch.from_numpy(s).to(torch.get_default_dtype()).to(self.device) for s in states]
         else:
             # Lite case (not memory or compute efficient, but closer to previous format for non-lite)
             # Unfold to all 3 representations
@@ -642,7 +720,7 @@ class AdvancedMemoryBuffer:
             for k in keys:
                 val = self.persistent_storage['suffixes'][k]
                 suffix_matrix.append(val)
-            suffix_matrix = torch.stack(suffix_matrix, dim=0)
+            suffix_matrix = np.stack(suffix_matrix, axis=0)
 
             # Add to cache
             if self.cache_suffix:
@@ -654,7 +732,7 @@ class AdvancedMemoryBuffer:
                         ' states in your data.', RuntimeWarning)
 
         # Append to state
-        return torch.concat((state, suffix_matrix), dim=1)
+        return np.concat((state, suffix_matrix), axis=1)
 
     def _flat_index_to_index(self, idx, inverse=False):
         """

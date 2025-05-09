@@ -49,3 +49,25 @@ def partition_distance(data, partitions=None, func=euclidean_distance):
     
     dist = torch.sparse_coo_tensor(indices, values, 2*data.shape[0:1]).coalesce()
     return scipy.sparse.coo_matrix((dist.values(), dist.indices()), shape=dist.shape).tocsr()
+
+def npolar_to_cartesian(coords):
+    "Converts polar `coords` (r, theta_1, ...) to cartesian (x1, x2, ...)"
+    # https://stackoverflow.com/a/20133681
+    r = coords[..., [0]]
+    thetas = torch.concat((torch.zeros((*coords.shape[:-1], 1), device=coords.device), coords[..., 1:]), dim=-1)
+    thetas_sin = thetas.sin()
+    thetas_sin[..., 0] = 1
+    thetas_sin = thetas_sin.cumprod(dim=-1)
+    thetas_cos = thetas.cos()
+    thetas_cos = thetas_cos.roll(-1, dims=-1)
+    return r * thetas_sin * thetas_cos
+
+
+def vec_to_n1polar(orig):
+    r = orig.norm(dim=-1)
+    thetas = (orig / r).acos()
+    return r, thetas
+
+
+def n1polar_to_vec(r, thetas):
+    return thetas.cos() * r

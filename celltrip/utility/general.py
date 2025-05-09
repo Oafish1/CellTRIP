@@ -1,6 +1,7 @@
 import warnings
 
 import h5py
+import numpy as np
 import torch
 
 
@@ -71,6 +72,27 @@ def rolled_index(arrays, idx):
     """
     if len(arrays) == 0: return []
     return rolled_index(arrays[:-1], idx//len(arrays[-1])) + [arrays[-1][idx%len(arrays[-1])]]
+
+
+def slicify_array(array):
+    """
+    Convert np.array to contiguous slices, i.e.
+    [0, 1, 2, 4, 5, 6, 8] -> [slice(0, 3, None), slice(3, 6, None), slice(6, 7, None)]
+
+    Example:
+    a = np.array([0, 1, 2, 4, 5, 6, 8])
+    slices = slicify_array(a)
+    for sl in slices: print(a[sl])
+
+    > [0 1 2]
+    > [4 5 6]
+    > [8]
+    """
+    anomalies = np.argwhere(~(array[1:]-1 == array[:-1])).flatten()
+    endpoints = np.concat((anomalies+1, [len(array)]))
+    startpoints = np.concat(([0], anomalies+1))
+    slices = [slice(st, en) for st, en in zip(startpoints, endpoints)]
+    return slices
 
 
 def h5_tree(val, pre=''):

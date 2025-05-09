@@ -59,7 +59,7 @@ group = parser.add_argument_group('Logging')
 group.add_argument('--logfile', type=str, default='cli', help='Location for log file, can be `cli`, `<local_file>`, or `<s3 location>`')
 group.add_argument('--flush_iterations', default=25, type=int, help='Number of iterations to wait before flushing logs')
 group.add_argument('--checkpoint', type=str, help='Checkpoint to use for initializing model')
-group.add_argument('--checkpoint_iterations', type=int, default=250, help='Number of updates to wait before recording checkpoints')
+group.add_argument('--checkpoint_iterations', type=int, default=100, help='Number of updates to wait before recording checkpoints')
 group.add_argument('--checkpoint_dir', type=str, default='./checkpoints', help='Directory for checkpoints')
 group.add_argument('--checkpoint_name', type=str, help='Run name, for checkpointing')
 
@@ -119,7 +119,7 @@ def train(config):
     import celltrip
 
     # Initialization
-    dataloader_kwargs = {'mask': config.train_split}  # {'num_nodes': 20, 'pca_dim': 128}
+    dataloader_kwargs = {'num_nodes': 1_000, 'mask': config.train_split}  # {'num_nodes': 20, 'pca_dim': 128}
     environment_kwargs = {
         'input_modalities': config.input_modalities,
         'target_modalities': config.target_modalities, 'dim': config.dim}
@@ -127,6 +127,7 @@ def train(config):
         input_files=config.input_files, merge_files=config.merge_files,
         backed=config.backed, dataloader_kwargs=dataloader_kwargs,
         # policy_kwargs={'minibatch_size': 10_000},
+        memory_kwargs={'device': 'cuda:0'},
         environment_kwargs=environment_kwargs)
 
     # Stages

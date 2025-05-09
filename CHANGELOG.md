@@ -1,3 +1,38 @@
+### 1.0.0+2025.5.8
+- Add discrete action space
+- Add further input sanitization to reduce `fast_sample` indexing time
+- Store all buffer memories in numpy arrays for faster indexing
+
+### 1.0.0+2025.5.7
+- Add direct indexing to `AdvancedMemoryBuffer`
+- All optimizations considered, speeds up memory indexing by >10x and allows for specific indexing, rather than grouped
+- Added environment behavior parameters
+- Revise `PPO.update` to iterate over all memories (if desired)
+
+### 1.0.0+2025.5.6
+- Add extremely rapid sampling, soon to be for uniform samples
+- Fix bug with improper caching of noised modalities
+- Pre-concatenation of buffer for fast load times in memory
+
+### 1.0.0+2025.5.5
+- Add scaling for policy entropy based on output size in combination with magnitude scaling
+- More testing and tuning
+
+### 1.0.0+2025.5.4
+- Assorted minor policy and environment changes, including reward calculation and increased simulation length
+- Much hyperparameter tuning and testing
+
+### 1.0.0+2025.5.3
+- Add utility functions
+- Change policy output to magnitude-direction format
+- Environment reward refinement and scaling
+- Hyperparameter tuning
+
+### 1.0.0+2025.5.2
+- More testing and tuning
+- Readd action reward to default environment and make distance relative
+- Smoothing correction for `runtime` notebook
+
 ### 1.0.0+2025.5.1
 - Fix bug with batch size calculation
 - Much hyperparameter tuning

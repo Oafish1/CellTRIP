@@ -2690,7 +2690,6 @@ static const char __pyx_k_dtype[] = "dtype";
 static const char __pyx_k_first[] = "first";
 static const char __pyx_k_fname[] = "fname";
 static const char __pyx_k_index[] = "index";
-static const char __pyx_k_input[] = "input";
 static const char __pyx_k_items[] = "items";
 static const char __pyx_k_m_idx[] = "m_idx";
 static const char __pyx_k_m_std[] = "m_std";
@@ -2827,6 +2826,7 @@ static const char __pyx_k_empty_like[] = "empty_like";
 static const char __pyx_k_fit_memory[] = "_fit_memory";
 static const char __pyx_k_fit_sample[] = "fit_sample";
 static const char __pyx_k_index_name[] = "index_name";
+static const char __pyx_k_input_data[] = "input_data";
 static const char __pyx_k_load_level[] = "load_level";
 static const char __pyx_k_merged_obs[] = "merged_obs";
 static const char __pyx_k_modal_dims[] = "modal_dims";
@@ -2998,7 +2998,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_10processing_21PreprocessFromAnnDat
 static PyObject *__pyx_pf_8celltrip_7utility_10processing_21PreprocessFromAnnData_8_fit_disk(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self); /* proto */
 static PyObject *__pyx_pf_8celltrip_7utility_10processing_21PreprocessFromAnnData_10_transform_disk(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_self, PyObject *__pyx_v_return_partition); /* proto */
 static PyObject *__pyx_pf_8celltrip_7utility_10processing_6split_state(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_state, PyObject *__pyx_v_idx, PyObject *__pyx_v_sample_strategy, PyObject *__pyx_v_max_nodes, PyObject *__pyx_v_reproducible_strategy, PyObject *__pyx_v_sample_dim, PyObject *__pyx_v_return_mask); /* proto */
-static PyObject *__pyx_pf_8celltrip_7utility_10processing_8recursive_tensor_func(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_input, PyObject *__pyx_v_func); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_10processing_8recursive_tensor_func(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_input_data, PyObject *__pyx_v_func); /* proto */
 static PyObject *__pyx_pf_8celltrip_7utility_10processing_10dict_map(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_dict, PyObject *__pyx_v_func, PyObject *__pyx_v_inplace); /* proto */
 static PyObject *__pyx_pf_8celltrip_7utility_10processing_32dict_map_recursive_tensor_idx_to_subfunc(PyObject *__pyx_self, PyObject *__pyx_v_x); /* proto */
 static PyObject *__pyx_lambda_funcdef_lambda4(PyObject *__pyx_self, PyObject *__pyx_v_x); /* proto */
@@ -3221,7 +3221,7 @@ typedef struct {
   PyObject *__pyx_n_s_init_subclass;
   PyObject *__pyx_n_s_initializing;
   PyObject *__pyx_n_s_inplace;
-  PyObject *__pyx_n_s_input;
+  PyObject *__pyx_n_s_input_data;
   PyObject *__pyx_n_s_intersect1d;
   PyObject *__pyx_n_s_inverse_transform;
   PyObject *__pyx_n_s_io;
@@ -3740,7 +3740,7 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_n_s_init_subclass);
   Py_CLEAR(clear_module_state->__pyx_n_s_initializing);
   Py_CLEAR(clear_module_state->__pyx_n_s_inplace);
-  Py_CLEAR(clear_module_state->__pyx_n_s_input);
+  Py_CLEAR(clear_module_state->__pyx_n_s_input_data);
   Py_CLEAR(clear_module_state->__pyx_n_s_intersect1d);
   Py_CLEAR(clear_module_state->__pyx_n_s_inverse_transform);
   Py_CLEAR(clear_module_state->__pyx_n_s_io);
@@ -4237,7 +4237,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_n_s_init_subclass);
   Py_VISIT(traverse_module_state->__pyx_n_s_initializing);
   Py_VISIT(traverse_module_state->__pyx_n_s_inplace);
-  Py_VISIT(traverse_module_state->__pyx_n_s_input);
+  Py_VISIT(traverse_module_state->__pyx_n_s_input_data);
   Py_VISIT(traverse_module_state->__pyx_n_s_intersect1d);
   Py_VISIT(traverse_module_state->__pyx_n_s_inverse_transform);
   Py_VISIT(traverse_module_state->__pyx_n_s_io);
@@ -4744,7 +4744,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_n_s_init_subclass __pyx_mstate_global->__pyx_n_s_init_subclass
 #define __pyx_n_s_initializing __pyx_mstate_global->__pyx_n_s_initializing
 #define __pyx_n_s_inplace __pyx_mstate_global->__pyx_n_s_inplace
-#define __pyx_n_s_input __pyx_mstate_global->__pyx_n_s_input
+#define __pyx_n_s_input_data __pyx_mstate_global->__pyx_n_s_input_data
 #define __pyx_n_s_intersect1d __pyx_mstate_global->__pyx_n_s_intersect1d
 #define __pyx_n_s_inverse_transform __pyx_mstate_global->__pyx_n_s_inverse_transform
 #define __pyx_n_s_io __pyx_mstate_global->__pyx_n_s_io
@@ -24909,9 +24909,9 @@ static PyObject *__pyx_pf_8celltrip_7utility_10processing_6split_state(CYTHON_UN
 /* "celltrip/utility/processing.py":677
  * 
  * 
- * def recursive_tensor_func(input, func):             # <<<<<<<<<<<<<<
+ * def recursive_tensor_func(input_data, func):             # <<<<<<<<<<<<<<
  *     "Applies function to tensors recursively"
- *     if type(input) == torch.Tensor:
+ *     if type(input_data) == torch.Tensor:
  */
 
 /* Python wrapper */
@@ -24931,7 +24931,7 @@ PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ) {
-  PyObject *__pyx_v_input = 0;
+  PyObject *__pyx_v_input_data = 0;
   PyObject *__pyx_v_func = 0;
   #if !CYTHON_METH_FASTCALL
   CYTHON_UNUSED Py_ssize_t __pyx_nargs;
@@ -24953,7 +24953,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   #endif
   __pyx_kwvalues = __Pyx_KwValues_FASTCALL(__pyx_args, __pyx_nargs);
   {
-    PyObject **__pyx_pyargnames[] = {&__pyx_n_s_input,&__pyx_n_s_func,0};
+    PyObject **__pyx_pyargnames[] = {&__pyx_n_s_input_data,&__pyx_n_s_func,0};
     if (__pyx_kwds) {
       Py_ssize_t kw_args;
       switch (__pyx_nargs) {
@@ -24967,7 +24967,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       kw_args = __Pyx_NumKwargs_FASTCALL(__pyx_kwds);
       switch (__pyx_nargs) {
         case  0:
-        if (likely((values[0] = __Pyx_GetKwValue_FASTCALL(__pyx_kwds, __pyx_kwvalues, __pyx_n_s_input)) != 0)) {
+        if (likely((values[0] = __Pyx_GetKwValue_FASTCALL(__pyx_kwds, __pyx_kwvalues, __pyx_n_s_input_data)) != 0)) {
           (void)__Pyx_Arg_NewRef_FASTCALL(values[0]);
           kw_args--;
         }
@@ -24994,7 +24994,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       values[0] = __Pyx_Arg_FASTCALL(__pyx_args, 0);
       values[1] = __Pyx_Arg_FASTCALL(__pyx_args, 1);
     }
-    __pyx_v_input = values[0];
+    __pyx_v_input_data = values[0];
     __pyx_v_func = values[1];
   }
   goto __pyx_L6_skip;
@@ -25013,7 +25013,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_10processing_8recursive_tensor_func(__pyx_self, __pyx_v_input, __pyx_v_func);
+  __pyx_r = __pyx_pf_8celltrip_7utility_10processing_8recursive_tensor_func(__pyx_self, __pyx_v_input_data, __pyx_v_func);
 
   /* function exit code */
   {
@@ -25026,7 +25026,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_7utility_10processing_8recursive_tensor_func(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_input, PyObject *__pyx_v_func) {
+static PyObject *__pyx_pf_8celltrip_7utility_10processing_8recursive_tensor_func(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_input_data, PyObject *__pyx_v_func) {
   PyObject *__pyx_9genexpr57__pyx_v_member = NULL;
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
@@ -25045,10 +25045,10 @@ static PyObject *__pyx_pf_8celltrip_7utility_10processing_8recursive_tensor_func
   __Pyx_RefNannySetupContext("recursive_tensor_func", 1);
 
   /* "celltrip/utility/processing.py":679
- * def recursive_tensor_func(input, func):
+ * def recursive_tensor_func(input_data, func):
  *     "Applies function to tensors recursively"
- *     if type(input) == torch.Tensor:             # <<<<<<<<<<<<<<
- *         return func(input)
+ *     if type(input_data) == torch.Tensor:             # <<<<<<<<<<<<<<
+ *         return func(input_data)
  * 
  */
   __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_n_s_torch); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 679, __pyx_L1_error)
@@ -25056,7 +25056,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_10processing_8recursive_tensor_func
   __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_Tensor); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 679, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  __pyx_t_1 = PyObject_RichCompare(((PyObject *)Py_TYPE(__pyx_v_input)), __pyx_t_2, Py_EQ); __Pyx_XGOTREF(__pyx_t_1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 679, __pyx_L1_error)
+  __pyx_t_1 = PyObject_RichCompare(((PyObject *)Py_TYPE(__pyx_v_input_data)), __pyx_t_2, Py_EQ); __Pyx_XGOTREF(__pyx_t_1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 679, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
   __pyx_t_3 = __Pyx_PyObject_IsTrue(__pyx_t_1); if (unlikely((__pyx_t_3 < 0))) __PYX_ERR(0, 679, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
@@ -25064,10 +25064,10 @@ static PyObject *__pyx_pf_8celltrip_7utility_10processing_8recursive_tensor_func
 
     /* "celltrip/utility/processing.py":680
  *     "Applies function to tensors recursively"
- *     if type(input) == torch.Tensor:
- *         return func(input)             # <<<<<<<<<<<<<<
+ *     if type(input_data) == torch.Tensor:
+ *         return func(input_data)             # <<<<<<<<<<<<<<
  * 
- *     return [recursive_tensor_func(member, func) for member in input]
+ *     return [recursive_tensor_func(member, func) for member in input_data]
  */
     __Pyx_XDECREF(__pyx_r);
     __Pyx_INCREF(__pyx_v_func);
@@ -25086,7 +25086,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_10processing_8recursive_tensor_func
     }
     #endif
     {
-      PyObject *__pyx_callargs[2] = {__pyx_t_4, __pyx_v_input};
+      PyObject *__pyx_callargs[2] = {__pyx_t_4, __pyx_v_input_data};
       __pyx_t_1 = __Pyx_PyObject_FastCall(__pyx_t_2, __pyx_callargs+1-__pyx_t_5, 1+__pyx_t_5);
       __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
       if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 680, __pyx_L1_error)
@@ -25098,18 +25098,18 @@ static PyObject *__pyx_pf_8celltrip_7utility_10processing_8recursive_tensor_func
     goto __pyx_L0;
 
     /* "celltrip/utility/processing.py":679
- * def recursive_tensor_func(input, func):
+ * def recursive_tensor_func(input_data, func):
  *     "Applies function to tensors recursively"
- *     if type(input) == torch.Tensor:             # <<<<<<<<<<<<<<
- *         return func(input)
+ *     if type(input_data) == torch.Tensor:             # <<<<<<<<<<<<<<
+ *         return func(input_data)
  * 
  */
   }
 
   /* "celltrip/utility/processing.py":682
- *         return func(input)
+ *         return func(input_data)
  * 
- *     return [recursive_tensor_func(member, func) for member in input]             # <<<<<<<<<<<<<<
+ *     return [recursive_tensor_func(member, func) for member in input_data]             # <<<<<<<<<<<<<<
  * 
  * 
  */
@@ -25117,12 +25117,12 @@ static PyObject *__pyx_pf_8celltrip_7utility_10processing_8recursive_tensor_func
   { /* enter inner scope */
     __pyx_t_1 = PyList_New(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 682, __pyx_L6_error)
     __Pyx_GOTREF(__pyx_t_1);
-    if (likely(PyList_CheckExact(__pyx_v_input)) || PyTuple_CheckExact(__pyx_v_input)) {
-      __pyx_t_2 = __pyx_v_input; __Pyx_INCREF(__pyx_t_2);
+    if (likely(PyList_CheckExact(__pyx_v_input_data)) || PyTuple_CheckExact(__pyx_v_input_data)) {
+      __pyx_t_2 = __pyx_v_input_data; __Pyx_INCREF(__pyx_t_2);
       __pyx_t_6 = 0;
       __pyx_t_7 = NULL;
     } else {
-      __pyx_t_6 = -1; __pyx_t_2 = PyObject_GetIter(__pyx_v_input); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 682, __pyx_L6_error)
+      __pyx_t_6 = -1; __pyx_t_2 = PyObject_GetIter(__pyx_v_input_data); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 682, __pyx_L6_error)
       __Pyx_GOTREF(__pyx_t_2);
       __pyx_t_7 = __Pyx_PyObject_GetIterNextFunc(__pyx_t_2); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 682, __pyx_L6_error)
     }
@@ -25213,9 +25213,9 @@ static PyObject *__pyx_pf_8celltrip_7utility_10processing_8recursive_tensor_func
   /* "celltrip/utility/processing.py":677
  * 
  * 
- * def recursive_tensor_func(input, func):             # <<<<<<<<<<<<<<
+ * def recursive_tensor_func(input_data, func):             # <<<<<<<<<<<<<<
  *     "Applies function to tensors recursively"
- *     if type(input) == torch.Tensor:
+ *     if type(input_data) == torch.Tensor:
  */
 
   /* function exit code */
@@ -28003,7 +28003,7 @@ static int __Pyx_CreateStringTabAndInitStrings(void) {
     {&__pyx_n_s_init_subclass, __pyx_k_init_subclass, sizeof(__pyx_k_init_subclass), 0, 0, 1, 1},
     {&__pyx_n_s_initializing, __pyx_k_initializing, sizeof(__pyx_k_initializing), 0, 0, 1, 1},
     {&__pyx_n_s_inplace, __pyx_k_inplace, sizeof(__pyx_k_inplace), 0, 0, 1, 1},
-    {&__pyx_n_s_input, __pyx_k_input, sizeof(__pyx_k_input), 0, 0, 1, 1},
+    {&__pyx_n_s_input_data, __pyx_k_input_data, sizeof(__pyx_k_input_data), 0, 0, 1, 1},
     {&__pyx_n_s_intersect1d, __pyx_k_intersect1d, sizeof(__pyx_k_intersect1d), 0, 0, 1, 1},
     {&__pyx_n_s_inverse_transform, __pyx_k_inverse_transform, sizeof(__pyx_k_inverse_transform), 0, 0, 1, 1},
     {&__pyx_n_s_io, __pyx_k_io, sizeof(__pyx_k_io), 0, 0, 1, 1},
@@ -28641,11 +28641,11 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   /* "celltrip/utility/processing.py":677
  * 
  * 
- * def recursive_tensor_func(input, func):             # <<<<<<<<<<<<<<
+ * def recursive_tensor_func(input_data, func):             # <<<<<<<<<<<<<<
  *     "Applies function to tensors recursively"
- *     if type(input) == torch.Tensor:
+ *     if type(input_data) == torch.Tensor:
  */
-  __pyx_tuple__65 = PyTuple_Pack(3, __pyx_n_s_input, __pyx_n_s_func, __pyx_n_s_member); if (unlikely(!__pyx_tuple__65)) __PYX_ERR(0, 677, __pyx_L1_error)
+  __pyx_tuple__65 = PyTuple_Pack(3, __pyx_n_s_input_data, __pyx_n_s_func, __pyx_n_s_member); if (unlikely(!__pyx_tuple__65)) __PYX_ERR(0, 677, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__65);
   __Pyx_GIVEREF(__pyx_tuple__65);
   __pyx_codeobj__66 = (PyObject*)__Pyx_PyCode_New(2, 0, 0, 3, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__65, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_processing_py, __pyx_n_s_recursive_tensor_func, 677, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__66)) __PYX_ERR(0, 677, __pyx_L1_error)
@@ -29711,9 +29711,9 @@ if (!__Pyx_RefNanny) {
   /* "celltrip/utility/processing.py":677
  * 
  * 
- * def recursive_tensor_func(input, func):             # <<<<<<<<<<<<<<
+ * def recursive_tensor_func(input_data, func):             # <<<<<<<<<<<<<<
  *     "Applies function to tensors recursively"
- *     if type(input) == torch.Tensor:
+ *     if type(input_data) == torch.Tensor:
  */
   __pyx_t_4 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_10processing_9recursive_tensor_func, 0, __pyx_n_s_recursive_tensor_func, NULL, __pyx_n_s_celltrip_utility_processing, __pyx_d, ((PyObject *)__pyx_codeobj__66)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 677, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);

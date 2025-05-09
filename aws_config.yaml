@@ -43,7 +43,8 @@ available_node_types:
         max_workers: 5
         resources: {}
         node_config:
-            InstanceType: g5.2xlarge
+            InstanceType: g5.2xlarge  # 1 GPU; 16 Gb RAM
+            # InstanceType: g4dn.2xlarge  # 1 GPU; 32 Gb RAM
             ImageId: ami-0ce21b0ce8e0f5a37  # us-east-2
             # EBS storage
             BlockDeviceMappings:

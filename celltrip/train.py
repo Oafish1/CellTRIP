@@ -261,8 +261,8 @@ class Worker:
         # self.policy.synchronize('learners')
 
         # Perform update
-        with torch.autograd.detect_anomaly():
-            iterations, losses, statistics = self.policy.update(self.memory, **kwargs)
+        # with torch.autograd.detect_anomaly():
+        iterations, losses, statistics = self.policy.update(self.memory, **kwargs)
 
         # Annotate and clean
         num_new_memories = self.memory.get_new_len()
