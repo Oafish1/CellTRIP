@@ -233,6 +233,7 @@ class Preprocessing:
         adata_obs=None,
         partition_cols=None,
         mask=None,
+        num_nodes=None,
         return_partition=False,
         **kwargs,
     ):
@@ -247,6 +248,7 @@ class Preprocessing:
             [adata_ob.shape[0] for adata_ob in adata_obs])
         if mask is not None: sample_mask = np.array(mask)
         else: sample_mask = None
+        if num_nodes is None: num_nodes = self.num_nodes
             
         # Align datasets
         # TODO: Add as auxiliary function
@@ -300,11 +302,14 @@ class Preprocessing:
             adata_obs = [adata_ob[mask] for adata_ob, mask in zip(adata_obs, masks)]
         
         # Subsample nodes
-        if self.num_nodes is not None and np.array([ms > self.num_nodes for ms in modal_sizes]).all():
+        if num_nodes is not None:
+            if not isinstance(num_nodes, int):
+                num_nodes = np.random.randint(*num_nodes)  # Uniform sample from range defined by num_nodes
+        if num_nodes is not None and np.array([ms > num_nodes for ms in modal_sizes]).all():
             if adata_obs is not None:
                 # Get all sample ids and choose some
                 sample_ids = np.unique(sum([adata_ob.index.to_list() for adata_ob in adata_obs], []))
-                choice = self.subsample_rng.choice(sample_ids, self.num_nodes, replace=False)
+                choice = self.subsample_rng.choice(sample_ids, num_nodes, replace=False)
                 # Get numerical index
                 # There has to be a better way, right?
                 series = [pd.Series(np.arange(adata_ob.shape[0]), adata_ob.index) for adata_ob in adata_obs]
@@ -314,7 +319,7 @@ class Preprocessing:
                 assert np.array([ms == modal_sizes[0] for ms in modal_sizes]), (
                     'Modalities must be aligned if `adata_obs` is not provided and '
                     '`num_samples` is not `None`')
-                node_idx = self.subsample_rng.choice(modal_sizes[0], self.num_nodes, replace=False)
+                node_idx = self.subsample_rng.choice(modal_sizes[0], num_nodes, replace=False)
                 node_idxs = [node_idx for _ in range(len(modal_sizes))]
 
             # Sort (required for on-disk AnnData objects)

@@ -181,7 +181,51 @@ class AdvancedMemoryBuffer:
 
     def __getitem__(self, idx):
         if isinstance(idx, int): idx = [idx]
-        return self.fast_sample(chosen=idx)
+        idx = np.sort(np.array(idx))
+        # return self.fast_sample(chosen=idx)
+
+        # Params
+        general_storage_keys = ('actions', 'action_logs', 'state_vals', 'advantages', 'propagated_rewards')
+    
+        # Pre concatenate vars
+        if 'concatenated_buffer' not in self.variable_storage:
+            self.variable_storage['concatenated_buffer'] = {}
+            # General case
+            for k in general_storage_keys:
+                self.variable_storage['concatenated_buffer'][k] = np.concat(self.storage[k], axis=0)
+            # Key case
+            mask = _utility.general.padded_concat(list(map(lambda x: np.ones_like(x, dtype=bool), self.storage['keys'])), method='false')
+            grid = np.meshgrid(*[np.arange(s) for s in mask.shape], indexing='ij')
+            self.variable_storage['concatenated_buffer']['idx_to_buffer'] = np.stack([arr[mask] for arr in grid], axis=-1)  # TODO: Try on variable-sized envs, should work
+            # Concatenate states
+            states = [self._append_suffix(s, keys=k) for k, s in zip(self.storage['keys'], self.storage['states'])]
+            s01 = _utility.general.padded_concat(states, method='zero')
+            s2 =  _utility.general.padded_concat(list(map(lambda x: np.eye(x.shape[0], dtype=bool), states)), method='true')
+            s01 = torch.from_numpy(s01).to(torch.get_default_dtype()).to(self.device)  # Cast to tensor early to avoid repeated casting cost
+            s2 = torch.from_numpy(s2).to(torch.bool).to(self.device)
+            states = [s01, s01, s2]  
+            self.variable_storage['concatenated_buffer']['states'] = states
+
+        # Get indices to padded buffer from idx
+        buffer_idx = self.variable_storage['concatenated_buffer']['idx_to_buffer'][idx]
+        unique_list_nums, unique_list_inverse, unique_list_counts = np.unique(buffer_idx[:, 0], return_inverse=True, return_counts=True)
+        grouped_indices = -np.ones((unique_list_nums.shape[0], unique_list_counts.max()), dtype=int)
+        grouped_sample_mask = np.expand_dims(np.arange(unique_list_counts.max()), axis=0) < np.expand_dims(unique_list_counts, axis=-1)
+        grouped_indices[grouped_sample_mask] = buffer_idx[:, 1]  # np.argsort(unique_list_inverse) doesn't respect initial ordering
+        states = [
+            self.variable_storage['concatenated_buffer']['states'][0][np.expand_dims(unique_list_nums, axis=-1), grouped_indices],
+            self.variable_storage['concatenated_buffer']['states'][1][unique_list_nums],
+            self.variable_storage['concatenated_buffer']['states'][2][np.expand_dims(unique_list_nums, axis=-1), grouped_indices].clone()]
+        states[2][tuple(np.argwhere(grouped_indices==-1).T)] = True  # Mask ragged fillers, uses -1 as indicator
+
+        # Pull from padded buffer and cast to tensors
+        ret = {}
+        # General case
+        for k in general_storage_keys:
+            ret[k] = torch.from_numpy(self.variable_storage['concatenated_buffer'][k][idx]).to(torch.get_default_dtype()).to(self.device)
+        # State case
+        ret['states'] = states
+        return ret
 
     def fast_sample(
         self, num_memories=None, chosen=None, replay_frac=None, max_samples_per_state=None,
@@ -366,8 +410,16 @@ class AdvancedMemoryBuffer:
                                 ret[k].insert(i+1, (last_num-1, [-1]))
                                 last_num -= 1
                             last_num = ret[k][i][0]
+                        # Handle unsampled 0 and sequential indices
+                        while last_num > 0:
+                            ret[k].insert(0, (last_num-1, [-1]))
+                            last_num -= 1
 
                     indexing_arr = [np.array([list(map(lambda x: x[0], ret[k]))], dtype=np.long).T]
+                    if pad_indexer:
+                        # Assert in order, unique, and full
+                        assert indexing_arr[0].shape[0] == self.variable_storage['concatenated_states'][1].shape[0]
+                        assert np.all(indexing_arr[0].flatten()[1:] > indexing_arr[0].flatten()[:-1])
                     ragged_arr = list(map(lambda x: x[1], ret[k]))
                     max_len = max(len(l) for l in ragged_arr)
                     indexing_arr.append(np.array([l+(max_len-len(l))*[-1] for l in ragged_arr], dtype=np.long))
@@ -670,8 +722,7 @@ class AdvancedMemoryBuffer:
             # Lite case (more memory and compute efficient)
             # NOTE: Shuffle currently incompatible
             # NOTE: Screws with policy indexing, need to use batch with no minibatches 
-            states = [
-                (s[0], s[0], np.eye(s[0].shape[0])) if len(s) == 1 else s for s in states]
+            states = [(s[0], s[0], np.eye(s[0].shape[0], dtype=bool)) if len(s) == 1 else s for s in states]
             max_self_shape = max(s[0].shape[0] for s in states)
             max_node_shape = max(s[1].shape[0] for s in states)
             s0 = np.zeros((len(states), max_self_shape, states[0][0].shape[-1]))
@@ -682,6 +733,10 @@ class AdvancedMemoryBuffer:
             s2 = np.ones((len(states), max_self_shape, max_node_shape), dtype=bool)
             for i, s in enumerate(states): s = s[2]; s2[i, :s.shape[0], :s.shape[1]] = s
             states = [s0, s1, s2]
+            # states = [
+            #     _utility.general.padded_concat(list(map(lambda x: x[0], states)), method='zero'),
+            #     _utility.general.padded_concat(list(map(lambda x: x[1], states)), method='zero'),
+            #     _utility.general.padded_concat(list(map(lambda x: x[2], states)), method='true')]
             states = [torch.from_numpy(s).to(torch.get_default_dtype()).to(self.device) for s in states]
         else:
             # Lite case (not memory or compute efficient, but closer to previous format for non-lite)

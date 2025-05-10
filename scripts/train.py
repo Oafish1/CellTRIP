@@ -119,7 +119,7 @@ def train(config):
     import celltrip
 
     # Initialization
-    dataloader_kwargs = {'num_nodes': 1_000, 'mask': config.train_split}  # {'num_nodes': 20, 'pca_dim': 128}
+    dataloader_kwargs = {'num_nodes': [2**9, 2**11], 'mask': config.train_split}  # {'num_nodes': 20, 'pca_dim': 128}
     environment_kwargs = {
         'input_modalities': config.input_modalities,
         'target_modalities': config.target_modalities, 'dim': config.dim}

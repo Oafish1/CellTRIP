@@ -395,8 +395,8 @@ class ResidualAttentionBlock(nn.Module):
 
         # Residual Attention
         x1 = self.norms[0](x)
-        # kv1 = self.norms[1](kv)
-        kv1 = kv
+        kv1 = self.norms[1](kv)
+        # kv1 = kv
         x2, _ = self.attention(x1, kv1, kv1, attn_mask=mask)
         x = x + x2
         x1 = self.norms[2](x)
@@ -415,17 +415,14 @@ class EntitySelfAttentionLite(nn.Module):
         log_std_init=0,
         # Deep
         # hidden_dim=256,
-        # # embed_dim=32,
         # heads=8,
         # blocks=4,
         # Basic
         # hidden_dim=128,
-        # # embed_dim=16,
         # heads=4,
         # blocks=2,
         # Barebones
         hidden_dim=64,
-        # embed_dim=8,
         heads=2,
         blocks=1,
         # Options
@@ -604,12 +601,18 @@ class EntitySelfAttentionLite(nn.Module):
 
 class DiscreteActions(nn.Module):
     # Discretized based on advice from https://arxiv.org/pdf/2004.00980
-    def __init__(self, input_dim, output_dims, activation=nn.ReLU, **kwargs):
+    def __init__(self, input_dim, output_dims, hidden_dim=None, activation=nn.ReLU, **kwargs):
         super().__init__(**kwargs)
+
+        # Params
+        if hidden_dim is None: hidden_dim = input_dim
 
         # Heads
         self.deciders = nn.ModuleList([
-            nn.Sequential(activation(), nn.Linear(input_dim, output_dim)) for output_dim in output_dims])
+            nn.Sequential(
+                activation(), nn.Linear(input_dim, hidden_dim),
+                activation(), nn.Linear(hidden_dim, output_dim))
+            for output_dim in output_dims])
         
     def forward(self, logits, *, action=None, return_entropy=False):
         # Calculate actions
@@ -793,7 +796,7 @@ class PPO(nn.Module):
             epsilon_ppo=.2,
             epsilon_critic=torch.inf,
             critic_weight=1.,
-            entropy_weight=1e-2,
+            entropy_weight=0,  # 1e-2,
             kl_beta_init=0.,
             kl_beta_increment=(.5, 2),
             kl_target=.03,
@@ -810,11 +813,11 @@ class PPO(nn.Module):
             lr_iters=None,
             lr_gamma=1,
             # Backward
-            update_iterations=30,  # was 5
+            update_iterations=30,
             sync_iterations=1,
             pool_size=torch.inf,
             epoch_size=100_000,
-            batch_size=10_000,
+            batch_size=10_000,  # https://scholarworks.sjsu.edu/cgi/viewcontent.cgi?params=/context/etd_projects/article/1972/&path_info=park_inhee.pdf
             minibatch_size=torch.inf,
             # load_level='minibatch',  # TODO: Allow for loading at batch with compression
             # cast_level='minibatch',
@@ -870,7 +873,7 @@ class PPO(nn.Module):
         #     {'params': self.actor_params, 'lr': actor_lr},
         #     {'params': self.critic_params, 'lr': critic_lr}],
         #     betas=betas, weight_decay=weight_decay)
-        self.optimizer = torch.optim.Adam(self.actor_critic.parameters(), betas=betas, lr=lr, weight_decay=weight_decay)
+        self.optimizer = torch.optim.Adam(self.actor_critic.parameters(), betas=betas, lr=lr, weight_decay=weight_decay, eps=1e-5)
         if lr_iters is not None: self.scheduler = torch.optim.lr_scheduler.PolynomialLR(self.optimizer, total_iters=lr_iters)
         else: self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
 
@@ -885,7 +888,7 @@ class PPO(nn.Module):
         #     {'params': actor_params, 'lr': actor_lr},
         #     {'params': critic_params, 'lr': critic_lr}],
         #     betas=betas, weight_decay=weight_decay)
-        self.optimizer_old = torch.optim.Adam(self.actor_critic_old.parameters(), betas=betas, lr=lr, weight_decay=weight_decay)
+        self.optimizer_old = torch.optim.Adam(self.actor_critic_old.parameters(), betas=betas, lr=lr, weight_decay=weight_decay, eps=1e-5)
 
         # Non-grad params
         self.policy_iteration = nn.Parameter(torch.tensor(0.), requires_grad=False)
@@ -1117,9 +1120,9 @@ class PPO(nn.Module):
         # Level adjustment
         denominator = self.get_world_size('learners') if sync_iterations == 1 else 1  # Adjust sizes if gradients synchronized across GPUs
         # if epoch_size is not None:
-        epoch_size = np.ceil(epoch_size / denominator).astype(int)
+        if not np.isinf(self.epoch_size): epoch_size = np.ceil(epoch_size / denominator).astype(int)
         # if batch_size is not None:
-        batch_size = np.ceil(batch_size / denominator).astype(int)
+        if not np.isinf(self.batch_size): batch_size = np.ceil(batch_size / denominator).astype(int)
 
         # Minibatch size
         minibatch_size = self.minibatch_size if not (self.minibatch_size is None and batch_size is not None) else batch_size
@@ -1144,7 +1147,7 @@ class PPO(nn.Module):
             #     current_level=1, load_level=load_level, cast_level=cast_level,
             #     device=self.policy_iteration.device, **kwargs)
             epoch_idx = np.random.choice(pool_idx, epoch_size, replace=False)  # Also shuffles
-            batches = np.ceil(epoch_size/batch_size).astype(int) if epoch_size is not None else 1
+            batches = np.floor(epoch_size/batch_size).astype(int) if epoch_size is not None else 1  # Drop any smaller batches
             for batch_num in range(batches):
                 # Load batch
                 batch_losses = defaultdict(lambda: 0)
@@ -1197,16 +1200,16 @@ class PPO(nn.Module):
                     batch_losses['critic'] += loss_critic.detach().mean() * accumulation_frac
                     batch_losses['entropy'] += loss_entropy.detach().mean() * accumulation_frac
                     batch_losses['KL'] += loss_kl.detach().mean() * accumulation_frac
-                    batch_statistics['Moving Return Mean'] += self.return_standardization.mean.mean().item() * accumulation_frac
-                    batch_statistics['Moving Return STD'] += self.return_standardization.std.mean().item() * accumulation_frac
-                    # batch_statistics['Moving Reward Mean'] += self.reward_standardization.mean.mean().item() * accumulation_frac
-                    # batch_statistics['Moving Reward STD'] += self.reward_standardization.std.mean().item() * accumulation_frac
-                    batch_statistics['Return Mean'] += (advantages+state_vals).detach().mean().item() * accumulation_frac
-                    batch_statistics['Return STD'] += (advantages+state_vals).detach().std().item() * accumulation_frac
-                    # batch_statistics['Advantage Mean'] += advantages.detach().mean().item() * accumulation_frac
-                    # batch_statistics['Advantage STD'] += advantages.detach().std().item() * accumulation_frac
+                    batch_statistics['Moving Return Mean'] += self.return_standardization.mean.detach().mean() * accumulation_frac
+                    batch_statistics['Moving Return STD'] += self.return_standardization.std.detach().mean() * accumulation_frac
+                    # batch_statistics['Moving Reward Mean'] += self.reward_standardization.mean.mean() * accumulation_frac
+                    # batch_statistics['Moving Reward STD'] += self.reward_standardization.std.mean() * accumulation_frac
+                    batch_statistics['Return Mean'] += (advantages+state_vals).detach().mean() * accumulation_frac
+                    batch_statistics['Return STD'] += (advantages+state_vals).detach().std() * accumulation_frac
+                    # batch_statistics['Advantage Mean'] += advantages.detach().mean() * accumulation_frac
+                    # batch_statistics['Advantage STD'] += advantages.detach().std() * accumulation_frac
                     # batch_statistics['Log STD'] += self.get_log_std() * accumulation_frac
-                    batch_statistics['Explained Variance'] += exp_var.detach().item() * accumulation_frac
+                    batch_statistics['Explained Variance'] += exp_var.detach() * accumulation_frac
                 
                 # Record
                 for k, v in batch_losses.items(): total_losses[k].append(v)
@@ -1268,7 +1271,7 @@ class PPO(nn.Module):
                     f'Iteration {iterations:02} - '
                     + f' + '.join([f'{k} ({np.mean([v.item() for v in vl[-batches:]]):.5f})' for k, vl in total_losses.items()])
                     + f' :: '
-                    + f', '.join([f'{k} ({np.mean([v for v in vl[-batches:]]):.5f})' for k, vl in total_statistics.items()]))
+                    + f', '.join([f'{k} ({np.mean([v.item() for v in vl[-batches:]]):.5f})' for k, vl in total_statistics.items()]))
 
             # Break
             if escape: break
@@ -1282,7 +1285,7 @@ class PPO(nn.Module):
         return (
             iterations,
             {k: np.mean([v.item() for v in vl]) for k, vl in total_losses.items()},
-            {k: np.mean([v for v in vl]) for k, vl in total_statistics.items()})
+            {k: np.mean([v.item() for v in vl]) for k, vl in total_statistics.items()})
 
     def get_world_size(self, group='default', warn=False):
         try:

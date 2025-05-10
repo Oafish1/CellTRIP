@@ -181,3 +181,18 @@ def get_s3_handler_with_access(fname):
         s3.ls(fname.split('/')[2])
 
     return s3
+
+
+def padded_concat(arrays, method='zero'):
+    batch_num = len(arrays)
+    shape = np.array([arr.shape for arr in arrays])
+    max_dims = shape.max(axis=0)
+    new_shape = (batch_num, *max_dims)
+    if method == 'zero': return_matrix = np.zeros(new_shape)
+    elif method == 'ones': return_matrix = np.ones(new_shape)
+    elif method == 'false': return_matrix = np.zeros(new_shape, dtype=bool)
+    elif method == 'true': return_matrix = np.ones(new_shape, dtype=bool)
+    else: raise ValueError(f'No method `{method}` found')
+    for i, arr in enumerate(arrays):
+        return_matrix[(i, *[slice(dim) for dim in max_dims])] = arr
+    return return_matrix

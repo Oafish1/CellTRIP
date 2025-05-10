@@ -1,3 +1,15 @@
+### 1.0.0+2025.5.9
+- Add random environment truncation for stochasticity in parallel environments
+- Add random subsample size for dataloader
+- Adjust Adam epsilon
+- Change and tune hyperparameters
+- Direct indexing change to avoid python looping and excessive indexing, speedup of ~15x (90s to 6s for 2.5M buffer, 30 iterations, 100k epoch, 10k batch)
+- Fix bug with improper `pad_indexer` behavior when buffer state 0 is not sampled and add further checks to the related optimization
+- Fix improper action normalization for discrete actions
+- Prevent processing of small batches
+- Remove erroneous comment preventing layer norm for key/values in MHA
+- Tune batch size and other hyperparameters
+
 ### 1.0.0+2025.5.8
 - Add discrete action space
 - Add further input sanitization to reduce `fast_sample` indexing time

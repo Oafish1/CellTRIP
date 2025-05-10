@@ -19,6 +19,7 @@ class EnvironmentBase:
         vel_bound=1,
         vel_rand_bound=0,
         force_bound=torch.inf,
+        discrete_force=1,
         delta=.1,
         discrete=True,
         spherical=True,
@@ -36,9 +37,10 @@ class EnvironmentBase:
         penalty_action=None,
         epsilon=1e-5,  # Limit to max rew of ~ln(2/3 - 1e-5) = 11.11 * coeff
         # Early stopping
-        max_timesteps=100,
+        max_timesteps=1_000,
+        min_timesteps=100,
         terminate_time=True,
-        min_timesteps=0,
+        terminate_random=True,
         terminate_bound=False,
         terminate_velocity=False,
         vel_threshold=1e-3,
@@ -55,11 +57,13 @@ class EnvironmentBase:
         self.vel_bound = vel_bound
         self.vel_rand_bound = vel_rand_bound
         self.force_bound = force_bound
+        self.discrete_force = discrete_force
         self.delta = delta
         self.discrete = discrete
         self.spherical = spherical
         self.termination_conds = {
             'time': terminate_time,
+            'random': terminate_random,
             'velocity': terminate_velocity,
             'bound': terminate_bound}
         self.vel_threshold = vel_threshold
@@ -200,11 +204,14 @@ class EnvironmentBase:
         # force = magnitude * direction
         if self.discrete:
             force = self.vel_bound * (actions - 1)
+            if self.spherical:
+                force_norm = force.norm(keepdim=True, dim=-1)
+                force = self.discrete_force * force / (force_norm + self.epsilon)
         else: force = actions
         if self.spherical:
             force_norm = force.norm(keepdim=True, dim=-1)
             over_mask = force_norm.squeeze(-1) > self.force_bound
-            force[over_mask] = self.force_bound * force[over_mask] / force_norm[over_mask]
+            force[over_mask] = self.force_bound * force[over_mask] / (force_norm[over_mask] + self.epsilon)
         else:
             force = force.clamp(-self.force_bound, self.force_bound)
         # Add velocity
@@ -258,7 +265,7 @@ class EnvironmentBase:
             reward_distance     *=  self.reward_scales['reward_distance']    * 1e-1/delta          # Raw 1e0, Log 1e0
             reward_origin       *=  self.reward_scales['reward_origin']      * 1e-1/delta          # Raw 1e0, Log 1e0
             penalty_bound       *=  self.reward_scales['penalty_bound']      * 1e0
-            penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e-1          # Raw 1e1, Log 1e0
+            penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e0          # Raw 1e1, Log 1e0
             penalty_action      *=  self.reward_scales['penalty_action']     * 1e-3
             # self.steps += 1
         else:
@@ -315,6 +322,9 @@ class EnvironmentBase:
         self.timestep = 0
         self.lapses = 0
         self.best = 0
+
+        # Reset end cond
+        self.end_timesteps = np.random.randint(self.min_timesteps, self.max_timesteps) if self.min_timesteps < self.max_timesteps else self.max_timesteps
 
         # Reset cache
         self.dist.clear()
@@ -383,14 +393,16 @@ class EnvironmentBase:
         # Min threshold for stop
         if self.timestep < self.min_timesteps: return False  # , 'min_thresh', 0.
         # Boundary stop
-        if self.termination_conds['bound'] and (self.pos.norm(dim=-1)-self.pos_bound > 0).any(): return True, 'bound', 0.
+        if self.termination_conds['bound'] and (self.pos.norm(dim=-1)-self.pos_bound > 0).any(): return True  # , 'bound', 0.
         # Latency stop
         # if self.lapses >= self.latency: return True, 'lat', 0.
         # Velocity stop
         if self.termination_conds['velocity'] and self.get_velocities().norm(dim=-1).max() <= self.vel_threshold:
-            return True, 'vel', 0.
+            return True  # , 'vel', 0.
         # Time stop
         if self.termination_conds['time'] and self.timestep >= self.max_timesteps: return True  # , 'time', 0.
+        # Random stop
+        if self.termination_conds['random'] and self.timestep >= self.end_timesteps: return True
         # Default
         return False  # , 'def', 0.
 

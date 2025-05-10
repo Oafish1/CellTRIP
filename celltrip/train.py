@@ -245,8 +245,7 @@ class Worker:
     @_decorator.metrics(append_to_dict=True)
     # @_decorator.line_profile(signatures=[
     #     _memory.AdvancedMemoryBuffer.compute_advantages,
-    #     _memory.AdvancedMemoryBuffer.fast_sample, _policy.PPO.update,
-    #     _utility.processing.split_state])
+    #     _memory.AdvancedMemoryBuffer.fast_sample, _policy.PPO.update])
     # @_decorator.profile(time_annotation=True)
     def update(self, **kwargs):
         # Flush buffer
