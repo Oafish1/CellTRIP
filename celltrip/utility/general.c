@@ -8442,9 +8442,9 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_28padded_concat(CYTHON_UNU
   unsigned int __pyx_t_8;
   int __pyx_t_9;
   Py_UCS4 __pyx_t_10;
-  Py_ssize_t __pyx_t_11;
-  PyObject *(*__pyx_t_12)(PyObject *);
-  PyObject *__pyx_t_13 = NULL;
+  PyObject *__pyx_t_11 = NULL;
+  Py_ssize_t __pyx_t_12;
+  PyObject *(*__pyx_t_13)(PyObject *);
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
@@ -8764,7 +8764,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_28padded_concat(CYTHON_UNU
  *     elif method == 'true': return_matrix = np.ones(new_shape, dtype=bool)
  *     else: raise ValueError(f'No method `{method}` found')             # <<<<<<<<<<<<<<
  *     for i, arr in enumerate(arrays):
- *         return_matrix[(i, *[slice(dim) for dim in max_dims])] = arr
+ *         return_matrix[(i, *[slice(dim) for dim in arr.shape])] = arr
  */
   /*else*/ {
     __pyx_t_2 = PyTuple_New(3); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 195, __pyx_L1_error)
@@ -8802,7 +8802,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_28padded_concat(CYTHON_UNU
  *     elif method == 'true': return_matrix = np.ones(new_shape, dtype=bool)
  *     else: raise ValueError(f'No method `{method}` found')
  *     for i, arr in enumerate(arrays):             # <<<<<<<<<<<<<<
- *         return_matrix[(i, *[slice(dim) for dim in max_dims])] = arr
+ *         return_matrix[(i, *[slice(dim) for dim in arr.shape])] = arr
  *     return return_matrix
  */
   __Pyx_INCREF(__pyx_int_0);
@@ -8872,7 +8872,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_28padded_concat(CYTHON_UNU
     /* "celltrip/utility/general.py":197
  *     else: raise ValueError(f'No method `{method}` found')
  *     for i, arr in enumerate(arrays):
- *         return_matrix[(i, *[slice(dim) for dim in max_dims])] = arr             # <<<<<<<<<<<<<<
+ *         return_matrix[(i, *[slice(dim) for dim in arr.shape])] = arr             # <<<<<<<<<<<<<<
  *     return return_matrix
  */
     __pyx_t_4 = PyList_New(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 197, __pyx_L1_error)
@@ -8885,49 +8885,52 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_28padded_concat(CYTHON_UNU
     { /* enter inner scope */
       __pyx_t_4 = PyList_New(0); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 197, __pyx_L15_error)
       __Pyx_GOTREF(__pyx_t_4);
-      if (likely(PyList_CheckExact(__pyx_v_max_dims)) || PyTuple_CheckExact(__pyx_v_max_dims)) {
-        __pyx_t_7 = __pyx_v_max_dims; __Pyx_INCREF(__pyx_t_7);
-        __pyx_t_11 = 0;
-        __pyx_t_12 = NULL;
+      __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_arr, __pyx_n_s_shape); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 197, __pyx_L15_error)
+      __Pyx_GOTREF(__pyx_t_7);
+      if (likely(PyList_CheckExact(__pyx_t_7)) || PyTuple_CheckExact(__pyx_t_7)) {
+        __pyx_t_11 = __pyx_t_7; __Pyx_INCREF(__pyx_t_11);
+        __pyx_t_12 = 0;
+        __pyx_t_13 = NULL;
       } else {
-        __pyx_t_11 = -1; __pyx_t_7 = PyObject_GetIter(__pyx_v_max_dims); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 197, __pyx_L15_error)
-        __Pyx_GOTREF(__pyx_t_7);
-        __pyx_t_12 = __Pyx_PyObject_GetIterNextFunc(__pyx_t_7); if (unlikely(!__pyx_t_12)) __PYX_ERR(0, 197, __pyx_L15_error)
+        __pyx_t_12 = -1; __pyx_t_11 = PyObject_GetIter(__pyx_t_7); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 197, __pyx_L15_error)
+        __Pyx_GOTREF(__pyx_t_11);
+        __pyx_t_13 = __Pyx_PyObject_GetIterNextFunc(__pyx_t_11); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 197, __pyx_L15_error)
       }
+      __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
       for (;;) {
-        if (likely(!__pyx_t_12)) {
-          if (likely(PyList_CheckExact(__pyx_t_7))) {
+        if (likely(!__pyx_t_13)) {
+          if (likely(PyList_CheckExact(__pyx_t_11))) {
             {
-              Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_t_7);
+              Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_t_11);
               #if !CYTHON_ASSUME_SAFE_MACROS
               if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 197, __pyx_L15_error)
               #endif
-              if (__pyx_t_11 >= __pyx_temp) break;
+              if (__pyx_t_12 >= __pyx_temp) break;
             }
             #if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
-            __pyx_t_13 = PyList_GET_ITEM(__pyx_t_7, __pyx_t_11); __Pyx_INCREF(__pyx_t_13); __pyx_t_11++; if (unlikely((0 < 0))) __PYX_ERR(0, 197, __pyx_L15_error)
+            __pyx_t_7 = PyList_GET_ITEM(__pyx_t_11, __pyx_t_12); __Pyx_INCREF(__pyx_t_7); __pyx_t_12++; if (unlikely((0 < 0))) __PYX_ERR(0, 197, __pyx_L15_error)
             #else
-            __pyx_t_13 = __Pyx_PySequence_ITEM(__pyx_t_7, __pyx_t_11); __pyx_t_11++; if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 197, __pyx_L15_error)
-            __Pyx_GOTREF(__pyx_t_13);
+            __pyx_t_7 = __Pyx_PySequence_ITEM(__pyx_t_11, __pyx_t_12); __pyx_t_12++; if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 197, __pyx_L15_error)
+            __Pyx_GOTREF(__pyx_t_7);
             #endif
           } else {
             {
-              Py_ssize_t __pyx_temp = __Pyx_PyTuple_GET_SIZE(__pyx_t_7);
+              Py_ssize_t __pyx_temp = __Pyx_PyTuple_GET_SIZE(__pyx_t_11);
               #if !CYTHON_ASSUME_SAFE_MACROS
               if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 197, __pyx_L15_error)
               #endif
-              if (__pyx_t_11 >= __pyx_temp) break;
+              if (__pyx_t_12 >= __pyx_temp) break;
             }
             #if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
-            __pyx_t_13 = PyTuple_GET_ITEM(__pyx_t_7, __pyx_t_11); __Pyx_INCREF(__pyx_t_13); __pyx_t_11++; if (unlikely((0 < 0))) __PYX_ERR(0, 197, __pyx_L15_error)
+            __pyx_t_7 = PyTuple_GET_ITEM(__pyx_t_11, __pyx_t_12); __Pyx_INCREF(__pyx_t_7); __pyx_t_12++; if (unlikely((0 < 0))) __PYX_ERR(0, 197, __pyx_L15_error)
             #else
-            __pyx_t_13 = __Pyx_PySequence_ITEM(__pyx_t_7, __pyx_t_11); __pyx_t_11++; if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 197, __pyx_L15_error)
-            __Pyx_GOTREF(__pyx_t_13);
+            __pyx_t_7 = __Pyx_PySequence_ITEM(__pyx_t_11, __pyx_t_12); __pyx_t_12++; if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 197, __pyx_L15_error)
+            __Pyx_GOTREF(__pyx_t_7);
             #endif
           }
         } else {
-          __pyx_t_13 = __pyx_t_12(__pyx_t_7);
-          if (unlikely(!__pyx_t_13)) {
+          __pyx_t_7 = __pyx_t_13(__pyx_t_11);
+          if (unlikely(!__pyx_t_7)) {
             PyObject* exc_type = PyErr_Occurred();
             if (exc_type) {
               if (likely(__Pyx_PyErr_GivenExceptionMatches(exc_type, PyExc_StopIteration))) PyErr_Clear();
@@ -8935,16 +8938,16 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_28padded_concat(CYTHON_UNU
             }
             break;
           }
-          __Pyx_GOTREF(__pyx_t_13);
+          __Pyx_GOTREF(__pyx_t_7);
         }
-        __Pyx_XDECREF_SET(__pyx_8genexpr3__pyx_v_dim, __pyx_t_13);
-        __pyx_t_13 = 0;
-        __pyx_t_13 = PySlice_New(Py_None, __pyx_8genexpr3__pyx_v_dim, Py_None); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 197, __pyx_L15_error)
-        __Pyx_GOTREF(__pyx_t_13);
-        if (unlikely(__Pyx_ListComp_Append(__pyx_t_4, (PyObject*)__pyx_t_13))) __PYX_ERR(0, 197, __pyx_L15_error)
-        __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
+        __Pyx_XDECREF_SET(__pyx_8genexpr3__pyx_v_dim, __pyx_t_7);
+        __pyx_t_7 = 0;
+        __pyx_t_7 = PySlice_New(Py_None, __pyx_8genexpr3__pyx_v_dim, Py_None); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 197, __pyx_L15_error)
+        __Pyx_GOTREF(__pyx_t_7);
+        if (unlikely(__Pyx_ListComp_Append(__pyx_t_4, (PyObject*)__pyx_t_7))) __PYX_ERR(0, 197, __pyx_L15_error)
+        __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
       }
-      __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
+      __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
       __Pyx_XDECREF(__pyx_8genexpr3__pyx_v_dim); __pyx_8genexpr3__pyx_v_dim = 0;
       goto __pyx_L19_exit_scope;
       __pyx_L15_error:;
@@ -8967,7 +8970,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_28padded_concat(CYTHON_UNU
  *     elif method == 'true': return_matrix = np.ones(new_shape, dtype=bool)
  *     else: raise ValueError(f'No method `{method}` found')
  *     for i, arr in enumerate(arrays):             # <<<<<<<<<<<<<<
- *         return_matrix[(i, *[slice(dim) for dim in max_dims])] = arr
+ *         return_matrix[(i, *[slice(dim) for dim in arr.shape])] = arr
  *     return return_matrix
  */
   }
@@ -8976,7 +8979,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_28padded_concat(CYTHON_UNU
 
   /* "celltrip/utility/general.py":198
  *     for i, arr in enumerate(arrays):
- *         return_matrix[(i, *[slice(dim) for dim in max_dims])] = arr
+ *         return_matrix[(i, *[slice(dim) for dim in arr.shape])] = arr
  *     return return_matrix             # <<<<<<<<<<<<<<
  */
   __Pyx_XDECREF(__pyx_r);
@@ -8999,7 +9002,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_28padded_concat(CYTHON_UNU
   __Pyx_XDECREF(__pyx_t_4);
   __Pyx_XDECREF(__pyx_t_5);
   __Pyx_XDECREF(__pyx_t_7);
-  __Pyx_XDECREF(__pyx_t_13);
+  __Pyx_XDECREF(__pyx_t_11);
   __Pyx_AddTraceback("celltrip.utility.general.padded_concat", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;

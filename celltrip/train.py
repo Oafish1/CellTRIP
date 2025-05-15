@@ -23,6 +23,7 @@ def simulate_until_completion(
     dummy=False, verbose=False):
     # NOTE: Does not flush buffer
     # Params
+    assert not (keys is not None and reset_on_finish), 'Cannot manually set keys while `reset_on_finish` is `True`'
     if keys is None: keys = env.get_keys()
 
     # Store states
@@ -82,7 +83,10 @@ def simulate_until_completion(
                 policy(state, keys=keys, memory=memory, terminal=True, feature_embeds=feature_embeds)
             # Reset if needed
             if finished:
-                if reset_on_finish: env.reset()
+                if reset_on_finish:
+                    env.reset()
+                    keys = env.get_keys()
+                    feature_embeds = None
                 else: break
             # Escape
             if not continue_condition: break

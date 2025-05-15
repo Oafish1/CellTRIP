@@ -273,6 +273,11 @@ class Preprocessing:
                 modalities = [m[sample_mask] for m in modalities]
             if adata_obs is not None:
                 adata_obs = [adata_ob[sample_mask] for adata_ob in adata_obs]
+            # Recalculate modal sizes if needed
+            modal_sizes = (
+                [m.shape[0] for m in modalities] if modalities is not None else
+                [adata_ob.shape[0] for adata_ob in adata_obs])
+            
         
         # Partition
         selected_partition = None
@@ -372,8 +377,7 @@ def read_adatas(*fnames, backed=False):
                 # handle = fname_local
                 # Backed with s3
                 file_h5 = h5py.File(f, 'r')
-                if file_h5['X'].attrs['encoding-type'] == 'array':  # Dense data
-                    X = file_h5['X']  # TODO
+                if file_h5['X'].attrs['encoding-type'] == 'array': X = file_h5['X']  # Dense data
                 else: X = ad.io.sparse_dataset(file_h5['X'])  # Sparse data
                 adata = ad.AnnData(
                     X=X, **{
@@ -393,11 +397,11 @@ def read_adatas(*fnames, backed=False):
     return adatas
 
 
-def merge_adatas(*adatas, backed=False):
+def merge_adatas(*adatas, backed=False, join_vars='inner'):
     if not backed:
         adatas = ad.concat(adatas)  # TODO: Test
     else:
-        adatas = [ad.experimental.AnnCollection(adatas)]
+        adatas = [ad.experimental.AnnCollection(adatas, join_vars=join_vars)]
         adatas[0].var = adatas[0].adatas[0].var
         
     return adatas

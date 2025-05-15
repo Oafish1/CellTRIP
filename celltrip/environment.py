@@ -16,11 +16,11 @@ class EnvironmentBase:
         dim=16,
         pos_bound=torch.inf,
         pos_rand_bound=1,
-        vel_bound=1,
+        vel_bound=torch.inf,
         vel_rand_bound=0,
         force_bound=torch.inf,
         discrete_force=1,
-        delta=.1,
+        delta=.05,
         discrete=True,
         spherical=True,
         # Targets
@@ -31,11 +31,12 @@ class EnvironmentBase:
         # Rewards
         compute_rewards=True,
         reward_distance=None,
+        reward_expvar=None,
         reward_origin=None,
         penalty_bound=None,
         penalty_velocity=None,
         penalty_action=None,
-        epsilon=1e-5,  # Limit to max rew of ~ln(2/3 - 1e-5) = 11.11 * coeff
+        epsilon=1e-5,
         # Early stopping
         max_timesteps=1_000,
         min_timesteps=100,
@@ -119,6 +120,7 @@ class EnvironmentBase:
         # NOTE: Rewards can and should go positive, penalties can't
         self.reward_scales = {
             'reward_distance': reward_distance,     # Emulate distances of each modality
+            'reward_expvar': reward_expvar,     # Explained variance
             'reward_origin': reward_origin,         # Make sure the mean of positions is close to the origin
             'penalty_bound': penalty_bound,         # Don't touch the bounds
             'penalty_velocity': penalty_velocity,   # Don't move fast
@@ -130,7 +132,8 @@ class EnvironmentBase:
         if np.array(list(reward_not_set.values())).all():
             # If all rewards are unset to zero, turn on default final rewards
             self.reward_scales = {
-                'reward_distance': 1,
+                'reward_distance': 0,
+                'reward_expvar': 1,
                 'reward_origin': 0,
                 'penalty_bound': 0,
                 'penalty_velocity': 1,
@@ -168,13 +171,18 @@ class EnvironmentBase:
         ### Pre-step calculations
         if self.compute_rewards:
             # Distance reward (Emulate combined intra-modal distances)
-            # get_reward_distance = lambda: self.get_distance_match()
-            get_reward_distance = lambda: (self.get_distance_match()+self.epsilon).log()
+            get_reward_distance = lambda: self.get_distance_match(use_cache=True)
+            # get_reward_distance = lambda: (self.get_distance_match()+self.epsilon).log().mean(dim=-1)
             # get_reward_distance = lambda: 1 / (1+self.get_distance_match())
             if self.reward_scales['reward_distance'] != 0:
                 reward_distance = get_reward_distance()
                 # reward_distance = 0
             else: reward_distance = torch.zeros(actions.shape[0], device=self.device)
+            # Expvar reward
+            get_reward_expvar = lambda: self.get_expvar(use_cache=True)
+            if self.reward_scales['reward_expvar'] != 0:
+                reward_expvar = get_reward_expvar()
+            else: reward_expvar = torch.zeros(actions.shape[0], device=self.device)
             # Origin penalty
             get_reward_origin = lambda: self.get_distance_from_origin()
             # get_reward_origin = lambda: (self.get_distance_from_origin()+self.epsilon).log()
@@ -203,15 +211,16 @@ class EnvironmentBase:
         # direction = actions[..., :-1] / actions[..., :-1].norm(keepdim=True, dim=-1)
         # force = magnitude * direction
         if self.discrete:
-            force = self.vel_bound * (actions - 1)
+            force = self.discrete_force * (actions - 1)
             if self.spherical:
                 force_norm = force.norm(keepdim=True, dim=-1)
-                force = self.discrete_force * force / (force_norm + self.epsilon)
+                force_norm[force_norm==0] = 1
+                force = self.discrete_force * force / force_norm
         else: force = actions
         if self.spherical:
             force_norm = force.norm(keepdim=True, dim=-1)
-            over_mask = force_norm.squeeze(-1) > self.force_bound
-            force[over_mask] = self.force_bound * force[over_mask] / (force_norm[over_mask] + self.epsilon)
+            strong_mask = force_norm.squeeze(-1) > self.force_bound
+            force[strong_mask] = self.force_bound * force[strong_mask] / force_norm[strong_mask]
         else:
             force = force.clamp(-self.force_bound, self.force_bound)
         # Add velocity
@@ -244,6 +253,8 @@ class EnvironmentBase:
         if self.compute_rewards:
             # Distance reward
             if self.reward_scales['reward_distance'] != 0: reward_distance -= get_reward_distance()
+            # Expvar reward
+            if self.reward_scales['reward_expvar'] != 0: reward_expvar -= get_reward_expvar()
             # Origin reward
             if self.reward_scales['reward_origin'] != 0: reward_origin -= get_reward_origin()
             # Velocity penalty (Apply to ending velocity)
@@ -263,6 +274,7 @@ class EnvironmentBase:
             else: self.best = self.get_distance_match().mean(); self.lapses = 0
 
             reward_distance     *=  self.reward_scales['reward_distance']    * 1e-1/delta          # Raw 1e0, Log 1e0
+            reward_expvar       *=  self.reward_scales['reward_expvar']      * 1e-1/delta          # Raw 1e0, Log 1e0
             reward_origin       *=  self.reward_scales['reward_origin']      * 1e-1/delta          # Raw 1e0, Log 1e0
             penalty_bound       *=  self.reward_scales['penalty_bound']      * 1e0
             penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e0          # Raw 1e1, Log 1e0
@@ -278,6 +290,7 @@ class EnvironmentBase:
         # Compute total reward
         rwd = (
             reward_distance
+            + reward_expvar
             + reward_origin
             + penalty_bound
             + penalty_velocity
@@ -286,13 +299,14 @@ class EnvironmentBase:
         ret = (rwd, finished)
         if return_itemized_rewards: ret += {
             'distance': reward_distance,
+            'expvar': reward_expvar,
             'origin': reward_origin,
             'bound': penalty_bound,
             'velocity': penalty_velocity,
             'action': penalty_action},
         return ret
 
-    def reset(self, resample=False, renoise=True):
+    def reset(self, resample=True, renoise=True):
         # Reset modalities if needed
         if resample and self.dataloader is not None:
             modalities, adata_obs, _ = self.dataloader.sample()
@@ -301,7 +315,9 @@ class EnvironmentBase:
                 for m in modalities])
             self.keys = adata_obs[0].index.to_numpy()
             # Add randomness to key to avoid culling in memory
-            if self.noise_std > 0: self.keys = [(k, np.random.randint(2**32)) for k in self.keys]
+            if self.noise_std > 0:
+                noise_id = np.random.randint(2**32)
+                self.keys = [(k, noise_id) for k in self.keys]
 
         # Generate noise
         if renoise: self.noise = [self.noise_std*torch.randn_like(m, device=self.device) for m in self.modalities]
@@ -332,6 +348,7 @@ class EnvironmentBase:
 
     def reset_cache(self):
         self.cached_dist_match = {}
+        self.cached_expvar = {}
 
     ### Input functions
     def add_velocities(self, velocities, node_ids=None):
@@ -350,13 +367,20 @@ class EnvironmentBase:
             self.vel = torch.clamp(self.vel, -self.vel_bound, self.vel_bound)
 
     ### Evaluation functions
-    def get_distance_match(self, targets=None):
+    def get_distance_match(self, targets=None, use_cache=False, log='per-modality', mean=True):
+        """
+        Get distance error between latent space and actual data.
+        log:
+            `per-modality` - Log for each modality
+            `pre-mean` - Log before mean but after aggregated modalities
+            `post-mean` - Log of mean
+        """
         # Defaults
         if targets is None: targets = self.target_modalities
         targets = tuple(targets)
 
         # Return if cached
-        if targets in self.cached_dist_match: return self.cached_dist_match[targets]
+        if use_cache and targets in self.cached_dist_match: return self.cached_dist_match[targets]
 
         # Calculate distance for position
         pos_dist = _utility.distance.euclidean_distance(self.pos)  # , scaled=not self.spherical
@@ -367,14 +391,44 @@ class EnvironmentBase:
             if target not in self.dist: self.calculate_dist([target])
             dist = self.dist[target]
             square_ew = (pos_dist - dist)**2
-            mean_square_ew = square_ew.mean(dim=1)
-            running = running + mean_square_ew
+            if log == 'per-modality':
+                square_ew = (square_ew+self.epsilon).log()
+            running = running + square_ew
         running = running / len(targets)
+        if log == 'pre-mean':
+            running = (running+self.epsilon).log()
+        running.fill_diagonal_(0)
+        if mean: running = running.mean(dim=-1)
+        if log == 'post-mean': running = (running+self.epsilon).log()
 
         # Cache result
         self.cached_dist_match[targets] = running
 
         return running
+    
+    def get_expvar(self, targets=None, use_cache=False):
+        # Defaults
+        if targets is None: targets = self.target_modalities
+        targets = tuple(targets)
+
+        # Return if cached
+        if use_cache and targets in self.cached_expvar: return self.cached_expvar[targets]
+
+        # Calculate least squares classification error
+        running_err = 0
+        for target in targets:
+            X, Y = self.pos, self.modalities[target]
+            X_norm_scaled = torch.linalg.matrix_norm(X) * np.sqrt(Y.shape[1]/X.shape[1])
+            Y_norm = torch.linalg.matrix_norm(Y)
+            C = torch.linalg.lstsq(X, Y / Y_norm).solution
+            err = (torch.matmul(X, C) * X_norm_scaled - Y).square().mean(dim=-1)
+            running_err += err
+        running_err = running_err / len(targets)
+
+        # Cache result
+        self.cached_expvar[targets] = running_err
+
+        return running_err
     
     def get_distance_from_origin(self):
         if self.spherical: return self.pos.norm(dim=-1)
@@ -461,7 +515,9 @@ class EnvironmentBase:
     def get_velocities(self):
         return self.vel
     
-    def get_keys(self):
+    def get_keys(self, include_noise=True):
+        if not include_noise and self.noise_std > 0:
+            return list(map(lambda x: x[0], self.keys))
         return self.keys
 
     def get_target_modalities(self, **kwargs):

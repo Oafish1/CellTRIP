@@ -194,5 +194,5 @@ def padded_concat(arrays, method='zero'):
     elif method == 'true': return_matrix = np.ones(new_shape, dtype=bool)
     else: raise ValueError(f'No method `{method}` found')
     for i, arr in enumerate(arrays):
-        return_matrix[(i, *[slice(dim) for dim in max_dims])] = arr
+        return_matrix[(i, *[slice(dim) for dim in arr.shape])] = arr
     return return_matrix

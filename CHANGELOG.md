@@ -1,3 +1,22 @@
+### 1.0.0+2025.5.14
+- Add inner join for h5ad files in `merge_adatas`
+- Additional loss for environment based on least-squares predictive capability, bounded by scale
+- Many minor changes and additional completed runs
+- Upload and generate commands for alternate datasets, and format existing datasets
+
+### 1.0.0+2025.5.13
+- Add individual dimension visualization for `analysis` notebook
+- Change epsilon for environment and entropy coefficient for policy
+- Change log calculation timing for environment distance match, with user-configurable options
+- Fix `padded_concat` assigning to improper coordinates while padding
+- Fix bug with resetting in `simulate_until_completion` not properly updating keys or caching feature embeddings
+- Fix default sampling preference for environment reset
+- Fix smoothing calculation in `runtime` notebook
+
+### 1.0.0+2025.5.10
+- Add deterministic operation to discrete model
+- More tuning runs, better results on scGLUE
+
 ### 1.0.0+2025.5.9
 - Add random environment truncation for stochasticity in parallel environments
 - Add random subsample size for dataloader

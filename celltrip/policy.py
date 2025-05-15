@@ -625,7 +625,9 @@ class DiscreteActions(nn.Module):
         dist = torch.distributions.Categorical(logits=actions)  # /np.sqrt(actions.shape[-1])
 
         # Sample
-        if not set_action: action = dist.sample()
+        if not set_action:
+            if self.training: action = dist.sample()
+            else: action = actions.argmax(dim=-1)
         action_log = dist.log_prob(action).sum(dim=-1)  # Multiply independent probabilities
         if return_entropy: entropy = dist.entropy().sum(dim=-1)
 
@@ -669,7 +671,7 @@ class ContinuousActions(nn.Module):
 
         # Define normal distribution
         # NOTE: Scaled by sqrt(num_features)
-        dist = torch.distributions.Normal(loc=actions, scale=self.log_std.exp())  # /np.sqrt(actions.shape[-1])
+        dist = torch.distributions.Normal(loc=actions, scale=self.log_std.exp() if self.training else 0)  # /np.sqrt(actions.shape[-1])
 
         # Sample
         if not set_action: action = dist.sample()
@@ -796,7 +798,7 @@ class PPO(nn.Module):
             epsilon_ppo=.2,
             epsilon_critic=torch.inf,
             critic_weight=1.,
-            entropy_weight=0,  # 1e-2,
+            entropy_weight=1e-2,
             kl_beta_init=0.,
             kl_beta_increment=(.5, 2),
             kl_target=.03,
