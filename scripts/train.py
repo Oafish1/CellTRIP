@@ -4,7 +4,6 @@
 
 
 # %% [markdown]
-# - Train/test
 # - Save preprocessing
 # - Early stopping for `train_celltrip` based on action_std and/or KL
 # - Maybe [this](https://arxiv.org/abs/2102.09430) but probably not
@@ -36,7 +35,7 @@ parser = argparse.ArgumentParser(description='Train CellTRIP model', formatter_c
 group = parser.add_argument_group('Input')
 group.add_argument('input_files', type=str, nargs='*', help='h5ad files to be used for input')
 group.add_argument('--merge_files', type=str, action='append', nargs='+', help='h5ad files to merge as input')
-group.add_argument('--partition_cols', type=str, action='append', nargs='+', help='Columns for data partitioning, found in `adata.obs` DataFrame')
+group.add_argument('--partition_cols', type=str, nargs='+', help='Columns for data partitioning, found in `adata.obs` DataFrame')
 group.add_argument('--backed', action='store_true', help='Read data directly from disk or s3, saving memory at the cost of time')
 group.add_argument('--input_modalities', type=int, nargs='+', help='Input modalities to give to CellTRIP')
 group.add_argument('--target_modalities', type=int, nargs='+', help='Target modalities to emulate, dictates environment reward')
@@ -68,20 +67,43 @@ if not celltrip.utility.notebook.is_notebook():
     # ray job submit -- python train.py...
     config = parser.parse_args()
 else:
-    experiment_name = 'Noise-Both'
+    # experiment_name = 'scglue-both-new'
+    experiment_name = 'flysta3d'
     command = (
-        f's3://nkalafut-celltrip/MERFISH/expression.h5ad s3://nkalafut-celltrip/MERFISH/spatial.h5ad '
-        # f'/home/nck/repos/INEPT/data/MERFISH/expression.h5ad /home/nck/repos/INEPT/data/MERFISH/spatial.h5ad '
+        # MERFISH
+        # f's3://nkalafut-celltrip/MERFISH/expression.h5ad s3://nkalafut-celltrip/MERFISH/spatial.h5ad --target_modalities 1 '
+        # scGLUE
+        # f's3://nkalafut-celltrip/scGLUE/Chen-2019-RNA.h5ad s3://nkalafut-celltrip/scGLUE/Chen-2019-ATAC.h5ad '
+        # f's3://nkalafut-celltrip/scGLUE/Chen-2019-RNA.h5ad s3://nkalafut-celltrip/scGLUE/Chen-2019-ATAC.h5ad --input_modalities 0 --target_modalities 0 '
+        # f'../data/scglue/Chen-2019-RNA.h5ad ../data/scglue/Chen-2019-ATAC.h5ad --input_modalities 0 --target_modalities 0 '
+        # Flysta3D
+        ' '.join([f'--merge_files ' + ' ' .join([f's3://nkalafut-celltrip/Flysta3D/{p}_{m}.h5ad' for p in ('E14-16h_a', 'E16-18h_a', 'L1_a', 'L2_a', 'L3_b')]) for m in ('expression', 'spatial')]) + ' '
+        + '--target_modalities 1 '
+        f'--partition_cols slice_ID '
+        # Tahoe-100M
+        # '--merge_files ' + ' '.join('[f's3://nkalafut-celltrip/Tahoe/plate{i}_filt_Vevo_Tahoe100M_WServicesFrom_ParseGigalab.h5ad' for i in range(1, 15)]) + ' '
+        # f'--partition_cols sample '
+        # scMultiSim
+        # f's3://nkalafut-celltrip/scMultiSim/expression.h5ad s3://nkalafut-celltrip/scMultiSim/peaks.h5ad '
+        # TemporalBrain
+        # f's3://nkalafut-celltrip/TemporalBrain/expression.h5ad s3://nkalafut-celltrip/TemporalBrain/peaks.h5ad '
+        # f'--partition_cols "Donor ID" '
+
         f'--backed '
-        f'--target_modalities 1 '
-        f'--dim 3 '
+        f'--dim 2 '
         f'--train_split .8 '
-        f'--num_gpus 3 --num_learners 3 --num_runners 3 '
-        f'--update_timesteps 100_000 '
-        f'--max_timesteps 300_000_000 '
+        f'--num_gpus 2 --num_learners 2 --num_runners 2 '
+        # f'--update_timesteps 1_000_000 '
+        # f'--max_timesteps 250_000_000 '
+        f'--update_timesteps 1_000_000 '
+        f'--max_timesteps 200_000_000 '
+        # f'--update_timesteps 100_000 '
+        # f'--max_timesteps 100_000_000 '
         f'--dont_sync_across_nodes '
         f'--logfile s3://nkalafut-celltrip/logs/{experiment_name}.log '
-        # f'--checkpoint s3://nkalafut-celltrip/checkpoints/Partial-L2-VelLinear-ClampLog-0500.weights '
+        f'--flush_iterations 1 '
+        # f'--checkpoint s3://nkalafut-celltrip/checkpoints/merfish-new-0200.weights '
+        f'--checkpoint_iterations 25 '
         f'--checkpoint_dir s3://nkalafut-celltrip/checkpoints '
         f'--checkpoint_name {experiment_name}')
     config = parser.parse_args(command.split(' '))
@@ -126,8 +148,8 @@ def train(config):
     initializers = celltrip.train.get_initializers(
         input_files=config.input_files, merge_files=config.merge_files,
         backed=config.backed, dataloader_kwargs=dataloader_kwargs,
-        # policy_kwargs={'minibatch_size': 10_000},
-        memory_kwargs={'device': 'cuda:0'},
+        partition_cols=config.partition_cols,
+        memory_kwargs={'device': 'cuda:0'},  # Skips casting, cutting time significantly for relatively small batch sizes
         environment_kwargs=environment_kwargs)
 
     # Stages
@@ -158,14 +180,19 @@ ray.get(train.remote(config))
 
 # # Initialize locally
 # os.environ['AWS_PROFILE'] = 'waisman-admin'
+# # config.update_timesteps = 100_000
+# # config.max_timesteps = 30_000_000
 
-# dataloader_kwargs = {'mask': config.train_split}  # {'num_nodes': 20, 'pca_dim': 128}
+# dataloader_kwargs = {'num_nodes': [2**9, 2**11], 'mask': config.train_split}  # {'num_nodes': [2**9, 2**11], 'pca_dim': 128}
 # environment_kwargs = {
 #     'input_modalities': config.input_modalities,
 #     'target_modalities': config.target_modalities, 'dim': config.dim}
 # env_init, policy_init, memory_init = celltrip.train.get_initializers(
 #     input_files=config.input_files, merge_files=config.merge_files,
-#     backed=config.backed, dataloader_kwargs=dataloader_kwargs,   # policy_kwargs={'minibatch_size': 2_000},
+#     partition_cols=config.partition_cols,
+#     backed=config.backed, dataloader_kwargs=dataloader_kwargs,
+#     policy_kwargs={'minibatch_size': 10_000},
+#     # memory_kwargs={'device': 'cuda:0'},  # Skips casting, cutting time significantly for relatively small batch sizes
 #     environment_kwargs=environment_kwargs)
 
 # # Environment
@@ -175,40 +202,172 @@ ray.get(train.remote(config))
 
 # # Policy
 # policy = policy_init(env).to('cuda')
-# policy.minibatch_size = 10_000
-# # policy.update_iterations = 5
 
 # # Memory
 # memory = memory_init(policy)
 
 
 # %%
-# while True:
+# import numpy as np
+# import torch
+
+# X = 5*torch.rand(1000, 8)
+# Y = 5*torch.rand(1000, 256)
+# X_norm_scaled = torch.linalg.matrix_norm(X) * np.sqrt(Y.shape[1]/X.shape[1])
+# Y_norm = torch.linalg.matrix_norm(Y)
+# # X_norm_scaled = Y_norm = 1
+
+# # Distance method
+# # dist = ((torch.cdist(X, X) - torch.cdist(Y, Y))/np.sqrt(X.shape[0])).square().mean(dim=-1)
+
+# # Least squares method
+# C = torch.linalg.lstsq(X, Y / Y_norm).solution
+# (torch.matmul(X, C) * X_norm_scaled - Y).square().mean(dim=-1)
+
+# %%
+# # Forward
+# import line_profiler
+# memory.mark_sampled()
+# memory.cleanup()
+# prof = line_profiler.LineProfiler(
+#     celltrip.train.simulate_until_completion,
+#     celltrip.policy.PPO.forward,
+#     celltrip.policy.EntitySelfAttentionLite.forward,
+#     celltrip.policy.ResidualAttention.forward,
+#     celltrip.environment.EnvironmentBase.step)
+# ret = prof.runcall(celltrip.train.simulate_until_completion, env, policy, memory, max_memories=config.update_timesteps, reset_on_finish=True)
+# print('ROLLOUT: ' + f'total: {ret[2]:.3f}, ' + ', '.join([f'{k}: {v:.3f}' for k, v in ret[3].items()]))
+# # memory.feed_new(policy.reward_standardization)
+# memory.compute_advantages()  # moving_standardization=policy.reward_standardization
+# prof.print_stats(output_unit=1)
+
+
+# %%
+# idx = np.sort(np.random.choice(len(memory), 10_000, replace=False))
+# a = memory[idx]
+
+# list_num = idx // a['states'][1].shape[1]
+# in_list_num = np.mod(idx, a['states'][1].shape[1])
+# check_idx = 2
+
+# a['states'][0]
+# memory.storage['states'][list_num[check_idx]][in_list_num[check_idx]]
+
+# a['states'][1]
+# memory.storage['states'][list_num[check_idx]]
+
+# a['advantages'][check_idx]
+# memory.storage['advantages'][list_num[check_idx]][in_list_num[check_idx]]
+
+# a['states'][2]
+
+
+# %%
+# # Memory pull
+# memory[0]
+# import line_profiler
+# prof = line_profiler.LineProfiler(
+#     celltrip.memory.AdvancedMemoryBuffer.fast_sample)
+# ret = prof.runcall(memory.__getitem__, np.random.choice(len(memory), 10_000, replace=False))
+# memory.compute_advantages()  # moving_standardization=policy.reward_standardizatio
+# prof.print_stats(output_unit=1)
+
+
+# %%
+# # Updates
+# import line_profiler
+# prof = line_profiler.LineProfiler(
+#     # memory.fast_sample, policy.actor_critic.forward,
+#     celltrip.policy.ResidualAttentionBlock.forward,
+#     policy.calculate_losses, policy.update,
+#     celltrip.memory.AdvancedMemoryBuffer.__getitem__)
+# ret = prof.runcall(policy.update, memory, verbose=True)
+# print('UPDATE: ' + ', '.join([f'{k}: {v:.3f}' for ret_dict in ret[1:] for k, v in ret_dict.items()]))
+# prof.print_stats(output_unit=1)
+
+
+# %%
+# for _ in range(int(config.max_timesteps / config.update_timesteps)):
 #     # Forward
-#     import line_profiler
 #     memory.mark_sampled()
 #     memory.cleanup()
-#     prof = line_profiler.LineProfiler(
-#         celltrip.train.simulate_until_completion,
-#         celltrip.policy.PPO.forward, celltrip.policy.EntitySelfAttentionLite.forward, celltrip.policy.ResidualAttention.forward,
-#         celltrip.environment.EnvironmentBase.step)
-#     ret = prof.runcall(celltrip.train.simulate_until_completion, env, policy, memory, max_memories=policy.epoch_size, reset_on_finish=True)
-#     print(f'total: {ret[2]:.3f}, ' + ', '.join([f'{k}: {v:.3f}' for k, v in ret[3].items()]))
-#     # memory.feed_new(policy.reward_standardization)
-#     memory.compute_advantages()  # moving_standardization=policy.reward_standardization
-#     # prof.print_stats(output_unit=1)
-
-#     # # Pull from memory
-#     # import line_profiler
-#     # prof = line_profiler.LineProfiler(
-#     #     celltrip.memory.AdvancedMemoryBuffer.fast_sample,
-#     #     celltrip.memory.AdvancedMemoryBuffer._concat_states)
-#     # ret = prof.runcall(memory.fast_sample, 512, shuffle=False, max_samples_per_state=np.inf)
-#     # # prof.print_stats(output_unit=1)
+#     ret = celltrip.train.simulate_until_completion(
+#         env, policy, memory,
+#         max_memories=config.update_timesteps,
+#         # max_timesteps=100,
+#         reset_on_finish=True)
+#     print('ROLLOUT: ' + f'iterations: {ret[0]: 5.0f}, ' + f'total: {ret[2]: 5.3f}, ' + ', '.join([f'{k}: {v: 5.3f}' for k, v in ret[3].items()]))
+#     memory.compute_advantages()
 
 #     # Update
-#     import line_profiler
-#     prof = line_profiler.LineProfiler(policy.update, memory.fast_sample, celltrip.utility.processing.split_state)
-#     ret = prof.runcall(policy.update, memory, verbose=True)
-#     # print(', '.join([f'{k}: {v:.3f}' for k, v in ret[1].items()]))
-#     # prof.print_stats(output_unit=1)
+#     # NOTE: Training often only improves when PopArt and actual distribution match
+#     ret = policy.update(memory, verbose=False)
+#     print('UPDATE: ' + ', '.join([f'{k}: {v: 5.3f}' for ret_dict in ret[1:] for k, v in ret_dict.items()]))
+
+
+# %%
+# # env.max_timesteps = 1_000
+# env.reset()
+# memory = memory_init(policy)
+# ret = celltrip.train.simulate_until_completion(env, policy, memory, store_states=True)
+# steady_states = ret[-1].cpu()
+# ret
+
+# env.get_distance_match().mean()
+
+# steady_states[-1, :, :env.dim]
+
+# steady_states[-1, :, env.dim:]
+
+# np.linalg.norm(memory.storage['actions'][-1]-1, axis=-1)
+
+
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+# import umap
+
+# # Get data and types
+# # raw = env.dataloader.adatas[0][env.keys].X
+# raw = steady_states[-1, :, :env.dim]
+# reducer = umap.UMAP(n_neighbors=100)
+
+# # Transform
+# transformed = reducer.fit_transform(raw)
+# # transformed = raw[:, :2]
+# # transformed = raw[:, 1:3]
+# # types = env.dataloader.adatas[0].obs.loc[env.keys, 'layer'].to_numpy()
+# types = env.dataloader.adatas[0].obs.loc[env.keys, 'cell_type'].to_numpy()
+
+# # Plot
+# fig, ax = plt.subplots(figsize=(4, 4))
+# for t in np.unique(types):
+#     ax.scatter(*transformed[types==t].T, s=2)
+# sns.despine(left=True, bottom=True, ax=ax)
+# # ax.set_xticks([])
+# # ax.set_yticks([])
+# # ax.add_patch(plt.Circle((0, 0), env.pos_bound, facecolor='none', edgecolor='black'))
+# fig.show()
+
+
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+# import umap
+
+# # Get data and types
+# # raw = env.dataloader.adatas[0][env.keys].X
+# raw = modalities[1].cpu()
+# reducer = umap.UMAP()
+
+# # Transform
+# transformed = reducer.fit_transform(raw)
+# types = env.dataloader.adatas[0].obs.loc[env.keys, 'cell_type'].to_numpy()
+
+# # Plot
+# fig, ax = plt.subplots(figsize=(4, 4))
+# for t in np.unique(types):
+#     ax.scatter(*transformed[types==t].T, s=2)
+# sns.despine(left=True, bottom=True, ax=ax)
+# fig.show()
+
+
+

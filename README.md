@@ -268,6 +268,9 @@ rsync -v ~/repos/inept/scripts/!(*.gzip) precision:~/repos/INEPT/scripts
 Profiling
 watch -d -n 0.5 nvidia-smi
 
+Environment
+conda activate ct
+
 AWS Profile
 export AWS_PROFILE=waisman-admin
 aws sso login --profile waisman-admin

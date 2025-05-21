@@ -9,7 +9,7 @@ docker:
     pull_before_run: False
     run_options:
         - --ulimit nofile=65536:65536
-idle_timeout_minutes: 10
+idle_timeout_minutes: 5
 
 # AWS config
 provider:
@@ -51,6 +51,7 @@ available_node_types:
                 - DeviceName: /dev/sda1
                   Ebs:
                       VolumeSize: 200  # GiB
+                      # Throughput: 750  # MiB
                       VolumeType: gp3
             # S3 permissions
             IamInstanceProfile:

@@ -20,6 +20,7 @@ class EnvironmentBase:
         vel_rand_bound=0,
         force_bound=torch.inf,
         discrete_force=1,
+        friction_force=0,
         delta=.05,
         discrete=True,
         spherical=True,
@@ -59,6 +60,7 @@ class EnvironmentBase:
         self.vel_rand_bound = vel_rand_bound
         self.force_bound = force_bound
         self.discrete_force = discrete_force
+        self.friction_force = friction_force
         self.delta = delta
         self.discrete = discrete
         self.spherical = spherical
@@ -137,7 +139,7 @@ class EnvironmentBase:
                 'reward_origin': 0,
                 'penalty_bound': 0,
                 'penalty_velocity': 1,
-                'penalty_action': 1,
+                'penalty_action': 0,
             }
         else:
             # Otherwise, set `None` rewards to zero
@@ -195,8 +197,8 @@ class EnvironmentBase:
             else: get_penalty_velocity = lambda: self.vel.square().mean(dim=-1)
             # get_penalty_velocity = lambda: (self.vel.norm(dim=-1).square()+self.epsilon).log()
             if self.reward_scales['penalty_velocity'] != 0:
-                penalty_velocity = get_penalty_velocity()
-                # penalty_velocity = 0
+                # penalty_velocity = get_penalty_velocity()
+                penalty_velocity = 0
             else: penalty_velocity = torch.zeros(actions.shape[0], device=self.device)
 
         ### Step positions
@@ -223,10 +225,11 @@ class EnvironmentBase:
             force[strong_mask] = self.force_bound * force[strong_mask] / force_norm[strong_mask]
         else:
             force = force.clamp(-self.force_bound, self.force_bound)
-        # Add velocity
+        # Add velocity and apply friction
         self.add_velocities(delta * force)
+        self.apply_friction()
         # Iterate positions
-        self.pos = self.pos + delta * self.vel
+        self.pos = self.pos + delta * self.vel  # .square()  # TODO: Experimental square
         # Clip by bounds
         # self.pos = torch.clamp(self.pos, -self.pos_bound, self.pos_bound)
         # Adjust nodes on bound-hits
@@ -277,7 +280,7 @@ class EnvironmentBase:
             reward_expvar       *=  self.reward_scales['reward_expvar']      * 1e-1/delta          # Raw 1e0, Log 1e0
             reward_origin       *=  self.reward_scales['reward_origin']      * 1e-1/delta          # Raw 1e0, Log 1e0
             penalty_bound       *=  self.reward_scales['penalty_bound']      * 1e0
-            penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e0          # Raw 1e1, Log 1e0
+            penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e-2          # Raw 1e1, Log 1e0
             penalty_action      *=  self.reward_scales['penalty_action']     * 1e-3
             # self.steps += 1
         else:
@@ -366,6 +369,16 @@ class EnvironmentBase:
         else:
             self.vel = torch.clamp(self.vel, -self.vel_bound, self.vel_bound)
 
+    def apply_friction(self, realized_force=None):
+        # Defaults
+        if realized_force is None: realized_force = self.delta * self.friction_force
+
+        # Apply friction
+        vel_norms = self.vel.norm(keepdim=True, dim=-1) + self.epsilon
+        vel_units = self.vel / vel_norms
+        new_vel_norms = torch.clip(vel_norms-realized_force, min=0)
+        self.vel = new_vel_norms * vel_units
+
     ### Evaluation functions
     def get_distance_match(self, targets=None, use_cache=False, log='per-modality', mean=True):
         """
@@ -417,11 +430,18 @@ class EnvironmentBase:
         # Calculate least squares classification error
         running_err = 0
         for target in targets:
-            X, Y = self.pos, self.modalities[target]
-            X_norm_scaled = torch.linalg.matrix_norm(X) * np.sqrt(Y.shape[1]/X.shape[1])
-            Y_norm = torch.linalg.matrix_norm(Y)
-            C = torch.linalg.lstsq(X, Y / Y_norm).solution
-            err = (torch.matmul(X, C) * X_norm_scaled - Y).square().mean(dim=-1)
+            A, B = torch.concat([self.pos, torch.ones((self.pos.shape[0], 1), device=self.device)], dim=-1), self.modalities[target]  # Could speed up a little by keeping ones vec, but not too expensive
+            # Match A norm to B norm
+            # A_norm = torch.linalg.matrix_norm(self.pos) * np.sqrt(B.shape[1]/self.pos.shape[1])
+            # B_norm = torch.linalg.matrix_norm(B)
+            # Make mean A var 1 over all dims (Doesn't converge)
+            # A_norm = self.pos.var(dim=0).mean(dim=-1)
+            # B_norm = 1
+            # No adjustment
+            A_norm = B_norm = 1
+            # Perform lstsq
+            X = torch.linalg.lstsq(A, B / B_norm).solution
+            err = (torch.matmul(A, X) * A_norm - B).square().mean(dim=-1)
             running_err += err
         running_err = running_err / len(targets)
 
@@ -515,8 +535,8 @@ class EnvironmentBase:
     def get_velocities(self):
         return self.vel
     
-    def get_keys(self, include_noise=True):
-        if not include_noise and self.noise_std > 0:
+    def get_keys(self, noise=True):
+        if not noise and self.noise_std > 0:
             return list(map(lambda x: x[0], self.keys))
         return self.keys
 

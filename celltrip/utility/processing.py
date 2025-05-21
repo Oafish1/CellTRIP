@@ -11,6 +11,7 @@ import scipy.sparse
 import sklearn.decomposition
 import torch
 
+from .. import decorator as _decorator
 from .. import utility as _utility
 
 
@@ -525,6 +526,7 @@ class PreprocessFromAnnData:
         self.preprocessing.fit(modalities)
         # print(self.preprocessing.transform([adata[adata.obs.index[[0]]].X for adata in self.adatas], force_filter=True))
 
+    # @_decorator.line_profile
     def _transform_disk(self, return_partition=False):
         adata_obs = [adata.obs for adata in self.adatas]
         adata_vars = [adata.var for adata in self.adatas]

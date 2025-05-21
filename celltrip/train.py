@@ -204,6 +204,11 @@ class Worker:
         return True
 
     @_decorator.metrics(append_to_dict=True)
+    # @_decorator.line_profile(signatures=[
+    #     simulate_until_completion,
+    #     _environment.EnvironmentBase.reset,
+    #     _utility.processing.PreprocessFromAnnData._transform_disk,
+    #     _utility.processing.Preprocessing.subsample])
     # @_decorator.profile(time_annotation=True)
     def rollout(self, num_new=None, condition='memories', **kwargs):
         # Arguments
@@ -407,7 +412,9 @@ def get_initializers(
 
     def env_init():
         # Create dataloader
-        adatas = _utility.processing.read_adatas(*input_files, backed=backed)
+        adatas = []
+        if input_files is not None:
+            adatas += _utility.processing.read_adatas(*input_files, backed=backed)
         if merge_files is not None:
             for merge_files_rec in merge_files:
                 merge_adatas = _utility.processing.read_adatas(*merge_files_rec, backed=backed)

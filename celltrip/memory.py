@@ -20,7 +20,7 @@ class AdvancedMemoryBuffer:
         flush_on_record=True,
         # Propagate
         gae_lambda=.95,
-        gamma=.99,
+        gamma=.995,
         # Sampling
         replay_frac=0,
         max_samples_per_state=np.inf,
@@ -180,11 +180,10 @@ class AdvancedMemoryBuffer:
         self.clear_var_cache()
 
     def __getitem__(self, idx):
-        if isinstance(idx, int): idx = [idx]
-        idx = np.sort(np.array(idx))
-        # return self.fast_sample(chosen=idx)
-
         # Params
+        pre_append = True  # Append node features once during concatenation stage then never again
+        pre_cast = True  # Cast to tensor once during concatenation stage and never again
+        pad_nodes = True  # Pad node array to avoid indexing
         general_storage_keys = ('actions', 'action_logs', 'state_vals', 'advantages', 'propagated_rewards')
     
         # Pre concatenate vars
@@ -193,30 +192,91 @@ class AdvancedMemoryBuffer:
             # General case
             for k in general_storage_keys:
                 self.variable_storage['concatenated_buffer'][k] = np.concat(self.storage[k], axis=0)
-            # Key case
-            mask = _utility.general.padded_concat(list(map(lambda x: np.ones_like(x, dtype=bool), self.storage['keys'])), method='false')
+            # Get key indices
+            self.variable_storage['concatenated_buffer']['keys'] = np.concat(self.storage['keys'])
+            unique_keys, new_suffix_idx = np.unique(self.variable_storage['concatenated_buffer']['keys'], return_inverse=True)
+            self.variable_storage['concatenated_buffer']['suffixes'] = np.stack([
+                self.persistent_storage['suffixes'][k] for k in unique_keys], axis=0)
+            self.variable_storage['concatenated_buffer']['idx_to_suffix'] = new_suffix_idx
+            state_lens = np.array(list(map(len, self.storage['keys'])))
+            suffix_keys_padded = -np.ones((state_lens.shape[0], state_lens.max()), dtype=int)
+            suffix_keys_padded_mask = np.expand_dims(np.arange(state_lens.max()), axis=0) < np.expand_dims(state_lens, axis=-1)
+            suffix_keys_padded[suffix_keys_padded_mask] = new_suffix_idx
+            self.variable_storage['concatenated_buffer']['suffix_indices'] = suffix_keys_padded
+            # Get state indices
+            mask = _utility.general.padded_stack(list(map(lambda x: np.ones_like(x, dtype=bool), self.storage['keys'])), method='false')
             grid = np.meshgrid(*[np.arange(s) for s in mask.shape], indexing='ij')
             self.variable_storage['concatenated_buffer']['idx_to_buffer'] = np.stack([arr[mask] for arr in grid], axis=-1)  # TODO: Try on variable-sized envs, should work
             # Concatenate states
-            states = [self._append_suffix(s, keys=k) for k, s in zip(self.storage['keys'], self.storage['states'])]
-            s01 = _utility.general.padded_concat(states, method='zero')
-            s2 =  _utility.general.padded_concat(list(map(lambda x: np.eye(x.shape[0], dtype=bool), states)), method='true')
-            s01 = torch.from_numpy(s01).to(torch.get_default_dtype()).to(self.device)  # Cast to tensor early to avoid repeated casting cost
-            s2 = torch.from_numpy(s2).to(torch.bool).to(self.device)
-            states = [s01, s01, s2]  
+            if pre_append: states = [self._append_suffix(s, keys=k) for k, s in zip(self.storage['keys'], self.storage['states'])]
+            else: states = self.storage['states']
+            s01 = _utility.general.padded_stack(states, method='zero')
+            s2 =  _utility.general.padded_stack(list(map(lambda x: np.eye(x.shape[0], dtype=bool), states)), method='true')
+            if pre_cast:
+                s01 = torch.from_numpy(s01).to(torch.get_default_dtype()).to(self.device)  # Cast to tensor early to avoid repeated casting cost
+                s2 = torch.from_numpy(s2).to(torch.bool).to(self.device)
+            states = [s01, s01, s2]
             self.variable_storage['concatenated_buffer']['states'] = states
+            self.out = None
+
+        # Automatically determine idx if int
+        if isinstance(idx, int):
+            idx = [idx]
+            # TODO: Make clustered version of this
+        idx = np.sort(np.array(idx))
+        # return self.fast_sample(chosen=idx)
 
         # Get indices to padded buffer from idx
         buffer_idx = self.variable_storage['concatenated_buffer']['idx_to_buffer'][idx]
-        unique_list_nums, unique_list_inverse, unique_list_counts = np.unique(buffer_idx[:, 0], return_inverse=True, return_counts=True)
+        unique_list_nums, unique_list_counts = np.unique(buffer_idx[:, 0], return_counts=True)
+        if pad_nodes:
+            size = self.variable_storage['concatenated_buffer']['states'][1].shape[0]
+            new_unique_list_nums = np.arange(size, dtype=int)
+            mask = np.isin(new_unique_list_nums, unique_list_nums)
+            new_unique_list_counts = np.zeros(size, dtype=int)
+            new_unique_list_counts[mask] = unique_list_counts
+            unique_list_nums = new_unique_list_nums
+            unique_list_counts = new_unique_list_counts
         grouped_indices = -np.ones((unique_list_nums.shape[0], unique_list_counts.max()), dtype=int)
         grouped_sample_mask = np.expand_dims(np.arange(unique_list_counts.max()), axis=0) < np.expand_dims(unique_list_counts, axis=-1)
         grouped_indices[grouped_sample_mask] = buffer_idx[:, 1]  # np.argsort(unique_list_inverse) doesn't respect initial ordering
+        overall_indices = grouped_indices.copy()
+        overall_indices[grouped_sample_mask] = idx
+
+        # Format output
+        # feature_dim = self.storage['states'][0].shape[-1] + self.suffix_len
+        # if self.out is None:
+        #     self.out = [
+        #         np.zeros((*grouped_indices.shape, feature_dim)),
+        #         np.zeros((grouped_indices.shape[0], self.variable_storage['concatenated_buffer']['states'][1].shape[1], feature_dim)),
+        #         np.zeros((*grouped_indices.shape, self.variable_storage['concatenated_buffer']['states'][1].shape[1])),
+        #     ]
+        # states = self.out
+        # Format states
+        # states[0][..., :-self.suffix_len] = self.variable_storage['concatenated_buffer']['states'][0][np.expand_dims(unique_list_nums, axis=-1), grouped_indices]
+        # states[1][..., :-self.suffix_len] = self.variable_storage['concatenated_buffer']['states'][1][unique_list_nums]
+        # states[2][:] = self.variable_storage['concatenated_buffer']['states'][2][np.expand_dims(unique_list_nums, axis=-1), grouped_indices]
+
+        # Format states
         states = [
             self.variable_storage['concatenated_buffer']['states'][0][np.expand_dims(unique_list_nums, axis=-1), grouped_indices],
-            self.variable_storage['concatenated_buffer']['states'][1][unique_list_nums],
-            self.variable_storage['concatenated_buffer']['states'][2][np.expand_dims(unique_list_nums, axis=-1), grouped_indices].clone()]
-        states[2][tuple(np.argwhere(grouped_indices==-1).T)] = True  # Mask ragged fillers, uses -1 as indicator
+            self.variable_storage['concatenated_buffer']['states'][1][unique_list_nums if not pad_nodes else slice(unique_list_nums.shape[0])],
+            self.variable_storage['concatenated_buffer']['states'][2][np.expand_dims(unique_list_nums, axis=-1), grouped_indices]]
+        if pre_cast: states[2] = states[2].clone()
+        else: states[2] = states[2].copy()
+        # Post-append
+        if not pre_append:
+            suffix_idx = self.variable_storage['concatenated_buffer']['idx_to_suffix'][idx]
+            suffix_grouped_indices = grouped_indices.copy()
+            suffix_grouped_indices[grouped_sample_mask] = suffix_idx
+            # states[0][..., -self.suffix_len:] = self.variable_storage['concatenated_buffer']['suffixes'][suffix_grouped_indices.flatten()].reshape((*suffix_grouped_indices.shape, -1))
+            # states[1][..., -self.suffix_len:] = self.variable_storage['concatenated_buffer']['suffixes'][self.variable_storage['concatenated_buffer']['suffix_indices'][unique_list_nums]]
+            s0_suffix = self.variable_storage['concatenated_buffer']['suffixes'][suffix_grouped_indices.flatten()].reshape((*suffix_grouped_indices.shape, -1))
+            s1_suffix = self.variable_storage['concatenated_buffer']['suffixes'][self.variable_storage['concatenated_buffer']['suffix_indices'][unique_list_nums]]
+            # states[0] = np.concatenate((states[0], s0_suffix), axis=-1)
+            # states[1] = np.concatenate((states[1], s1_suffix), axis=-1)
+        # Mask ragged fillers, uses -1 as indicator
+        states[2][tuple(np.argwhere(grouped_indices==-1).T)] = True
 
         # Pull from padded buffer and cast to tensors
         ret = {}
@@ -224,8 +284,13 @@ class AdvancedMemoryBuffer:
         for k in general_storage_keys:
             ret[k] = torch.from_numpy(self.variable_storage['concatenated_buffer'][k][idx]).to(torch.get_default_dtype()).to(self.device)
         # State case
-        ret['states'] = states
-        return ret
+        if pre_cast: ret['states'] = states
+        else:
+            ret['states'] = [
+                torch.from_numpy(states[0]).to(torch.get_default_dtype()).to(self.device),
+                torch.from_numpy(states[1]).to(torch.get_default_dtype()).to(self.device),
+                torch.from_numpy(states[2]).to(torch.bool).to(self.device)]
+        return overall_indices, ret  # indices, data
 
     def fast_sample(
         self, num_memories=None, chosen=None, replay_frac=None, max_samples_per_state=None,

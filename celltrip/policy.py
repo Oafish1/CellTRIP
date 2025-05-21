@@ -821,6 +821,7 @@ class PPO(nn.Module):
             epoch_size=100_000,
             batch_size=10_000,  # https://scholarworks.sjsu.edu/cgi/viewcontent.cgi?params=/context/etd_projects/article/1972/&path_info=park_inhee.pdf
             minibatch_size=torch.inf,
+            minibatch_memories=1_000_000,
             # load_level='minibatch',  # TODO: Allow for loading at batch with compression
             # cast_level='minibatch',
             **kwargs,
@@ -861,6 +862,7 @@ class PPO(nn.Module):
         self.epoch_size = epoch_size
         self.batch_size = batch_size
         self.minibatch_size = minibatch_size
+        self.minibatch_memories = minibatch_memories
         # self.load_level = load_level
         # self.cast_level = cast_level
 
@@ -1129,89 +1131,99 @@ class PPO(nn.Module):
         # Minibatch size
         minibatch_size = self.minibatch_size if not (self.minibatch_size is None and batch_size is not None) else batch_size
         if minibatch_size is not None and batch_size is not None: minibatch_size = int(min(minibatch_size, batch_size))
-        # print(f'{pool_size} - {epoch_size} - {batch_size} - {minibatch_size}')
 
         # Load pool
         total_losses = defaultdict(lambda: [])
         total_statistics = defaultdict(lambda: [])
-        # pool_data = _utility.processing.sample_and_cast(
-        #     memory, None, None, pool_size,
-        #     current_level=0, load_level=load_level, cast_level=cast_level,
-        #     device=self.policy_iteration.device, **kwargs)
         pool_idx = np.random.choice(memory_size, pool_size, replace=False) if pool_size < memory_size else memory_size
 
         # Train
         iterations = 0; synchronized = True; escape = False
         while True:
             # Load epoch
-            # epoch_data = _utility.processing.sample_and_cast(
-            #     memory, pool_data, pool_size, epoch_size,
-            #     current_level=1, load_level=load_level, cast_level=cast_level,
-            #     device=self.policy_iteration.device, **kwargs)
             epoch_idx = np.random.choice(pool_idx, epoch_size, replace=False)  # Also shuffles
             batches = np.floor(epoch_size/batch_size).astype(int) if epoch_size is not None else 1  # Drop any smaller batches
             for batch_num in range(batches):
                 # Load batch
                 batch_losses = defaultdict(lambda: 0)
                 batch_statistics = defaultdict(lambda: 0)
-                # batch_data = _utility.processing.sample_and_cast(
-                #     memory, epoch_data, epoch_size, batch_size,
-                #     current_level=2, load_level=load_level, cast_level=cast_level,
-                #     device=self.policy_iteration.device, sequential_num=batch_num,
-                #     clip_sequential=False, **kwargs)
                 batch_idx = epoch_idx[batch_num*batch_size:(batch_num+1)*batch_size]
+                batch_state_vals_new = torch.zeros(0, device=self.policy_iteration.device)
                 batch_returns = torch.zeros(0, device=self.policy_iteration.device)
                 minibatches = np.ceil(batch_size/minibatch_size).astype(int) if batch_size is not None else 1
                 for minibatch_num in range(minibatches):
                     # Load minibatch
-                    # minibatch_data, minibatch_actual_size = _utility.processing.sample_and_cast(
-                    #     memory, batch_data, batch_size, minibatch_size,
-                    #     current_level=3, load_level=load_level, cast_level=cast_level,
-                    #     device=self.policy_iteration.device, sequential_num=minibatch_num,
-                    #     clip_sequential=True, **kwargs)
                     minibatch_idx = batch_idx[minibatch_num*minibatch_size:(minibatch_num+1)*minibatch_size]
-                    minibatch_data = memory[minibatch_idx]
+                    minibatch_indices, minibatch_data = memory[minibatch_idx]
+
+                    # Normalize advantages
+                    minibatch_data['normalized_advantages'] = (minibatch_data['advantages'] - minibatch_data['advantages'].mean()) / (minibatch_data['advantages'].std() + 1e-8)
+
+                    # Cast
                     minibatch_data = _utility.processing.dict_map_recursive_tensor_idx_to(minibatch_data, None, self.policy_iteration.device)
 
-                    # Get subset data
-                    states = minibatch_data['states']
-                    actions = minibatch_data['actions']
-                    action_logs = minibatch_data['action_logs']
-                    state_vals = minibatch_data['state_vals']
-                    advantages = minibatch_data['advantages']
-                    # rewards = minibatch_data['propagated_rewards']
+                    # Ministeps
+                    minibatch_memories = self.minibatch_memories if self.minibatch_memories is not None else np.prod(minibatch_data['states'][1].shape[:-1])
+                    ministep_size = np.maximum(np.floor(minibatch_memories / minibatch_data['states'][1].shape[1]), 1).astype(int)
+                    ministeps = np.ceil(minibatch_data['states'][1].shape[0] / ministep_size).astype(int)
+                    cumsum_indices = (minibatch_indices > -1).flatten().cumsum(0).reshape(minibatch_indices.shape)
+                    proc_mems = 0
+                    for ministep_num in range(ministeps):
+                        # Subsample
+                        double_idx = slice(ministep_num*ministep_size, (ministep_num+1)*ministep_size)
+                        single_idx = cumsum_indices[double_idx]
+                        first_true = int(minibatch_indices[double_idx][0, 0] > -1)
+                        num_memories = single_idx.max() - single_idx.min() + first_true
+                        single_idx = slice(single_idx.min() - first_true, single_idx.max())  # NOTE: No +1 here because cumsum is always one ahead
+                        if num_memories == 0: continue
+                        proc_mems += num_memories
 
-                    # Perform backward
-                    losses, statistics = self.calculate_losses(
-                        states, actions, action_logs, state_vals, advantages=advantages, rewards=None)
-                    loss, loss_ppo, loss_critic, loss_entropy, loss_kl = losses
-                    exp_var, = statistics
+                        # Get subset data
+                        states = [s[double_idx] for s in minibatch_data['states']]
+                        actions = minibatch_data['actions'][single_idx]
+                        action_logs = minibatch_data['action_logs'][single_idx]
+                        state_vals = minibatch_data['state_vals'][single_idx]
+                        advantages = minibatch_data['advantages'][single_idx]
+                        normalized_advantages = minibatch_data['normalized_advantages'][single_idx]
+                        # rewards = minibatch_data['propagated_rewards'][single_idx]
 
-                    # Scale and calculate gradient
-                    # accumulation_frac = minibatch_actual_size / batch_size
-                    accumulation_frac = minibatch_idx.shape[0] / batch_size
-                    loss = loss * accumulation_frac
-                    loss.backward()  # Longest computation
+                        # Perform backward
+                        loss, loss_ppo, loss_critic, loss_entropy, loss_kl, state_vals_new = self.calculate_losses(
+                            states, actions, action_logs, state_vals, advantages=advantages, normalized_advantages=normalized_advantages, rewards=None)
 
-                    # Update moving return mean
-                    batch_returns = torch.cat((batch_returns, advantages+state_vals), dim=0)
+                        # Scale and calculate gradient
+                        # accumulation_frac = minibatch_actual_size / batch_size
+                        # accumulation_frac = minibatch_idx.shape[0] / batch_size
+                        accumulation_frac = num_memories / batch_size
+                        loss = loss * accumulation_frac
+                        loss.backward()  # Longest computation
 
-                    # Scale and record
-                    batch_losses['Total'] += loss.detach()
-                    batch_losses['PPO'] += loss_ppo.detach().mean() * accumulation_frac
-                    batch_losses['critic'] += loss_critic.detach().mean() * accumulation_frac
-                    batch_losses['entropy'] += loss_entropy.detach().mean() * accumulation_frac
-                    batch_losses['KL'] += loss_kl.detach().mean() * accumulation_frac
-                    batch_statistics['Moving Return Mean'] += self.return_standardization.mean.detach().mean() * accumulation_frac
-                    batch_statistics['Moving Return STD'] += self.return_standardization.std.detach().mean() * accumulation_frac
-                    # batch_statistics['Moving Reward Mean'] += self.reward_standardization.mean.mean() * accumulation_frac
-                    # batch_statistics['Moving Reward STD'] += self.reward_standardization.std.mean() * accumulation_frac
-                    batch_statistics['Return Mean'] += (advantages+state_vals).detach().mean() * accumulation_frac
-                    batch_statistics['Return STD'] += (advantages+state_vals).detach().std() * accumulation_frac
-                    # batch_statistics['Advantage Mean'] += advantages.detach().mean() * accumulation_frac
-                    # batch_statistics['Advantage STD'] += advantages.detach().std() * accumulation_frac
-                    # batch_statistics['Log STD'] += self.get_log_std() * accumulation_frac
-                    batch_statistics['Explained Variance'] += exp_var.detach() * accumulation_frac
+                        # Record required logs
+                        batch_returns = torch.cat((batch_returns, advantages+state_vals), dim=0)
+                        batch_state_vals_new = torch.cat((batch_state_vals_new, state_vals_new), dim=0)
+
+                        # Scale and record
+                        batch_losses['Total'] += loss.detach()
+                        batch_losses['PPO'] += loss_ppo.detach().mean() * accumulation_frac
+                        batch_losses['critic'] += loss_critic.detach().mean() * accumulation_frac
+                        batch_losses['entropy'] += loss_entropy.detach().mean() * accumulation_frac
+                        batch_losses['KL'] += loss_kl.detach().mean() * accumulation_frac
+
+                # Calculate explained variance
+                normalized_returns = self.return_standardization.apply(batch_returns)
+                exp_var = (1- (normalized_returns - batch_state_vals_new).var() / normalized_returns.var()).clamp(min=-1)
+
+                # Statistics
+                batch_statistics['Moving Return Mean'] += self.return_standardization.mean.detach().mean()
+                batch_statistics['Moving Return STD'] += self.return_standardization.std.detach().mean()
+                # batch_statistics['Moving Reward Mean'] += self.reward_standardization.mean.mean() * accumulation_frac
+                # batch_statistics['Moving Reward STD'] += self.reward_standardization.std.mean() * accumulation_frac
+                batch_statistics['Return Mean'] += batch_returns.detach().mean() * accumulation_frac
+                batch_statistics['Return STD'] += batch_returns.detach().std() * accumulation_frac
+                batch_statistics['Explained Variance'] += exp_var.detach()
+                # batch_statistics['Advantage Mean'] += advantages.detach().mean() * accumulation_frac
+                # batch_statistics['Advantage STD'] += advantages.detach().std() * accumulation_frac
+                # batch_statistics['Log STD'] += self.get_log_std() * accumulation_frac
                 
                 # Record
                 for k, v in batch_losses.items(): total_losses[k].append(v)
@@ -1326,18 +1338,19 @@ class PPO(nn.Module):
         action_logs,
         state_vals,
         advantages=None,
+        normalized_advantages=None,
         rewards=None):
         # TODO: Maybe implement PFO https://github.com/CLAIRE-Labo/no-representation-no-trust
         if advantages is not None:
             # Get inferred rewards
             rewards = advantages + state_vals
-            # print(f'{self.get_policy_iteration()} - {advantages_mean:.3f} - {advantages_std:.3f}')
         elif rewards is not None:
             # Get advantages
             advantages = rewards - state_vals
         # Get normalized advantages
-        advantages_mean, advantages_std = advantages.mean(), advantages.std() + 1e-8
-        normalized_advantages = (advantages - advantages_mean) / advantages_std
+        if normalized_advantages is None:
+            advantages_mean, advantages_std = advantages.mean(), advantages.std() + 1e-8
+            normalized_advantages = (advantages - advantages_mean) / advantages_std
         # Clip advantages for stability
         # normalized_advantages =  normalized_advantages.clamp(
         #     normalized_advantages.quantile(.05), normalized_advantages.quantile(.95))
@@ -1371,23 +1384,12 @@ class PPO(nn.Module):
         # loss_kl = loss_kl * loss_kl.shape[0] / new_memories.sum()
 
         # Calculate critic loss
-        # unclipped_critic = (state_vals_new - normalized_rewards).square()
         criteria = F.smooth_l1_loss
         # criteria = F.mse_loss
         unclipped_critic = criteria(state_vals_new, normalized_rewards)
         clipped_state_vals_new = torch.clamp(state_vals_new, state_vals-self.epsilon_critic, state_vals+self.epsilon_critic)
-        # clipped_critic = (clipped_state_vals_new - normalized_rewards).square()
         clipped_critic = criteria(clipped_state_vals_new, normalized_rewards, reduction='none')
         loss_critic = torch.max(unclipped_critic, clipped_critic)
-        # if torch.rand(1) < .03:
-        #     print(
-        #         f'{state_vals_new.mean().detach().item():.3f}'
-        #         f' - {rewards.mean().detach().item():.3f}'
-        #         f' - {normalized_rewards.mean().detach().item():.3f}'
-        #         f' - {normalized_rewards.std().detach().item():.3f}')
-
-        # Calculate explained variance
-        exp_var = (1- (normalized_rewards-state_vals_new).var() / normalized_rewards.var()).clamp(min=-1)
 
         # Calculate entropy bonus
         # NOTE: Not included in training grad if action_std is constant
@@ -1402,4 +1404,4 @@ class PPO(nn.Module):
             + self.kl_beta * loss_kl)
         loss = loss.mean()
 
-        return (loss, loss_ppo, loss_critic, loss_entropy, loss_kl), (exp_var,)
+        return loss, loss_ppo, loss_critic, loss_entropy, loss_kl, state_vals_new

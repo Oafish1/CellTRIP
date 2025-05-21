@@ -173,23 +173,26 @@ def get_s3_handler_with_access(fname):
     import s3fs
     try:
         s3 = s3fs.S3FileSystem()
-        s3.ls(fname.split('/')[2])
+        try: s3.ls(fname.split('/')[2])
+        except: s3.ls('/'.join(fname.split('/')[2:4]))
     except:
         warnings.warn('No suitable credentials found for s3 '
                       'access, using anonymous mode')
         s3 = s3fs.S3FileSystem(anon=True)
-        s3.ls(fname.split('/')[2])
+        try: s3.ls(fname.split('/')[2])
+        except: s3.ls('/'.join(fname.split('/')[2:4]))
 
     return s3
 
 
-def padded_concat(arrays, method='zero'):
+def padded_stack(arrays, method='zero'):
     batch_num = len(arrays)
     shape = np.array([arr.shape for arr in arrays])
     max_dims = shape.max(axis=0)
     new_shape = (batch_num, *max_dims)
     if method == 'zero': return_matrix = np.zeros(new_shape)
     elif method == 'ones': return_matrix = np.ones(new_shape)
+    elif method == 'neg_ones': return_matrix = -np.ones(new_shape)
     elif method == 'false': return_matrix = np.zeros(new_shape, dtype=bool)
     elif method == 'true': return_matrix = np.ones(new_shape, dtype=bool)
     else: raise ValueError(f'No method `{method}` found')

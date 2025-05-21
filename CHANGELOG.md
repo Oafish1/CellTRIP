@@ -1,3 +1,31 @@
+### 1.0.0+2025.5.21
+- Add friction to `EnvironmentBase` and change lstsq normalization again
+- Move statistics outside minibatch loop, fixing rare `nan` statistic return
+- Tweak environment rewards and params to stop expansion of discretized latent space
+
+### 1.0.0+2025.5.20
+- Change environment reward scheme to remove action penalty and unbound lstsq norm
+- Change scaling to be more intuitive for cross-dim visualizations
+- Fix env reset timing in steady state analysis
+- Fix initial env reset in permutation analysis
+
+### 1.0.0+2025.5.19
+- Add bias for environment lstsq reward
+- Add fix for subsampled mask in `analysis`
+- Fix for analysis noise setting
+
+### 1.0.0+2025.5.17
+- Try different scaling for environment lstsq
+
+### 1.0.0+2025.5.16
+- Add `minibatch_memories` and ministeps to policy update, limiting the amount of data allowed for backward computation
+- Add option for node feature padding in `AdvancedMemoryBuffer.__getitem__`, resulting in theoretical 2x speedup (almost 10x in practice)
+- Optionally remove pre-appending and pre-cast from `AdvancedMemoryBuffer.__getitem__`, 3x slowdown but tremendous memory efficiency
+- Update s3 access to allow for endpoints
+
+### 1.0.0+2025.5.15
+- Fix partition argument handling in all relevant notebooks
+
 ### 1.0.0+2025.5.14
 - Add inner join for h5ad files in `merge_adatas`
 - Additional loss for environment based on least-squares predictive capability, bounded by scale
