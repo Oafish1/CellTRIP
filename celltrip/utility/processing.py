@@ -367,6 +367,8 @@ def read_adatas(*fnames, backed=False):
             # Get file handle
             s3 = _utility.general.get_s3_handler_with_access(fname)
             f = s3.open(fname, 'rb')  # NOTE: Never closed
+            # import fsspec
+            # f = fsspec.open(fname, 'rb').open()  # NOTE: Never closed
 
             # Read from s3
             if backed:
@@ -378,12 +380,53 @@ def read_adatas(*fnames, backed=False):
                 # handle = fname_local
                 # Backed with s3
                 file_h5 = h5py.File(f, 'r')
+                # ROS3 solution
+                # from boto3 import Session
+                # session = Session()
+                # credentials = session.get_credentials()
+                # cred = credentials.get_frozen_credentials()
+                # file_h5 = h5py.File(fname, 'r', driver='ros3', aws_region=b'us-east-2',
+                #     secret_id=bytes(cred.access_key, 'utf-8'),
+                #     secret_key=bytes(cred.secret_key, 'utf-8'),
+                #     session_token=bytes(cred.token, 'utf-8'))
+                # Read in data
                 if file_h5['X'].attrs['encoding-type'] == 'array': X = file_h5['X']  # Dense data
                 else: X = ad.io.sparse_dataset(file_h5['X'])  # Sparse data
                 adata = ad.AnnData(
                     X=X, **{
                         k: ad.io.read_elem(file_h5[k]) if k in file_h5 else {}
                         for k in ['layers', 'obs', 'var', 'obsm', 'varm', 'uns', 'obsp', 'varp']})
+
+                # NOTE: Could use h5coro in the dense case
+                # from h5coro import h5coro, s3driver
+                # h5obj = h5coro.H5Coro(f'nkalafut-celltrip/Tahoe/plate1_filt_Vevo_Tahoe100M_WServicesFrom_ParseGigalab.h5ad', s3driver.S3Driver)
+
+                # def slicify(idx, window=100):
+                #     idx = np.sort(idx)
+                #     new_idx = []
+                #     inverse = [[0]]
+                #     start_idx = idx[0]
+                #     prev_idx = start_idx
+                #     for i in idx[1:]:
+                #         # Create slice
+                #         if i - prev_idx >= window:
+                #             # Create slice
+                #             new_idx.append([start_idx, prev_idx+1])
+                #             inverse.append([])
+                #             start_idx = i
+                #         prev_idx = i
+                #         inverse[-1].append(i-start_idx)
+                #     new_idx.append([start_idx, prev_idx+1])
+
+                #     return new_idx, inverse
+
+                # idx = np.random.choice(10_000, 1_000, replace=False)
+                # slices, inverse = slicify(idx, window=100)
+                # promises = []
+                # for sl, inv in zip(slices, inverse):
+                #     datasets = [{'dataset': '/X', 'hyperslice': [sl]}]
+                #     promises.append(h5obj.readDatasets(datasets=datasets, block=True)['/X'][inv])
+                # promises = np.concat(promises, axis=0)
             
             # Read into memory
             else:
@@ -457,7 +500,8 @@ class PreprocessFromAnnData:
                 isinstance(adata, ad.experimental.AnnCollection) or isinstance(adata.X, ad.abc.CSRDataset)
                 for adata in adatas]).any()
         if fit_sample == 'auto':
-            fit_sample = int(1e4) if memory_efficient else None
+            # fit_sample = int(1e4) if self.memory_efficient else None
+            fit_sample = int(1e4)
         self.fit_sample = fit_sample
 
         # Public parameters

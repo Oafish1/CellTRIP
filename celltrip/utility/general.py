@@ -168,11 +168,12 @@ def set_device_recursive(state_dict, device):
     return state_dict
 
 
-def get_s3_handler_with_access(fname):
+def get_s3_handler_with_access(fname, default_block_size=100*2**20, default_cache_type='background'):
     # Get s3 handler
     import s3fs
     try:
-        s3 = s3fs.S3FileSystem()
+        # Caching methods (https://filesystem-spec.readthedocs.io/en/latest/_modules/fsspec/caching.html) ordered by speed
+        s3 = s3fs.S3FileSystem(default_block_size=default_block_size, default_cache_type=default_cache_type)  # background, mmap, blockcache, readahead, bytes
         try: s3.ls(fname.split('/')[2])
         except: s3.ls('/'.join(fname.split('/')[2:4]))
     except:

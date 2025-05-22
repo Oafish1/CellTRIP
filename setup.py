@@ -101,7 +101,7 @@ setup(
             'pip-tools',
             'snakeviz'],
         'extras': [
-            'adjustText',
+            # 'adjustText',
             'aiobotocore[boto3]',  # Compatibility with boto3 and s3fs
             'anndata',
             # 'fastplotlib[notebook,imgui]',  # imgui needed `sudo apt install xorg-dev cmake`

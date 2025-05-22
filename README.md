@@ -246,6 +246,35 @@ this script will generate...
 
 <!--
 DEV NOTES
+Getting h5py
+
+
+%%bash
+git clone https://github.com/HDFGroup/hdf5.git build/hdf5
+mkdir -p build/hdf5/build
+cd build/hdf5/build
+cmake -DCMAKE_INSTALL_PREFIX=/home/vscode/.local -DHDF5_ENABLE_ROS3_VFD=ON -DBUILD_STATIC_LIBS=OFF -DBUILD_TESTING=OFF -DHDF5_BUILD_EXAMPLES=OFF -DHDF5_BUILD_TOOLS=ON -DHDF5_BUILD_UTILS=OFF ../ 2>&1 > /dev/null
+make -j 4 2>&1 > /dev/null
+make install 2>&1 > /dev/null
+cd ../../..
+
+sudo apt update
+sudo apt install build-essential git cmake libcurl4-openssl-dev
+git clone https://github.com/HDFGroup/hdf5.git
+cd hdf5
+git checkout hdf5_1_14_3
+mkdir build && cd build
+cmake .. -DCMAKE_INSTALL_PREFIX=$HOME/hdf5_ros3 -DHDF5_ENABLE_ROS3_VFD=ON
+make -j$(nproc)
+make install
+
+export HDF5_DIR=$HOME/hdf5_ros3
+export LD_LIBRARY_PATH=$HDF5_DIR/lib:$LD_LIBRARY_PATH
+export CPATH=$HDF5_DIR/include:$CPATH
+# export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libffi.so.7  # FIX FOR "error: /lib/x86_64-linux-gnu/libp11-kit.so.0: undefined symbol: ffi_type_pointer, version LIBFFI_BASE_7.0"
+ln -sf /usr/lib/x86_64-linux-gnu/libffi.so.7 ~/miniconda3/envs/ct/lib/libffi.so.7  # BETTER FIX FOR PREVIOUS
+python -m pip install --no-binary=h5py h5py
+
 Compiling requirements
 Make sure Ray is 2.43.0!
 python -m pip freeze -r requirements.in | sed -e '/@/d' -e 's/+.*//' -e '/nvidia-.*/d' > requirements.txt

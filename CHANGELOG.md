@@ -1,3 +1,10 @@
+### 1.0.0+2025.5.22
+- Add animation saving using old high-quality writer
+- Add notes and light benchmarks for `ROS3` and `h5Coro`
+- Animation exports for Flysta3d
+- Benchmark caching methods for `fsspec` and change default from `readforward` to `background` with a `100MB` block size, at `32` maximum blocks, resulting in >100x speedup for some datasets
+- Recompile requirements
+
 ### 1.0.0+2025.5.21
 - Add friction to `EnvironmentBase` and change lstsq normalization again
 - Move statistics outside minibatch loop, fixing rare `nan` statistic return
