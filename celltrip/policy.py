@@ -798,7 +798,7 @@ class PPO(nn.Module):
             epsilon_ppo=.2,
             epsilon_critic=torch.inf,
             critic_weight=1.,
-            entropy_weight=1e-2,
+            entropy_weight=1e-3,
             kl_beta_init=0.,
             kl_beta_increment=(.5, 2),
             kl_target=.03,

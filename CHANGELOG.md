@@ -1,8 +1,18 @@
-### 1.0.0+2025.5.22
+### 1.0.0+2025.6.12
+- Figure updates
+
+### 1.0.0+2025.5.28
+- Many tuning changes and trial runs
+
+### 1.0.0+2025.5.26
+- Use log expvar
+
+### 1.0.0+2025.5.22 (1-2)
 - Add animation saving using old high-quality writer
 - Add notes and light benchmarks for `ROS3` and `h5Coro`
 - Animation exports for Flysta3d
 - Benchmark caching methods for `fsspec` and change default from `readforward` to `background` with a `100MB` block size, at `32` maximum blocks, resulting in >100x speedup for some datasets
+- Fix bug with shell command parsing in arguments definition, especially relevant for `TemporalBrain` dataset
 - Recompile requirements
 
 ### 1.0.0+2025.5.21

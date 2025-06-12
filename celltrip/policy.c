@@ -3998,7 +3998,7 @@ typedef struct {
   PyObject *__pyx_float_1e2;
   PyObject *__pyx_float_1e6;
   PyObject *__pyx_float_5e4;
-  PyObject *__pyx_float_1eneg_2;
+  PyObject *__pyx_float_1eneg_3;
   PyObject *__pyx_float_1eneg_4;
   PyObject *__pyx_float_1eneg_5;
   PyObject *__pyx_float_1eneg_8;
@@ -4774,7 +4774,7 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_float_1e2);
   Py_CLEAR(clear_module_state->__pyx_float_1e6);
   Py_CLEAR(clear_module_state->__pyx_float_5e4);
-  Py_CLEAR(clear_module_state->__pyx_float_1eneg_2);
+  Py_CLEAR(clear_module_state->__pyx_float_1eneg_3);
   Py_CLEAR(clear_module_state->__pyx_float_1eneg_4);
   Py_CLEAR(clear_module_state->__pyx_float_1eneg_5);
   Py_CLEAR(clear_module_state->__pyx_float_1eneg_8);
@@ -5528,7 +5528,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_float_1e2);
   Py_VISIT(traverse_module_state->__pyx_float_1e6);
   Py_VISIT(traverse_module_state->__pyx_float_5e4);
-  Py_VISIT(traverse_module_state->__pyx_float_1eneg_2);
+  Py_VISIT(traverse_module_state->__pyx_float_1eneg_3);
   Py_VISIT(traverse_module_state->__pyx_float_1eneg_4);
   Py_VISIT(traverse_module_state->__pyx_float_1eneg_5);
   Py_VISIT(traverse_module_state->__pyx_float_1eneg_8);
@@ -6292,7 +6292,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_float_1e2 __pyx_mstate_global->__pyx_float_1e2
 #define __pyx_float_1e6 __pyx_mstate_global->__pyx_float_1e6
 #define __pyx_float_5e4 __pyx_mstate_global->__pyx_float_5e4
-#define __pyx_float_1eneg_2 __pyx_mstate_global->__pyx_float_1eneg_2
+#define __pyx_float_1eneg_3 __pyx_mstate_global->__pyx_float_1eneg_3
 #define __pyx_float_1eneg_4 __pyx_mstate_global->__pyx_float_1eneg_4
 #define __pyx_float_1eneg_5 __pyx_mstate_global->__pyx_float_1eneg_5
 #define __pyx_float_1eneg_8 __pyx_mstate_global->__pyx_float_1eneg_8
@@ -26794,9 +26794,9 @@ static PyObject *__pyx_pf_8celltrip_6policy_20__defaults__(CYTHON_UNUSED PyObjec
   __Pyx_INCREF(((PyObject*)__pyx_float_1_));
   __Pyx_GIVEREF(((PyObject*)__pyx_float_1_));
   if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 9, ((PyObject*)__pyx_float_1_))) __PYX_ERR(0, 781, __pyx_L1_error);
-  __Pyx_INCREF(((PyObject*)__pyx_float_1eneg_2));
-  __Pyx_GIVEREF(((PyObject*)__pyx_float_1eneg_2));
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 10, ((PyObject*)__pyx_float_1eneg_2))) __PYX_ERR(0, 781, __pyx_L1_error);
+  __Pyx_INCREF(((PyObject*)__pyx_float_1eneg_3));
+  __Pyx_GIVEREF(((PyObject*)__pyx_float_1eneg_3));
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 10, ((PyObject*)__pyx_float_1eneg_3))) __PYX_ERR(0, 781, __pyx_L1_error);
   __Pyx_INCREF(((PyObject*)__pyx_float_0_));
   __Pyx_GIVEREF(((PyObject*)__pyx_float_0_));
   if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 11, ((PyObject*)__pyx_float_0_))) __PYX_ERR(0, 781, __pyx_L1_error);
@@ -26983,7 +26983,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
     values[11] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_float__2)));
     values[12] = __Pyx_Arg_NewRef_FASTCALL(__pyx_dynamic_args->__pyx_arg_epsilon_critic);
     values[13] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_float_1_)));
-    values[14] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_float_1eneg_2)));
+    values[14] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_float_1eneg_3)));
     values[15] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_float_0_)));
     values[16] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_tuple__7)));
     values[17] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_float__03)));
@@ -42921,7 +42921,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __Pyx_GIVEREF(__pyx_tuple__6);
 
   /* "celltrip/policy.py":803
- *             entropy_weight=1e-2,
+ *             entropy_weight=1e-3,
  *             kl_beta_init=0.,
  *             kl_beta_increment=(.5, 2),             # <<<<<<<<<<<<<<
  *             kl_target=.03,
@@ -43566,7 +43566,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitConstants(void) {
   __pyx_float_1e2 = PyFloat_FromDouble(1e2); if (unlikely(!__pyx_float_1e2)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_float_1e6 = PyFloat_FromDouble(1e6); if (unlikely(!__pyx_float_1e6)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_float_5e4 = PyFloat_FromDouble(5e4); if (unlikely(!__pyx_float_5e4)) __PYX_ERR(0, 1, __pyx_L1_error)
-  __pyx_float_1eneg_2 = PyFloat_FromDouble(1e-2); if (unlikely(!__pyx_float_1eneg_2)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_float_1eneg_3 = PyFloat_FromDouble(1e-3); if (unlikely(!__pyx_float_1eneg_3)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_float_1eneg_4 = PyFloat_FromDouble(1e-4); if (unlikely(!__pyx_float_1eneg_4)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_float_1eneg_5 = PyFloat_FromDouble(1e-5); if (unlikely(!__pyx_float_1eneg_5)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_float_1eneg_8 = PyFloat_FromDouble(1e-8); if (unlikely(!__pyx_float_1eneg_8)) __PYX_ERR(0, 1, __pyx_L1_error)
@@ -45285,7 +45285,7 @@ if (!__Pyx_RefNanny) {
  *             epsilon_ppo=.2,
  *             epsilon_critic=torch.inf,             # <<<<<<<<<<<<<<
  *             critic_weight=1.,
- *             entropy_weight=1e-2,
+ *             entropy_weight=1e-3,
  */
   __Pyx_GetModuleGlobalName(__pyx_t_3, __pyx_n_s_torch); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 799, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);

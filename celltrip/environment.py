@@ -37,7 +37,7 @@ class EnvironmentBase:
         penalty_bound=None,
         penalty_velocity=None,
         penalty_action=None,
-        epsilon=1e-5,
+        epsilon=1e-3,
         # Early stopping
         max_timesteps=1_000,
         min_timesteps=100,
@@ -182,6 +182,7 @@ class EnvironmentBase:
             else: reward_distance = torch.zeros(actions.shape[0], device=self.device)
             # Expvar reward
             get_reward_expvar = lambda: self.get_expvar(use_cache=True)
+            # get_reward_expvar = lambda: (self.get_expvar(use_cache=True)+self.epsilon).log().mean(dim=-1)
             if self.reward_scales['reward_expvar'] != 0:
                 reward_expvar = get_reward_expvar()
             else: reward_expvar = torch.zeros(actions.shape[0], device=self.device)
@@ -197,8 +198,8 @@ class EnvironmentBase:
             else: get_penalty_velocity = lambda: self.vel.square().mean(dim=-1)
             # get_penalty_velocity = lambda: (self.vel.norm(dim=-1).square()+self.epsilon).log()
             if self.reward_scales['penalty_velocity'] != 0:
-                # penalty_velocity = get_penalty_velocity()
-                penalty_velocity = 0
+                penalty_velocity = get_penalty_velocity()
+                # penalty_velocity = 0
             else: penalty_velocity = torch.zeros(actions.shape[0], device=self.device)
 
         ### Step positions
@@ -280,7 +281,7 @@ class EnvironmentBase:
             reward_expvar       *=  self.reward_scales['reward_expvar']      * 1e-1/delta          # Raw 1e0, Log 1e0
             reward_origin       *=  self.reward_scales['reward_origin']      * 1e-1/delta          # Raw 1e0, Log 1e0
             penalty_bound       *=  self.reward_scales['penalty_bound']      * 1e0
-            penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e-2          # Raw 1e1, Log 1e0
+            penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e-1/delta          # Raw 1e1, Log 1e0
             penalty_action      *=  self.reward_scales['penalty_action']     * 1e-3
             # self.steps += 1
         else:
@@ -441,7 +442,9 @@ class EnvironmentBase:
             A_norm = B_norm = 1
             # Perform lstsq
             X = torch.linalg.lstsq(A, B / B_norm).solution
-            err = (torch.matmul(A, X) * A_norm - B).square().mean(dim=-1)
+            err = (torch.matmul(A, X) * A_norm - B).square()
+            # err = (err + self.epsilon).log().mean(dim=-1)  # NOTE: ADDED LOG
+            err = (err + self.epsilon).mean(dim=-1).log()  # NOTE: ADDED LOG
             running_err += err
         running_err = running_err / len(targets)
 
