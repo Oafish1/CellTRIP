@@ -487,6 +487,13 @@ class EntitySelfAttentionLite(nn.Module):
         self.critic_decider = nn.Sequential(
             # activation(), nn.Linear(hidden_dim, hidden_dim),
             activation(), nn.Linear(hidden_dim, 1))
+        
+        # Input and output layers for standardization functions
+        self.input_pos_layers = [self.self_pos_embed, self.node_pos_embed]
+        if self.independent_critic: self.input_pos_layers += [self.critic_self_pos_embed, self.critic_node_pos_embed]
+        self.input_feat_layers = [self.self_feat_embed, self.node_feat_embed]
+        if self.independent_critic: self.input_feat_layers += [self.critic_self_feat_embed, self.critic_node_feat_embed]
+        self.output_critic_layers = [self.critic_decider[-1]]
     
     def forward(
             self, self_entities, node_entities=None, mask=None,
@@ -640,16 +647,17 @@ class DiscreteActions(nn.Module):
 
 
 class ContinuousActions(nn.Module):
-    def __init__(self, input_dim, output_dim, activation=nn.ReLU, log_std_init=0, **kwargs):
+    def __init__(self, input_dim, output_dim, hidden_dim=None, activation=nn.ReLU, log_std_init=0, **kwargs):
         super().__init__(**kwargs)
 
         # Params
         self.log_std = nn.Parameter(torch.tensor(log_std_init, dtype=torch.float))
+        if hidden_dim is None: hidden_dim = input_dim
         
         # Heads
         self.decider = nn.Sequential(
-            # activation(), nn.Linear(hidden_dim, hidden_dim),
-            activation(), nn.Linear(input_dim, output_dim))
+            activation(), nn.Linear(input_dim, hidden_dim),
+            activation(), nn.Linear(hidden_dim, output_dim))
         
     def forward(self, logits, *, action=None, return_entropy=False):
         # Calculate actions
@@ -688,16 +696,16 @@ class ContinuousActions(nn.Module):
 
 class ArtStandardization(nn.Module):
     "Adaptively Rescaling Targets"
-    def __init__(self, dim=(), beta=3e-4, use_mean=True, use_std=True):
+    def __init__(self, dim=(1,), beta=3e-4, use_mean=True, use_std=True):
         super().__init__()
 
         self.beta = beta
         self.use_mean = use_mean
         self.use_std = use_std
         # TODO: Change to buffers
-        self.mean = nn.Parameter(torch.zeros((1, *dim)), requires_grad=False)  # Should probably make this a buffer
-        self.square_mean = nn.Parameter(torch.ones((1, *dim)), requires_grad=False)
-        self.std = nn.Parameter(torch.ones((1, *dim)).sqrt(), requires_grad=False)
+        self.mean = nn.Parameter(torch.zeros(dim), requires_grad=False)  # Should probably make this a buffer
+        self.square_mean = nn.Parameter(torch.ones(dim), requires_grad=False)
+        self.std = nn.Parameter(torch.ones(dim).sqrt(), requires_grad=False)
 
     def update(self, x):
         "First dimension must be batch"
@@ -705,8 +713,8 @@ class ArtStandardization(nn.Module):
         # NOTE: It might be better to use another variance approximation method, but this one
         # is the easiest - https://www.johndcook.com/blog/2008/09/26/comparing-three-methods-of-computing-standard-deviation/
         # Update params
-        batch_mean = (1-self.beta) * self.mean + self.beta * x.mean(keepdim=True, dim=0)
-        batch_square_mean = (1-self.beta) * self.square_mean + self.beta * x.square().mean(keepdim=True, dim=0)
+        batch_mean = (1-self.beta) * self.mean + self.beta * x.mean(dim=0)
+        batch_square_mean = (1-self.beta) * self.square_mean + self.beta * x.square().mean(dim=0)
         batch_std = (batch_square_mean - batch_mean.square()).sqrt()
 
         # Handle NANs
@@ -721,22 +729,33 @@ class ArtStandardization(nn.Module):
         self.square_mean.data = batch_square_mean
         self.std.data = batch_std
 
-    def apply(self, x):
-        if self.use_mean: x = x - self.mean
-        if self.use_std: x = x / self.std
+    def apply(self, x, shape=None):
+        if shape is None: shape = tuple((len(x.shape)-1)*[1]+[-1])
+        if self.use_mean: x = x - self.mean.view(shape)
+        if self.use_std: x = x / self.std.view(shape)
         return x
 
-    def remove(self, x):
-        if self.use_std: x = x * self.std
-        if self.use_mean: x = x + self.mean
+    def remove(self, x, shape=None):
+        if shape is None: shape = tuple((len(x.shape)-1)*[1]+[-1])
+        if self.use_std: x = x * self.std.view(shape)
+        if self.use_mean: x = x + self.mean.view(shape)
         return x
     
 
 class PopArtStandardization(ArtStandardization):
     "https://arxiv.org/pdf/1809.04474"
-    def __init__(self, layer, **kwargs):
-        super().__init__(**kwargs)
-        self.layer = layer
+    def __init__(self, *layers, splits=None, pre=False, dim=None, **kwargs):
+        # Pre: Standardization for inputs, rather than outputs
+        # Parameters
+        self.layers = layers  # List of lists of layer groups
+        self.splits = splits
+        self.pre = pre
+
+        # Automatically detect dim
+        if dim is None: dim = sum(l[0].weight.shape[1] for l in layers) if pre else sum(l[0].weight.shape[0] for l in layers)
+
+        # Super
+        super().__init__(dim=dim, **kwargs)
 
     def update(self, x):
         # Perform update
@@ -744,9 +763,48 @@ class PopArtStandardization(ArtStandardization):
         prev_std = self.std.clone()
         super().update(x)
 
-        # POP - Preserving Outputs Precisely
-        self.layer.weight.data = self.layer.weight * prev_std.unsqueeze(-1) / self.std.unsqueeze(-1)
-        self.layer.bias.data = (self.layer.bias * prev_std + prev_mean - self.mean) / self.std
+        for i, layers in enumerate(self.layers):
+            split = self.splits[i] if self.splits is not None else None
+            for layer in layers:
+                # Get previous
+                mu = prev_mean
+                sigma = prev_std
+                mu_prime = self.mean
+                sigma_prime = self.std
+                if self.splits is not None:
+                    mu, sigma, mu_prime, sigma_prime = mu[..., split], sigma[..., split], mu_prime[..., split], sigma_prime[..., split]
+
+                # POP - Preserving Outputs Precisely (Original)
+                if not self.pre:
+                    # UNIT TEST (16 input, 64 out)
+                    # ## Initialize
+                    # X = torch.rand((1, 16), device='cuda')
+                    # stand = celltrip.policy.PopArtStandardization(policy.actor_critic.self_pos_embed, dim=(64,)).cuda()
+                    # logits = policy.actor_critic.self_pos_embed(X)
+                    # print(stand.remove(logits))
+                    # # print(logits)
+                    # ## Update
+                    # for _ in range(1_000): stand.update(logits)
+                    # logits = policy.actor_critic.self_pos_embed(X)
+                    # print(stand.remove(logits))  # Should be same
+                    # print(logits)  # Should be different
+                    layer.weight.data = layer.weight * sigma.unsqueeze(-1) / sigma_prime.unsqueeze(-1)
+                    layer.bias.data = (layer.bias * sigma + mu - mu_prime) / sigma_prime
+
+                # POP for inputs
+                if self.pre:
+                    # UNIT TEST (16 input, 64 out)
+                    # ## Initialize
+                    # X = torch.rand((1, 16), device='cuda')
+                    # stand = celltrip.policy.PopArtStandardization(policy.actor_critic.self_pos_embed, pre=True, dim=(16,)).cuda()
+                    # print(stand.apply(X))
+                    # print(policy.actor_critic.self_pos_embed(stand.apply(X)))
+                    # ## Update
+                    # for _ in range(1_000): stand.update(X)
+                    # print(stand.apply(X))  # Different than 1st
+                    # print(policy.actor_critic.self_pos_embed(stand.apply(X)))  # Same as 2nd
+                    layer.weight.data = layer.weight * sigma_prime.unsqueeze(0) / sigma.unsqueeze(0)
+                    layer.bias.data = layer.bias + torch.matmul((mu_prime-mu)/sigma, layer.weight.T)
 
 
 class BufferStandardization(nn.Module):
@@ -798,7 +856,7 @@ class PPO(nn.Module):
             epsilon_ppo=.2,
             epsilon_critic=torch.inf,
             critic_weight=1.,
-            entropy_weight=1e-3,
+            entropy_weight=0,  # 1e-3
             kl_beta_init=0.,
             kl_beta_increment=(.5, 2),
             kl_target=.03,
@@ -809,13 +867,13 @@ class PPO(nn.Module):
             # actor_lr=3e-4,
             # critic_lr=3e-4,
             lr=3e-4,
-            return_beta=3e-3,
+            standardization_beta=3e-4,
             weight_decay=1e-5,
             betas=(.99, .99),  # (.9, .999)
             lr_iters=None,
             lr_gamma=1,
             # Backward
-            update_iterations=30,
+            update_iterations=5,
             sync_iterations=1,
             pool_size=torch.inf,
             epoch_size=100_000,
@@ -906,8 +964,11 @@ class PPO(nn.Module):
         # self.return_standardization = BufferStandardization(buffer_size=buffer_size)
 
         # PopArt
-        self.reward_standardization = ArtStandardization(beta=.5)
-        self.return_standardization = PopArtStandardization(self.actor_critic.critic_decider[-1], beta=return_beta)
+        # self.reward_standardization = ArtStandardization(beta=.5)
+        self.input_standardization = PopArtStandardization(
+            self.actor_critic.input_pos_layers, self.actor_critic.input_feat_layers,
+            splits=(slice(0, self.positional_dim), slice(self.positional_dim, self.positional_dim+sum(self.modal_dims))), pre=True, beta=standardization_beta)
+        self.return_standardization = PopArtStandardization(self.actor_critic.output_critic_layers, beta=standardization_beta)
         
 
         # Initialize
@@ -1015,7 +1076,7 @@ class PPO(nn.Module):
         state_val = torch.zeros(0, device=self.policy_iteration.device)
         for start_idx in range(0, compressed_state.shape[0], forward_batch_size):
             state = _utility.processing.split_state(
-                compressed_state,
+                self.input_standardization.apply(compressed_state),
                 idx=np.arange(start_idx, min(start_idx+forward_batch_size, compressed_state.shape[0])),
                 **self.split_args)
             if not terminal:
@@ -1082,6 +1143,7 @@ class PPO(nn.Module):
         self,
         memory,
         update_iterations=None,
+        standardize_inputs=True,
         standardize_returns=True,
         verbose=False,
         # Collective args
@@ -1149,6 +1211,7 @@ class PPO(nn.Module):
                 batch_statistics = defaultdict(lambda: 0)
                 batch_idx = epoch_idx[batch_num*batch_size:(batch_num+1)*batch_size]
                 batch_state_vals_new = torch.zeros(0, device=self.policy_iteration.device)
+                batch_inputs = torch.zeros(0, device=self.policy_iteration.device)
                 batch_returns = torch.zeros(0, device=self.policy_iteration.device)
                 minibatches = np.ceil(batch_size/minibatch_size).astype(int) if batch_size is not None else 1
                 for minibatch_num in range(minibatches):
@@ -1199,6 +1262,7 @@ class PPO(nn.Module):
                         loss.backward()  # Longest computation
 
                         # Record required logs
+                        batch_inputs = torch.cat((batch_inputs, states[0].view(-1, states[0].shape[-1])), dim=0)  # Only use first to save memory
                         batch_returns = torch.cat((batch_returns, advantages+state_vals), dim=0)
                         batch_state_vals_new = torch.cat((batch_state_vals_new, state_vals_new), dim=0)
 
@@ -1216,10 +1280,14 @@ class PPO(nn.Module):
                 # Statistics
                 batch_statistics['Moving Return Mean'] += self.return_standardization.mean.detach().mean()
                 batch_statistics['Moving Return STD'] += self.return_standardization.std.detach().mean()
-                # batch_statistics['Moving Reward Mean'] += self.reward_standardization.mean.mean() * accumulation_frac
-                # batch_statistics['Moving Reward STD'] += self.reward_standardization.std.mean() * accumulation_frac
                 batch_statistics['Return Mean'] += batch_returns.detach().mean() * accumulation_frac
                 batch_statistics['Return STD'] += batch_returns.detach().std() * accumulation_frac
+                batch_statistics['Moving Input Mean'] += self.input_standardization.mean.detach().mean()
+                batch_statistics['Moving Input STD'] += self.input_standardization.std.detach().mean()
+                batch_statistics['Input Mean'] += batch_inputs.detach().mean() * accumulation_frac
+                batch_statistics['Input STD'] += batch_inputs.detach().std() * accumulation_frac
+                # batch_statistics['Moving Reward Mean'] += self.reward_standardization.mean.mean() * accumulation_frac
+                # batch_statistics['Moving Reward STD'] += self.reward_standardization.std.mean() * accumulation_frac
                 batch_statistics['Explained Variance'] += exp_var.detach()
                 # batch_statistics['Advantage Mean'] += advantages.detach().mean() * accumulation_frac
                 # batch_statistics['Advantage STD'] += advantages.detach().std() * accumulation_frac
@@ -1247,6 +1315,8 @@ class PPO(nn.Module):
                     else: synchronized = False
 
                 # Update moving return mean
+                if standardize_inputs:
+                    self.input_standardization.update(batch_inputs)
                 if standardize_returns:
                     self.return_standardization.update(batch_returns)
                     self.synchronize('learners', sync_list=self.return_standardization.parameters())
@@ -1361,7 +1431,8 @@ class PPO(nn.Module):
         normalized_rewards = self.return_standardization.apply(rewards)  # , mean=False
 
         # Evaluate actions and states
-        action_logs_new, dist_entropy, state_vals_new = self.actor_critic(*states, action=actions, entropy=True, critic=True)
+        normalized_states = [self.input_standardization.apply(states[0]), self.input_standardization.apply(states[1]), states[2]]
+        action_logs_new, dist_entropy, state_vals_new = self.actor_critic(*normalized_states, action=actions, entropy=True, critic=True)
         # action_logs_new = action_logs_new.clamp(-20, 0)
         
         # Calculate PPO loss

@@ -200,3 +200,9 @@ def padded_stack(arrays, method='zero'):
     for i, arr in enumerate(arrays):
         return_matrix[(i, *[slice(dim) for dim in arr.shape])] = arr
     return return_matrix
+
+
+def center_states(states, dim):
+    states = states.copy()
+    states[:, :, :dim] -= states[:, :, :dim].mean(keepdims=True, axis=1)
+    return states

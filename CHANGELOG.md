@@ -1,3 +1,27 @@
+### 1.0.0+2025.6.18
+- Add functionality for targeted partition sampling
+- Add minimum timesteps protection toggle
+- Bugfix for spherical unbounded velocity initial state
+- Clean and reorganize analysis notebook
+- Figures for analysis notebook
+- Fix environment behavior when not computing rewards
+- Notebook version of public API
+- Return `EnvironmentBase.finished` reason
+- Tweak policy and environment parameters
+
+### 1.0.0+2025.6.17
+- Figure changes
+
+### 1.0.0+2025.6.16
+- Add normal distribution option to environment
+- PopArt module compatibility with layer groups and custom indexing
+- Input normalization using PopArt (novel)
+- Testing with continuous output head and unbounded velocity
+- Time estimation output to runtime checker
+
+### 1.0.0+2025.6.14
+- Add degrees to least square solver
+
 ### 1.0.0+2025.6.12
 - Figure updates
 

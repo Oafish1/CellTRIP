@@ -235,6 +235,7 @@ class Preprocessing:
         partition_cols=None,
         mask=None,
         num_nodes=None,
+        partition=None,
         return_partition=False,
         **kwargs,
     ):
@@ -250,6 +251,7 @@ class Preprocessing:
         if mask is not None: sample_mask = np.array(mask)
         else: sample_mask = None
         if num_nodes is None: num_nodes = self.num_nodes
+        selected_partition = partition
             
         # Align datasets
         # TODO: Add as auxiliary function
@@ -293,7 +295,8 @@ class Preprocessing:
             while True:
                 # selected_partition = _utility.general.rolled_index(
                 #     unique_partition_vals, np.random.choice(np.prod(list(map(len, unique_partition_vals)))))
-                selected_partition = np.random.choice(unique_partition_vals)
+                if selected_partition is None: selected_partition = np.random.choice(unique_partition_vals)
+                else: assert selected_partition in unique_partition_vals, f'Partition not found, "{selected_partition}"'
                 masks = [
                     np.prod([
                         adata_ob[col] == val
@@ -542,7 +545,7 @@ class PreprocessFromAnnData:
         self.processed_modalities, self.processed_adata_vars = self.preprocessing.fit_transform(
             modalities, adata_vars=adata_vars, force_filter=True)
         
-    def _transform_memory(self, return_partition=False):
+    def _transform_memory(self, return_partition=False, **kwargs):
         # Perform sampling
         sampled_adata_vars = self.processed_adata_vars
         sampled_modalities, sampled_adata_obs = self.preprocessing.subsample(
@@ -550,7 +553,7 @@ class PreprocessFromAnnData:
             adata_obs=self.processed_adata_obs,
             partition_cols=self.partition_cols,
             mask=self.mask,
-            return_partition=return_partition)
+            **kwargs)
         if return_partition: sampled_adata_obs, partition = sampled_adata_obs
         
         ret = (sampled_modalities, sampled_adata_obs, sampled_adata_vars)
@@ -571,7 +574,7 @@ class PreprocessFromAnnData:
         # print(self.preprocessing.transform([adata[adata.obs.index[[0]]].X for adata in self.adatas], force_filter=True))
 
     # @_decorator.line_profile
-    def _transform_disk(self, return_partition=False):
+    def _transform_disk(self, return_partition=False, **kwargs):
         adata_obs = [adata.obs for adata in self.adatas]
         adata_vars = [adata.var for adata in self.adatas]
 
@@ -580,7 +583,8 @@ class PreprocessFromAnnData:
             adata_obs=adata_obs,
             partition_cols=self.partition_cols,
             mask=self.mask,
-            return_partition=return_partition)
+            return_partition=return_partition,
+            **kwargs)
         if return_partition: sampled_adata_obs, partition = sampled_adata_obs
         sampled_modalities = [adata[adata_ob.index.to_numpy()].X for adata, adata_ob in zip(self.adatas, sampled_adata_obs)]
         processed_adata_obs = sampled_adata_obs
