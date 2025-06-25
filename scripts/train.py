@@ -3,16 +3,11 @@
 # %autoreload 2
 
 
-# %% [markdown]
-# - Save preprocessing
-# - Early stopping for `train_celltrip` based on action_std and/or KL
-# - Maybe [this](https://arxiv.org/abs/2102.09430) but probably not
-# - [EFS on clusters maybe](https://docs.ray.io/en/latest/cluster/vms/user-guides/launching-clusters/aws.html#start-ray-with-the-ray-cluster-launcher)
-
 # %%
 import argparse
 import os
 import random
+import shlex
 
 import ray
 
@@ -43,6 +38,7 @@ group.add_argument('--target_modalities', type=int, nargs='+', help='Target moda
 group = parser.add_argument_group('Algorithm')
 group.add_argument('--dim', type=int, default=16, help='Dimensions in the output latent space')
 group.add_argument('--train_split', type=float, default=1., help='Fraction of input data to use as training')
+group.add_argument('--train_partitions', action='store_true', default=1., help='Split training/validation data across partitions rather than samples')
 # Computation
 group = parser.add_argument_group('Computation')
 group.add_argument('--num_gpus', type=int, default=1, help='Number of GPUs to use during computation')
@@ -68,45 +64,59 @@ if not celltrip.utility.notebook.is_notebook():
     config = parser.parse_args()
 else:
     # experiment_name = 'scglue-both-new'
-    experiment_name = 'flysta3d'
+    experiment_name = 'flysta3d-L3_b-single-250622'
+    bucket_name = 'nkalafut-celltrip'
+    # bucket_name = 'arn:aws:s3:us-east-2:245432013314:accesspoint/ray-nkalafut-celltrip'
     command = (
         # MERFISH
-        # f's3://nkalafut-celltrip/MERFISH/expression.h5ad s3://nkalafut-celltrip/MERFISH/spatial.h5ad --target_modalities 1 '
+        # f's3://{bucket_name}/MERFISH/expression.h5ad s3://{bucket_name}/MERFISH/spatial.h5ad --target_modalities 1 '
         # scGLUE
-        # f's3://nkalafut-celltrip/scGLUE/Chen-2019-RNA.h5ad s3://nkalafut-celltrip/scGLUE/Chen-2019-ATAC.h5ad '
-        # f's3://nkalafut-celltrip/scGLUE/Chen-2019-RNA.h5ad s3://nkalafut-celltrip/scGLUE/Chen-2019-ATAC.h5ad --input_modalities 0 --target_modalities 0 '
+        # f's3://{bucket_name}/scGLUE/Chen-2019-RNA.h5ad s3://{bucket_name}/scGLUE/Chen-2019-ATAC.h5ad '
+        # f's3://{bucket_name}/scGLUE/Chen-2019-RNA.h5ad s3://{bucket_name}/scGLUE/Chen-2019-ATAC.h5ad --input_modalities 0 --target_modalities 0 '
         # f'../data/scglue/Chen-2019-RNA.h5ad ../data/scglue/Chen-2019-ATAC.h5ad --input_modalities 0 --target_modalities 0 '
         # Flysta3D
-        ' '.join([f'--merge_files ' + ' ' .join([f's3://nkalafut-celltrip/Flysta3D/{p}_{m}.h5ad' for p in ('E14-16h_a', 'E16-18h_a', 'L1_a', 'L2_a', 'L3_b')]) for m in ('expression', 'spatial')]) + ' '
-        + '--target_modalities 1 '
+        # f' '.join([f'--merge_files ' + ' ' .join([f's3://{bucket_name}/Flysta3D/{p}_{m}.h5ad' for p in ('E14-16h_a', 'E16-18h_a', 'L1_a', 'L2_a', 'L3_b')]) for m in ('expression', 'spatial')]) + ' '
+        # f'--target_modalities 1 '
+        # f'--partition_cols slice_ID '
+        f' '.join([f'--merge_files ' + ' ' .join([f's3://{bucket_name}/Flysta3D/{p}_{m}.h5ad' for p in ('L3_b',)]) for m in ('expression', 'spatial')]) + ' '
+        f'--target_modalities 1 '
         f'--partition_cols slice_ID '
         # Tahoe-100M
-        # '--merge_files ' + ' '.join('[f's3://nkalafut-celltrip/Tahoe/plate{i}_filt_Vevo_Tahoe100M_WServicesFrom_ParseGigalab.h5ad' for i in range(1, 15)]) + ' '
+        # '--merge_files ' + ' '.join('[f's3://{bucket_name}/Tahoe/plate{i}_filt_Vevo_Tahoe100M_WServicesFrom_ParseGigalab.h5ad' for i in range(1, 15)]) + ' '
         # f'--partition_cols sample '
         # scMultiSim
-        # f's3://nkalafut-celltrip/scMultiSim/expression.h5ad s3://nkalafut-celltrip/scMultiSim/peaks.h5ad '
+        # f's3://{bucket_name}/scMultiSim/expression.h5ad s3://{bucket_name}/scMultiSim/peaks.h5ad '
         # TemporalBrain
-        # f's3://nkalafut-celltrip/TemporalBrain/expression.h5ad s3://nkalafut-celltrip/TemporalBrain/peaks.h5ad '
+        # f's3://{bucket_name}/TemporalBrain/expression.h5ad s3://{bucket_name}/TemporalBrain/peaks.h5ad '
         # f'--partition_cols "Donor ID" '
 
         f'--backed '
-        f'--dim 2 '
-        f'--train_split .8 '
+        # f'--dim 2 '
+        # f'--dim 8 '
+        f'--dim 32 '
+
+        # Sample split
+        # f'--train_split .8 '
+        # Partition split
+        # f'--train_split .6 '
+        # f'--train_partitions '
+        # Single slice
+        f'--train_split .0001 '
+        f'--train_partitions '
+
         f'--num_gpus 2 --num_learners 2 --num_runners 2 '
-        # f'--update_timesteps 1_000_000 '
-        # f'--max_timesteps 250_000_000 '
         f'--update_timesteps 1_000_000 '
         f'--max_timesteps 200_000_000 '
         # f'--update_timesteps 100_000 '
         # f'--max_timesteps 100_000_000 '
         f'--dont_sync_across_nodes '
-        f'--logfile s3://nkalafut-celltrip/logs/{experiment_name}.log '
+        f'--logfile s3://{bucket_name}/logs/{experiment_name}.log '
         f'--flush_iterations 1 '
-        # f'--checkpoint s3://nkalafut-celltrip/checkpoints/merfish-new-0200.weights '
+        # f'--checkpoint s3://nkalafut-celltrip/checkpoints/flysta3d-250616-0200.weights '
         f'--checkpoint_iterations 25 '
-        f'--checkpoint_dir s3://nkalafut-celltrip/checkpoints '
+        f'--checkpoint_dir s3://{bucket_name}/checkpoints '
         f'--checkpoint_name {experiment_name}')
-    config = parser.parse_args(command.split(' '))
+    config = parser.parse_args(shlex.split(command))
     print(f'python train.py {command}')
     
 # Defaults
@@ -141,7 +151,9 @@ def train(config):
     import celltrip
 
     # Initialization
-    dataloader_kwargs = {'num_nodes': [2**9, 2**11], 'mask': config.train_split}  # {'num_nodes': 20, 'pca_dim': 128}
+    dataloader_kwargs = {
+        'num_nodes': [2**9, 2**11], 'mask': config.train_split,
+        'mask_partitions': config.train_partitions}  # {'num_nodes': 20, 'pca_dim': 128}
     environment_kwargs = {
         'input_modalities': config.input_modalities,
         'target_modalities': config.target_modalities, 'dim': config.dim}
@@ -170,6 +182,56 @@ ray.get(train.remote(config))
 
 
 # %% [markdown]
+# # Trial Code
+
+# %%
+# import numpy as np
+# import sklearn.ensemble
+# import sklearn.neural_network
+# import sklearn.tree
+# import torch
+# import torch.nn as nn
+
+
+# %%
+# # Generate data
+# X = torch.rand((1_000, 16))
+# Y = torch.rand((1_000, 32))
+
+# # Generate model
+# m = nn.Sequential(nn.Linear(16, 128), nn.ReLU(), nn.Linear(128, 32))
+# opt = torch.optim.Adam(m.parameters(), lr=1e-3)
+
+# # ML (.9s)
+# for i in range(1000):
+#     # batch_idx = np.random.choice(X.shape[0], 64, replace=False)
+#     logits = m(X)
+#     loss = (Y - logits).square().mean()
+#     loss.backward()
+#     opt.step()
+#     # if (i+1) % 10 == 0: print(f'{i+1:>2d}: {loss.detach():.3f}')
+
+# # Lstsq (.0Xs)
+# degree = 3
+# X_app = torch.hstack([X.pow(deg+1) for deg in range(degree)] + [torch.ones((X.shape[0], 1))])
+# trans = torch.linalg.lstsq(X_app, Y).solution
+# loss = (torch.matmul(X_app, trans) - Y).square().mean()
+
+# # MLP (.1s)
+# m = sklearn.neural_network.MLPRegressor((128,))
+# m.fit(X, Y)
+# loss = (Y - m.predict(X)).square().mean()
+
+
+# %%
+# m = sklearn.tree.DecisionTreeRegressor(max_depth=4)
+# m.fit(X, Y)
+# logits = m.predict(X)
+# loss = (Y - logits).square().mean()
+# loss
+
+
+# %% [markdown]
 # # Run Locally
 
 # %%
@@ -180,8 +242,8 @@ ray.get(train.remote(config))
 
 # # Initialize locally
 # os.environ['AWS_PROFILE'] = 'waisman-admin'
-# # config.update_timesteps = 100_000
-# # config.max_timesteps = 30_000_000
+# config.update_timesteps = 100_000
+# config.max_timesteps = 20_000_000
 
 # dataloader_kwargs = {'num_nodes': [2**9, 2**11], 'mask': config.train_split}  # {'num_nodes': [2**9, 2**11], 'pca_dim': 128}
 # environment_kwargs = {
@@ -208,23 +270,6 @@ ray.get(train.remote(config))
 
 
 # %%
-# import numpy as np
-# import torch
-
-# X = 5*torch.rand(1000, 8)
-# Y = 5*torch.rand(1000, 256)
-# X_norm_scaled = torch.linalg.matrix_norm(X) * np.sqrt(Y.shape[1]/X.shape[1])
-# Y_norm = torch.linalg.matrix_norm(Y)
-# # X_norm_scaled = Y_norm = 1
-
-# # Distance method
-# # dist = ((torch.cdist(X, X) - torch.cdist(Y, Y))/np.sqrt(X.shape[0])).square().mean(dim=-1)
-
-# # Least squares method
-# C = torch.linalg.lstsq(X, Y / Y_norm).solution
-# (torch.matmul(X, C) * X_norm_scaled - Y).square().mean(dim=-1)
-
-# %%
 # # Forward
 # import line_profiler
 # memory.mark_sampled()
@@ -243,33 +288,12 @@ ray.get(train.remote(config))
 
 
 # %%
-# idx = np.sort(np.random.choice(len(memory), 10_000, replace=False))
-# a = memory[idx]
-
-# list_num = idx // a['states'][1].shape[1]
-# in_list_num = np.mod(idx, a['states'][1].shape[1])
-# check_idx = 2
-
-# a['states'][0]
-# memory.storage['states'][list_num[check_idx]][in_list_num[check_idx]]
-
-# a['states'][1]
-# memory.storage['states'][list_num[check_idx]]
-
-# a['advantages'][check_idx]
-# memory.storage['advantages'][list_num[check_idx]][in_list_num[check_idx]]
-
-# a['states'][2]
-
-
-# %%
 # # Memory pull
-# memory[0]
 # import line_profiler
 # prof = line_profiler.LineProfiler(
-#     celltrip.memory.AdvancedMemoryBuffer.fast_sample)
+#     celltrip.memory.AdvancedMemoryBuffer.__getitem__)
 # ret = prof.runcall(memory.__getitem__, np.random.choice(len(memory), 10_000, replace=False))
-# memory.compute_advantages()  # moving_standardization=policy.reward_standardizatio
+# memory.compute_advantages()
 # prof.print_stats(output_unit=1)
 
 
@@ -303,71 +327,6 @@ ray.get(train.remote(config))
 #     # NOTE: Training often only improves when PopArt and actual distribution match
 #     ret = policy.update(memory, verbose=False)
 #     print('UPDATE: ' + ', '.join([f'{k}: {v: 5.3f}' for ret_dict in ret[1:] for k, v in ret_dict.items()]))
-
-
-# %%
-# # env.max_timesteps = 1_000
-# env.reset()
-# memory = memory_init(policy)
-# ret = celltrip.train.simulate_until_completion(env, policy, memory, store_states=True)
-# steady_states = ret[-1].cpu()
-# ret
-
-# env.get_distance_match().mean()
-
-# steady_states[-1, :, :env.dim]
-
-# steady_states[-1, :, env.dim:]
-
-# np.linalg.norm(memory.storage['actions'][-1]-1, axis=-1)
-
-
-# import matplotlib.pyplot as plt
-# import seaborn as sns
-# import umap
-
-# # Get data and types
-# # raw = env.dataloader.adatas[0][env.keys].X
-# raw = steady_states[-1, :, :env.dim]
-# reducer = umap.UMAP(n_neighbors=100)
-
-# # Transform
-# transformed = reducer.fit_transform(raw)
-# # transformed = raw[:, :2]
-# # transformed = raw[:, 1:3]
-# # types = env.dataloader.adatas[0].obs.loc[env.keys, 'layer'].to_numpy()
-# types = env.dataloader.adatas[0].obs.loc[env.keys, 'cell_type'].to_numpy()
-
-# # Plot
-# fig, ax = plt.subplots(figsize=(4, 4))
-# for t in np.unique(types):
-#     ax.scatter(*transformed[types==t].T, s=2)
-# sns.despine(left=True, bottom=True, ax=ax)
-# # ax.set_xticks([])
-# # ax.set_yticks([])
-# # ax.add_patch(plt.Circle((0, 0), env.pos_bound, facecolor='none', edgecolor='black'))
-# fig.show()
-
-
-# import matplotlib.pyplot as plt
-# import seaborn as sns
-# import umap
-
-# # Get data and types
-# # raw = env.dataloader.adatas[0][env.keys].X
-# raw = modalities[1].cpu()
-# reducer = umap.UMAP()
-
-# # Transform
-# transformed = reducer.fit_transform(raw)
-# types = env.dataloader.adatas[0].obs.loc[env.keys, 'cell_type'].to_numpy()
-
-# # Plot
-# fig, ax = plt.subplots(figsize=(4, 4))
-# for t in np.unique(types):
-#     ax.scatter(*transformed[types==t].T, s=2)
-# sns.despine(left=True, bottom=True, ax=ax)
-# fig.show()
 
 
 

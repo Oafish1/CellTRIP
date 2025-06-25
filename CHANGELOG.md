@@ -1,3 +1,29 @@
+### 1.0.0+2025.6.24
+- Fix partition selection for `Preprocessing.subsample`
+
+### 1.0.0+2025.6.23
+- Figure changes
+
+### 1.0.0+2025.6.22
+- `README.md` changes
+- Add partition-based train/validation splitting
+- Analysis bugfixes with feature indexing and retrieval
+- Analysis visualization changes
+- Bugfix for caching feature embeddings when `PPO.forward_batch_size` is exceeded
+
+### 1.0.0+2025.6.21
+- Environment reward tuning
+- More individual runs for `Flysta3D` dataset
+
+### 1.0.0+2025.6.20
+- Analysis notebook changes
+- Environment reward tuning
+- Full dataset runs for `TemporalBrain` dataset
+- Various individual runs for `Flysta3D` dataset
+
+### 1.0.0+2025.6.19
+- Bugfix for dataloader fit subsampling
+
 ### 1.0.0+2025.6.18
 - Add functionality for targeted partition sampling
 - Add minimum timesteps protection toggle

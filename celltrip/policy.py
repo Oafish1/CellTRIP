@@ -526,9 +526,10 @@ class EntitySelfAttentionLite(nn.Module):
 
         # Actor block
         if actor or not self.independent_critic:
-            # Feature embedding
+            # Positional embedding
             self_pos_embeds = self.self_pos_embed(self_entities[..., :self.positional_dim])
             node_pos_embeds = self.node_pos_embed(node_entities[..., :self.positional_dim])
+            # Feature embedding
             if feature_embeds is not None: self_feat_embeds, node_feat_embeds = feature_embeds.pop(0)
             else:
                 self_feat_embeds = self.self_feat_embed(self_entities[..., self.positional_dim:])
@@ -547,9 +548,10 @@ class EntitySelfAttentionLite(nn.Module):
 
         # Critic block
         if self.independent_critic and critic:
-            # Feature embedding
+            # Positional embedding
             self_pos_embeds = self.critic_self_pos_embed(self_entities[..., :self.positional_dim])
             node_pos_embeds = self.critic_node_pos_embed(node_entities[..., :self.positional_dim])
+            # Feature embedding
             if feature_embeds is not None: self_feat_embeds, node_feat_embeds = feature_embeds.pop(0)
             else:
                 self_feat_embeds = self.critic_self_feat_embed(self_entities[..., self.positional_dim:])
@@ -847,11 +849,11 @@ class PPO(nn.Module):
             # Forward
             log_std_init=0,
             forward_batch_size=int(5e4),
-            vision_size=int(1e2),
+            vision_size=int(1e2),  # NOTE: Not used in Lite model
             # sample_strategy='random-proximity',
-            sample_strategy=None,
+            sample_strategy=None,  # NOTE: Not used in Lite model
             sample_dim=None,
-            reproducible_strategy='mean',
+            reproducible_strategy='mean',  # NOTE: Not used in Lite model
             # Weights
             epsilon_ppo=.2,
             epsilon_critic=torch.inf,
@@ -867,7 +869,7 @@ class PPO(nn.Module):
             # actor_lr=3e-4,
             # critic_lr=3e-4,
             lr=3e-4,
-            standardization_beta=3e-4,
+            standardization_beta=3e-3,
             weight_decay=1e-5,
             betas=(.99, .99),  # (.9, .999)
             lr_iters=None,
@@ -1058,6 +1060,7 @@ class PPO(nn.Module):
         self, compressed_state, *,
         keys=None, memory=None, forward_batch_size=None, terminal=False,
         feature_embeds=None, return_feature_embeds=False):
+        # NOTE: `feature_embeds` will not re-randomize vision if applicable to `split_state` (i.e. do not use non-lite model with vision culling and feature embed caching)
         # Data Checks
         assert compressed_state.shape[0] > 0, 'Empty state matrix passed'
         if keys is not None: assert len(keys) == compressed_state.shape[0], (
@@ -1075,24 +1078,31 @@ class PPO(nn.Module):
         action_log = torch.zeros(0, device=self.policy_iteration.device)
         state_val = torch.zeros(0, device=self.policy_iteration.device)
         for start_idx in range(0, compressed_state.shape[0], forward_batch_size):
+            self_idx = np.arange(start_idx, min(start_idx+forward_batch_size, compressed_state.shape[0]))
             state = _utility.processing.split_state(
                 self.input_standardization.apply(compressed_state),
-                idx=np.arange(start_idx, min(start_idx+forward_batch_size, compressed_state.shape[0])),
+                idx=self_idx,
                 **self.split_args)
+            feature_embeds_arg_use = [(sfe[self_idx], nfe) for sfe, nfe in feature_embeds_arg] if feature_embeds_arg is not None else None
             if not terminal:
                 action_sub, action_log_sub, state_val_sub, feature_embeds_sub = self.actor_critic(
-                    *state, critic=True, feature_embeds=feature_embeds_arg, return_feature_embeds=True)
+                    *state, critic=True, feature_embeds=feature_embeds_arg_use, return_feature_embeds=True)
                 action = torch.concat((action, action_sub), dim=0)
                 action_log = torch.concat((action_log, action_log_sub), dim=0)
             else: state_val_sub, feature_embeds_sub = self.actor_critic(
-                *state, actor=False, critic=True, feature_embeds=feature_embeds_arg, return_feature_embeds=True)
+                *state, actor=False, critic=True, feature_embeds=feature_embeds_arg_use, return_feature_embeds=True)
             state_val = torch.concat((state_val, state_val_sub), dim=0)
             if construct_feature_embeds:
                 if feature_embeds is None: feature_embeds = feature_embeds_sub
                 else:
-                    feature_embeds = [
-                        tuple(torch.concat((feature_embeds[i][j], t)) for j, t in enumerate(feat_tensors))
-                        for i, feat_tensors in enumerate(feature_embeds_sub)]
+                    # feature_embeds = [
+                    #     tuple(torch.concat((feature_embeds[i][j], t)) for j, t in enumerate(feat_tensors))
+                    #     for i, feat_tensors in enumerate(feature_embeds_sub)]
+                    for i in range(len(feature_embeds)):
+                        # NOTE: 0 is the self embeddings, which are the only ones subset in the Lite model
+                        # feature_embeds[i][0] = torch.concat((feature_embeds[i][0], feature_embeds_sub[i][0]))
+                        assert (feature_embeds[i][1] == feature_embeds_sub[i][1]).all(), 'Unexpected node embedding changes, make sure no vision culling is occurring.'
+                        feature_embeds[i] = (torch.concat((feature_embeds[i][0], feature_embeds_sub[i][0])), feature_embeds[i][1])
 
         # Unstandardize state_val
         state_val = self.return_standardization.remove(state_val)

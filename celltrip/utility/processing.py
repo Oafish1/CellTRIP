@@ -252,6 +252,7 @@ class Preprocessing:
         else: sample_mask = None
         if num_nodes is None: num_nodes = self.num_nodes
         selected_partition = partition
+        user_selected_partition = selected_partition is not None
             
         # Align datasets
         # TODO: Add as auxiliary function
@@ -283,7 +284,6 @@ class Preprocessing:
             
         
         # Partition
-        selected_partition = None
         if partition_cols is not None:
             if adata_obs is None: raise AttributeError('Cannot compute partitions without `adata_obs`.')
             # unique_partition_vals = [np.unique([adata_ob[col].unique() for adata_ob in adata_obs]) for col in partition_cols]
@@ -295,8 +295,8 @@ class Preprocessing:
             while True:
                 # selected_partition = _utility.general.rolled_index(
                 #     unique_partition_vals, np.random.choice(np.prod(list(map(len, unique_partition_vals)))))
-                if selected_partition is None: selected_partition = np.random.choice(unique_partition_vals)
-                else: assert selected_partition in unique_partition_vals, f'Partition not found, "{selected_partition}"'
+                if user_selected_partition: assert np.array([selected_partition == upv for upv in unique_partition_vals]).any(), f'Partition not found, "{selected_partition}".'
+                elif selected_partition is None: selected_partition = np.random.choice(unique_partition_vals)
                 masks = [
                     np.prod([
                         adata_ob[col] == val
@@ -304,6 +304,8 @@ class Preprocessing:
                     for adata_ob in adata_obs]
                 modal_sizes = [mask.sum() for mask in masks]
                 if sum(modal_sizes) > 0: break
+                if user_selected_partition: raise RuntimeError(f'Partition "{selected_partition}" had no matching entries.')
+                selected_partition = None
 
             # Apply
             if modalities is not None:
@@ -479,6 +481,7 @@ class PreprocessFromAnnData:
         memory_efficient='auto',  # Also works on in-memory datasets
         partition_cols=None,
         mask=None,  # List or int indicating pct of keepable samples
+        mask_partitions=False,  # Mask whole partitions if `mask` is provided as int
         fit_sample='auto',
         seed=None,
         **kwargs
@@ -495,7 +498,16 @@ class PreprocessFromAnnData:
             partition_cols = [partition_cols]
         self.partition_cols = partition_cols
         if isinstance(mask, float):
-            self.mask = self.rng.random(adatas[0].shape[0]) < mask
+            # Currently incompatible with mismatched modalities
+            if not mask_partitions: self.mask = self.rng.random(adatas[0].shape[0]) < mask
+            else:
+                adata_partitions = [
+                    adata.obs[partition_cols]
+                    .apply(lambda r: tuple(r[col] for col in r.index), axis=1).to_numpy()
+                    for adata in self.adatas]
+                partitions = np.unique(ft.reduce(np.union1d, adata_partitions))  # Unique for the case of 1 adata
+                chosen_partitions = self.rng.choice(partitions, max(1, np.floor(mask*len(partitions)).astype(int)), replace=False)
+                self.mask = np.isin(adata_partitions[0], chosen_partitions)
         else: self.mask = mask
         if memory_efficient == 'auto':
             # Only activate if on disk
@@ -563,7 +575,7 @@ class PreprocessFromAnnData:
     def _fit_disk(self):
         if self.fit_sample:
             modalities = [
-                adata[self.rng.choice(adata.shape[0], self.fit_sample)].X
+                adata[self.rng.choice(adata.shape[0], self.fit_sample, replace=False)].X
                 if adata.shape[0] > self.fit_sample else
                 adata[:].X[:]
                 for adata in self.adatas]
