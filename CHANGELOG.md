@@ -1,3 +1,7 @@
+### 1.0.0+2025.6.25
+- Additional analysis runs
+- Figure updates
+
 ### 1.0.0+2025.6.24
 - Fix partition selection for `Preprocessing.subsample`
 
