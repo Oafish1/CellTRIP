@@ -1,3 +1,25 @@
+### 1.0.0+2025.7.3
+- Add discrete option to train CLI
+- Adjust env weights
+- Better perturbation stability detection
+- Compatibility fixes with `analysis` notebook
+- Continuous spherical hacky adaptation, norm normalization across codebase
+- Many additional runs
+
+### 1.0.0+2025.7.2
+- Bugfix for disabled partitioning
+- Capability for cell-variable vel stopping
+- Change environment units to seconds instead of timesteps
+- Continuous model, tuning, and activation to work in high dimensions (!!!)
+- Variable delta during training
+
+### 1.0.0+2025.7.1
+- Tuning changes
+
+### 1.0.0+2025.6.30
+- Figure changes
+- Longer runs for reduced entropy
+
 ### 1.0.0+2025.6.25
 - Additional analysis runs
 - Figure updates

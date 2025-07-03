@@ -427,6 +427,8 @@ class EntitySelfAttentionLite(nn.Module):
         blocks=1,
         # Options
         activation=nn.ReLU,
+        # Structure
+        discrete=False,
         # independent_critic=True,
         independent_critic=False,
         **kwargs,
@@ -474,8 +476,8 @@ class EntitySelfAttentionLite(nn.Module):
         #     activation(), nn.Linear(hidden_dim, embed_dim))
         
         # General method
-        # self.actor_decider = ContinuousActions(hidden_dim, output_dim, activation=activation, log_std_init=log_std_init)
-        self.actor_decider = DiscreteActions(hidden_dim, output_dim*(3,), activation=activation)
+        if discrete: self.actor_decider = DiscreteActions(hidden_dim, output_dim*(3,), activation=activation)
+        else: self.actor_decider = ContinuousActions(hidden_dim, output_dim, activation=activation, log_std_init=log_std_init)
         
         # Magnitude method
         # self.actor_decider_direction = nn.Sequential(
@@ -638,7 +640,7 @@ class DiscreteActions(nn.Module):
             if self.training: action = dist.sample()
             else: action = actions.argmax(dim=-1)
         action_log = dist.log_prob(action).sum(dim=-1)  # Multiply independent probabilities
-        if return_entropy: entropy = dist.entropy().sum(dim=-1)
+        if return_entropy: entropy = dist.entropy().sum(dim=-1)  # Technically, `sum` would be correct, but this is better for consistent weighting
 
         # Return
         ret = ()
@@ -659,7 +661,8 @@ class ContinuousActions(nn.Module):
         # Heads
         self.decider = nn.Sequential(
             activation(), nn.Linear(input_dim, hidden_dim),
-            activation(), nn.Linear(hidden_dim, output_dim))
+            activation(), nn.Linear(hidden_dim, output_dim),
+            nn.Tanh())
         
     def forward(self, logits, *, action=None, return_entropy=False):
         # Calculate actions
@@ -681,12 +684,12 @@ class ContinuousActions(nn.Module):
 
         # Define normal distribution
         # NOTE: Scaled by sqrt(num_features)
-        dist = torch.distributions.Normal(loc=actions, scale=self.log_std.exp() if self.training else 0)  # /np.sqrt(actions.shape[-1])
+        dist = torch.distributions.Normal(loc=actions, scale=self.log_std.exp() if self.training else 1e-7)  # /np.sqrt(actions.shape[-1])
 
         # Sample
         if not set_action: action = dist.sample()
         action_log = dist.log_prob(action).sum(dim=-1)  # Multiply independent probabilities
-        if return_entropy: entropy = dist.entropy().sum(dim=-1)
+        if return_entropy: entropy = dist.entropy().sum(dim=-1)  # Technically, `sum` would be correct, but this is better for consistent weighting
 
         # Return
         ret = ()
@@ -858,7 +861,7 @@ class PPO(nn.Module):
             epsilon_ppo=.2,
             epsilon_critic=torch.inf,
             critic_weight=1.,
-            entropy_weight=0,  # 1e-3
+            entropy_weight=1e-3,  # 1e-3
             kl_beta_init=0.,
             kl_beta_increment=(.5, 2),
             kl_target=.03,

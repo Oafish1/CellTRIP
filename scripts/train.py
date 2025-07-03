@@ -38,7 +38,7 @@ group.add_argument('--target_modalities', type=int, nargs='+', help='Target moda
 group = parser.add_argument_group('Algorithm')
 group.add_argument('--dim', type=int, default=16, help='Dimensions in the output latent space')
 group.add_argument('--train_split', type=float, default=1., help='Fraction of input data to use as training')
-group.add_argument('--train_partitions', action='store_true', default=1., help='Split training/validation data across partitions rather than samples')
+group.add_argument('--train_partitions', action='store_true', help='Split training/validation data across partitions rather than samples')
 # Computation
 group = parser.add_argument_group('Computation')
 group.add_argument('--num_gpus', type=int, default=1, help='Number of GPUs to use during computation')
@@ -165,7 +165,12 @@ def train(config):
         environment_kwargs=environment_kwargs)
 
     # Stages
-    stage_functions = []
+    stage_functions = [
+        # lambda w: w.env.set_delta(.1),
+        # lambda w: w.env.set_delta(.05),
+        # lambda w: w.env.set_delta(.01),
+        # lambda w: w.env.set_delta(.005),
+    ]
 
     # Run function
     celltrip.train.train_celltrip(
