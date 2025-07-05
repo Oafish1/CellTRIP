@@ -1,3 +1,7 @@
+### 1.0.0+2025.7.4
+- Additional models for scMultiSim and TemporalBrain
+- Small bugfix for partition formatting in `analysis`
+
 ### 1.0.0+2025.7.3
 - Add discrete option to train CLI
 - Adjust env weights

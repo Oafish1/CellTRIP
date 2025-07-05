@@ -483,8 +483,8 @@ class EnvironmentBase:
             X = torch.linalg.lstsq(A, B / B_norm).solution
             err = (torch.matmul(A, X) * A_norm - B).square()
             # err = err.mean(dim=-1)
-            err = (err + self.epsilon).log().mean(dim=-1)
-            # err = (err + self.epsilon).mean(dim=-1).log()
+            # err = (err + self.epsilon).log().mean(dim=-1)
+            err = (err + self.epsilon).mean(dim=-1).log()
             running_err += err
         running_err = running_err / len(targets)
 
