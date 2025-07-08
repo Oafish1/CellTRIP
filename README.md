@@ -44,7 +44,7 @@ Install dependencies using `pip`
 
 ```bash
 # Development install (Recommended)
-# For full development capabilities, also install ffmpeg, poppler-utils, boto3, cupy, docker, ffmpeg, and poppler-utils
+# For full development capabilities, also install ffmpeg, poppler-utils, boto3, cupy, docker, and poppler-utils
 pip install -r requirements.txt
 pip install -e .
 

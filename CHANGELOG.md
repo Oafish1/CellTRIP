@@ -1,3 +1,12 @@
+### 1.0.0+2025.7.8
+- `README.md` small correction
+- UMAP seeding in analysis
+
+### 1.0.0+2025.7.6
+- Figure changes
+- Flysta partition handling fixes
+- Small bugfixes
+
 ### 1.0.0+2025.7.4
 - Additional models for scMultiSim and TemporalBrain
 - Small bugfix for partition formatting in `analysis`
