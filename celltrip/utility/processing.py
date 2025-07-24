@@ -28,7 +28,7 @@ class Preprocessing:
         # Fitting
         seed=None,
         # Subsampling
-        num_nodes=int(5e3),
+        num_nodes=None,
         subsample_seed=None,
         # End cast
         device=None,
@@ -477,7 +477,11 @@ def test_adatas(*adatas, partition_cols=None):
 class PreprocessFromAnnData:
     def __init__(
         self,
+        # Main data
         *adatas,
+        # Pre-trained
+        preprocessing=None,
+        # Arguments
         memory_efficient='auto',  # Also works on in-memory datasets
         partition_cols=None,
         mask=None,  # List or int indicating pct of keepable samples
@@ -487,7 +491,7 @@ class PreprocessFromAnnData:
         **kwargs
     ):
         self.adatas = adatas
-        self.preprocessing = Preprocessing(**kwargs, seed=seed)
+        self.preprocessing = Preprocessing(**kwargs, seed=seed) if preprocessing is None else preprocessing
         self.seed = seed
 
         # RNG
@@ -531,7 +535,7 @@ class PreprocessFromAnnData:
             self.fit = self._fit_memory
             self.transform = self._transform_memory
         self.sample = self.transform
-        self.fit()
+        self.fit(calculate=(preprocessing is None))
         self.modal_dims = self.preprocessing.modal_dims
 
     def get_transformables(self):
@@ -540,21 +544,26 @@ class PreprocessFromAnnData:
         return self.adatas, adata_obs, adata_vars
         # return self.processed_modalities, self.processed_adata_obs, self.processed_adata_vars
 
-    def _fit_memory(self):
-        if self.fit_sample:
+    def _fit_memory(self, calculate=True):
+        # NOTE: Untested. In case of crash, use backed mode
+        # Subsample for training
+        if self.fit_sample and calculate:
             modalities = [
                 adata[self.rng.choice(adata.shape[0], self.fit_sample)].X
                 if adata.shape[0] > self.fit_sample else
                 adata.X
                 for adata in self.adatas]
-        else: modalities = [adata.X for adata in self.adatas]
+        else: modalities = [adata[:].X[:] for adata in self.adatas]
+
+        # Fit data
+        if calculate: self.preprocessing.fit(modalities)
+
+        # Transform
+        if not self.fit_sample: modalities = [adata[:].X[:] for adata in self.adatas]
         adata_vars = [adata.var for adata in self.adatas]
         adata_obs = [adata.obs for adata in self.adatas]
-
-        # Perform preprocessing
-        # self.preprocessing.fit([adata.X for adata in self.adatas])
         self.processed_adata_obs = adata_obs
-        self.processed_modalities, self.processed_adata_vars = self.preprocessing.fit_transform(
+        self.processed_modalities, self.processed_adata_vars = self.preprocessing.transform(
             modalities, adata_vars=adata_vars, force_filter=True)
         
     def _transform_memory(self, return_partition=False, **kwargs):
@@ -572,7 +581,10 @@ class PreprocessFromAnnData:
         if return_partition: ret += (partition,)
         return ret
         
-    def _fit_disk(self):
+    def _fit_disk(self, calculate=True):
+        if not calculate: return  # Skip if already trained
+
+        # Subsample for training
         if self.fit_sample:
             modalities = [
                 adata[self.rng.choice(adata.shape[0], self.fit_sample, replace=False)].X

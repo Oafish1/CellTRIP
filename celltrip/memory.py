@@ -194,9 +194,14 @@ class AdvancedMemoryBuffer:
                 self.variable_storage['concatenated_buffer'][k] = np.concat(self.storage[k], axis=0)
             # Get key indices
             self.variable_storage['concatenated_buffer']['keys'] = np.concat(self.storage['keys'])
-            unique_keys, new_suffix_idx = np.unique(self.variable_storage['concatenated_buffer']['keys'], return_inverse=True)
-            self.variable_storage['concatenated_buffer']['suffixes'] = np.stack([
-                self.persistent_storage['suffixes'][k] for k in unique_keys], axis=0)
+            unique_keys, new_suffix_idx = np.unique(self.variable_storage['concatenated_buffer']['keys'], return_inverse=True, axis=-1)
+            try:
+                self.variable_storage['concatenated_buffer']['suffixes'] = np.stack([
+                    self.persistent_storage['suffixes'][k] for k in unique_keys], axis=0)
+            except:
+                print(unique_keys)
+                print(self.persistent_storage.keys())
+                assert False
             self.variable_storage['concatenated_buffer']['idx_to_suffix'] = new_suffix_idx
             state_lens = np.array(list(map(len, self.storage['keys'])))
             suffix_keys_padded = -np.ones((state_lens.shape[0], state_lens.max()), dtype=int)

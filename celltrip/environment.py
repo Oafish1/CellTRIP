@@ -28,8 +28,9 @@ class EnvironmentBase:
         # Targets
         input_modalities=None,  # Which modalities are given as input
         target_modalities=None,  # Which modalities are targets
-        noise_std=0,  # Noise to apply to input modalities
-        target_noise=True,
+        noise_std=.1,  # Noise to apply to input modalities
+        input_noise=False,
+        target_noise=False,
         # Rewards
         compute_rewards=True,
         reward_distance=None,
@@ -77,6 +78,7 @@ class EnvironmentBase:
         self.vel_threshold = vel_threshold
         self.epsilon = epsilon
         self.noise_std = noise_std
+        self.input_noise = input_noise
         self.target_noise = target_noise
         self.compute_rewards = compute_rewards
         self.max_time = max_time
@@ -290,7 +292,7 @@ class EnvironmentBase:
             reward_expvar       *=  self.reward_scales['reward_expvar']      * 1e-1/delta
             reward_origin       *=  self.reward_scales['reward_origin']      * 1e-1/delta
             penalty_bound       *=  self.reward_scales['penalty_bound']      * 1e0
-            penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e-1/delta
+            penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e0/delta
             penalty_action      *=  self.reward_scales['penalty_action']     * 1e-3
             # self.steps += 1
         else:
@@ -470,7 +472,9 @@ class EnvironmentBase:
         # Calculate least squares classification error
         running_err = 0
         for target in targets:
-            A, B = torch.concat([self.pos.pow(deg+1) for deg in range(self.lin_deg)] + [torch.ones((self.pos.shape[0], 1), device=self.device)], dim=-1), self.modalities[target]  # Could speed up a little by keeping ones vec, but not too expensive
+            m = self.modalities[target]
+            if self.target_noise: m += self.noise[target]
+            A, B = torch.concat([self.pos.pow(deg+1) for deg in range(self.lin_deg)] + [torch.ones((self.pos.shape[0], 1), device=self.device)], dim=-1), m  # Could speed up a little by keeping ones vec, but not too expensive
             # Match A norm to B norm
             # A_norm = torch.linalg.matrix_norm(self.pos) * np.sqrt(B.shape[1]/self.pos.shape[1])
             # B_norm = torch.linalg.matrix_norm(B)
@@ -542,6 +546,9 @@ class EnvironmentBase:
     def set_delta(self, delta):
         self.delta = delta
 
+    def set_noise_std(self, noise_std):
+        self.noise_std = noise_std
+
     def set_modalities(self, modalities):
         # Set modalities
         self.modalities = modalities
@@ -583,10 +590,11 @@ class EnvironmentBase:
     def get_velocities(self):
         return self.vel
     
-    def get_keys(self, noise=True):
-        if not noise and self.noise_std > 0:
+    def get_keys(self, noise=True, stringify=True):
+        if not noise and self.noise_std > 0 and self.input_noise:
             return list(map(lambda x: x[0], self.keys))
-        return self.keys
+        if stringify: return list(map(str, self.keys))
+        else: return self.keys
 
     def get_target_modalities(self, **kwargs):
         return self.get_modalities(**kwargs, _indices=self.target_modalities)
@@ -601,7 +609,7 @@ class EnvironmentBase:
     def get_state(self, include_modalities=False, include_time=False):
         cat = (self.pos, self.vel)  # (self.pos/self.pos_bound, self.vel/self.vel_bound)
         if include_time: cat += (torch.tensor(self.time, device=self.device).expand((self.num_nodes, 1)),)
-        if include_modalities: cat += (*self.get_input_modalities(noise=True),)
+        if include_modalities: cat += (*self.get_input_modalities(noise=self.input_noise),)
         return torch.cat(cat, dim=-1)
         
     def set_state(self, state):

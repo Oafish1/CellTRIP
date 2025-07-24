@@ -406,7 +406,7 @@ def get_initializers(
     memory_kwargs={},
 ):
     # Defaults
-    dataloader_kwargs_defaults = {'seed': 42}
+    dataloader_kwargs_defaults = {'seed': 42}  # Necessary for preprocessing consistency
     dataloader_kwargs_defaults.update(dataloader_kwargs)
     dataloader_kwargs = dataloader_kwargs_defaults
 

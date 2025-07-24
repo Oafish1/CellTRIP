@@ -1,3 +1,29 @@
+### 1.0.0+2025.7.24
+- Add `preprocessing` argument to dataloader (`PreprocessFromAnnData`)
+- Add dataset `VirtualCell` and train a model
+- Add separate input and target noise toggles to `EnvironmentBase`
+- Fix bug in `AdvancedMemoryBuffer` with pre-concatenation and tuple keys with added noise
+
+### 1.0.0+2025.7.23
+- Add MERFISH benchmark dataset
+- Change default velocity penalty weight (10x) in `EnvironmentBase`
+- New trained models
+
+### 1.0.0+2025.7.18
+- Figure updates
+
+### 1.0.0+2025.7.16
+- Various troubleshooting measures
+
+### 1.0.0+2025.7.15
+- Figure updates
+- Fix `other_methods` data loading
+- Reformat `other_methods` notebook to run in pure python
+- Reimplement imputation methods
+
+### 1.0.0+2025.7.14
+- Update default `num_nodes` for `Preprocessing` to `None` from `5_000`
+
 ### 1.0.0+2025.7.8
 - `README.md` small correction
 - UMAP seeding in analysis
