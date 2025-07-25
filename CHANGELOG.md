@@ -1,3 +1,9 @@
+### 1.0.0+2025.7.25
+- Add saving and loading to `Preprocessing`
+- Automated `Preprocessing` export from training
+- Automated `Preprocessing` file export and loading for `analysis` notebook
+- Fix bug with environment key stringification
+
 ### 1.0.0+2025.7.24
 - Add `preprocessing` argument to dataloader (`PreprocessFromAnnData`)
 - Add dataset `VirtualCell` and train a model

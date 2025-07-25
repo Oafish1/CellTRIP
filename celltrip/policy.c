@@ -2960,10 +2960,10 @@ static const char __pyx_k_use_std[] = "use_std";
 static const char __pyx_k_utility[] = "_utility";
 static const char __pyx_k_verbose[] = "verbose";
 static const char __pyx_k_weights[] = ".weights";
+static const char __pyx_k_CellTRIP[] = "CellTRIP";
 static const char __pyx_k_No_group[] = "No group \"";
 static const char __pyx_k_argwhere[] = "argwhere";
 static const char __pyx_k_backward[] = "backward";
-static const char __pyx_k_celltrip[] = "celltrip";
 static const char __pyx_k_constant[] = "constant_";
 static const char __pyx_k_criteria[] = "criteria";
 static const char __pyx_k_deciders[] = "deciders";
@@ -3447,6 +3447,7 @@ typedef struct {
   PyObject *__pyx_n_s_BufferStandardization_remove;
   PyObject *__pyx_n_s_BufferStandardization_update;
   PyObject *__pyx_n_s_Categorical;
+  PyObject *__pyx_n_u_CellTRIP;
   PyObject *__pyx_n_s_ContinuousActions;
   PyObject *__pyx_n_s_ContinuousActions___init;
   PyObject *__pyx_n_s_ContinuousActions_forward;
@@ -3608,7 +3609,6 @@ typedef struct {
   PyObject *__pyx_n_s_calculate_losses;
   PyObject *__pyx_n_s_cat;
   PyObject *__pyx_n_s_ceil;
-  PyObject *__pyx_n_u_celltrip;
   PyObject *__pyx_n_s_celltrip_policy;
   PyObject *__pyx_kp_s_celltrip_policy_py;
   PyObject *__pyx_n_s_changed_params;
@@ -4253,6 +4253,7 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_n_s_BufferStandardization_remove);
   Py_CLEAR(clear_module_state->__pyx_n_s_BufferStandardization_update);
   Py_CLEAR(clear_module_state->__pyx_n_s_Categorical);
+  Py_CLEAR(clear_module_state->__pyx_n_u_CellTRIP);
   Py_CLEAR(clear_module_state->__pyx_n_s_ContinuousActions);
   Py_CLEAR(clear_module_state->__pyx_n_s_ContinuousActions___init);
   Py_CLEAR(clear_module_state->__pyx_n_s_ContinuousActions_forward);
@@ -4414,7 +4415,6 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_n_s_calculate_losses);
   Py_CLEAR(clear_module_state->__pyx_n_s_cat);
   Py_CLEAR(clear_module_state->__pyx_n_s_ceil);
-  Py_CLEAR(clear_module_state->__pyx_n_u_celltrip);
   Py_CLEAR(clear_module_state->__pyx_n_s_celltrip_policy);
   Py_CLEAR(clear_module_state->__pyx_kp_s_celltrip_policy_py);
   Py_CLEAR(clear_module_state->__pyx_n_s_changed_params);
@@ -5037,6 +5037,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_n_s_BufferStandardization_remove);
   Py_VISIT(traverse_module_state->__pyx_n_s_BufferStandardization_update);
   Py_VISIT(traverse_module_state->__pyx_n_s_Categorical);
+  Py_VISIT(traverse_module_state->__pyx_n_u_CellTRIP);
   Py_VISIT(traverse_module_state->__pyx_n_s_ContinuousActions);
   Py_VISIT(traverse_module_state->__pyx_n_s_ContinuousActions___init);
   Py_VISIT(traverse_module_state->__pyx_n_s_ContinuousActions_forward);
@@ -5198,7 +5199,6 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_n_s_calculate_losses);
   Py_VISIT(traverse_module_state->__pyx_n_s_cat);
   Py_VISIT(traverse_module_state->__pyx_n_s_ceil);
-  Py_VISIT(traverse_module_state->__pyx_n_u_celltrip);
   Py_VISIT(traverse_module_state->__pyx_n_s_celltrip_policy);
   Py_VISIT(traverse_module_state->__pyx_kp_s_celltrip_policy_py);
   Py_VISIT(traverse_module_state->__pyx_n_s_changed_params);
@@ -5831,6 +5831,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_n_s_BufferStandardization_remove __pyx_mstate_global->__pyx_n_s_BufferStandardization_remove
 #define __pyx_n_s_BufferStandardization_update __pyx_mstate_global->__pyx_n_s_BufferStandardization_update
 #define __pyx_n_s_Categorical __pyx_mstate_global->__pyx_n_s_Categorical
+#define __pyx_n_u_CellTRIP __pyx_mstate_global->__pyx_n_u_CellTRIP
 #define __pyx_n_s_ContinuousActions __pyx_mstate_global->__pyx_n_s_ContinuousActions
 #define __pyx_n_s_ContinuousActions___init __pyx_mstate_global->__pyx_n_s_ContinuousActions___init
 #define __pyx_n_s_ContinuousActions_forward __pyx_mstate_global->__pyx_n_s_ContinuousActions_forward
@@ -5992,7 +5993,6 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_n_s_calculate_losses __pyx_mstate_global->__pyx_n_s_calculate_losses
 #define __pyx_n_s_cat __pyx_mstate_global->__pyx_n_s_cat
 #define __pyx_n_s_ceil __pyx_mstate_global->__pyx_n_s_ceil
-#define __pyx_n_u_celltrip __pyx_mstate_global->__pyx_n_u_celltrip
 #define __pyx_n_s_celltrip_policy __pyx_mstate_global->__pyx_n_s_celltrip_policy
 #define __pyx_kp_s_celltrip_policy_py __pyx_mstate_global->__pyx_kp_s_celltrip_policy_py
 #define __pyx_n_s_changed_params __pyx_mstate_global->__pyx_n_s_changed_params
@@ -31357,7 +31357,7 @@ static PyObject *__pyx_pf_8celltrip_6policy_3PPO_8revert_policy(CYTHON_UNUSED Py
  * 
  *     def save_checkpoint(self, directory, name=None):             # <<<<<<<<<<<<<<
  *         # Defaults
- *         name = 'celltrip' if name is None else name
+ *         name = 'CellTRIP' if name is None else name
  */
 
 /* Python wrapper */
@@ -31519,14 +31519,14 @@ static PyObject *__pyx_pf_8celltrip_6policy_3PPO_10save_checkpoint(CYTHON_UNUSED
   /* "celltrip/policy.py":1023
  *     def save_checkpoint(self, directory, name=None):
  *         # Defaults
- *         name = 'celltrip' if name is None else name             # <<<<<<<<<<<<<<
+ *         name = 'CellTRIP' if name is None else name             # <<<<<<<<<<<<<<
  * 
  *         # Get all vars in order
  */
   __pyx_t_2 = (__pyx_v_name == Py_None);
   if (__pyx_t_2) {
-    __Pyx_INCREF(__pyx_n_u_celltrip);
-    __pyx_t_1 = __pyx_n_u_celltrip;
+    __Pyx_INCREF(__pyx_n_u_CellTRIP);
+    __pyx_t_1 = __pyx_n_u_CellTRIP;
   } else {
     __Pyx_INCREF(__pyx_v_name);
     __pyx_t_1 = __pyx_v_name;
@@ -32035,7 +32035,7 @@ static PyObject *__pyx_pf_8celltrip_6policy_3PPO_10save_checkpoint(CYTHON_UNUSED
  * 
  *     def save_checkpoint(self, directory, name=None):             # <<<<<<<<<<<<<<
  *         # Defaults
- *         name = 'celltrip' if name is None else name
+ *         name = 'CellTRIP' if name is None else name
  */
 
   /* function exit code */
@@ -44333,6 +44333,7 @@ static int __Pyx_CreateStringTabAndInitStrings(void) {
     {&__pyx_n_s_BufferStandardization_remove, __pyx_k_BufferStandardization_remove, sizeof(__pyx_k_BufferStandardization_remove), 0, 0, 1, 1},
     {&__pyx_n_s_BufferStandardization_update, __pyx_k_BufferStandardization_update, sizeof(__pyx_k_BufferStandardization_update), 0, 0, 1, 1},
     {&__pyx_n_s_Categorical, __pyx_k_Categorical, sizeof(__pyx_k_Categorical), 0, 0, 1, 1},
+    {&__pyx_n_u_CellTRIP, __pyx_k_CellTRIP, sizeof(__pyx_k_CellTRIP), 0, 1, 0, 1},
     {&__pyx_n_s_ContinuousActions, __pyx_k_ContinuousActions, sizeof(__pyx_k_ContinuousActions), 0, 0, 1, 1},
     {&__pyx_n_s_ContinuousActions___init, __pyx_k_ContinuousActions___init, sizeof(__pyx_k_ContinuousActions___init), 0, 0, 1, 1},
     {&__pyx_n_s_ContinuousActions_forward, __pyx_k_ContinuousActions_forward, sizeof(__pyx_k_ContinuousActions_forward), 0, 0, 1, 1},
@@ -44494,7 +44495,6 @@ static int __Pyx_CreateStringTabAndInitStrings(void) {
     {&__pyx_n_s_calculate_losses, __pyx_k_calculate_losses, sizeof(__pyx_k_calculate_losses), 0, 0, 1, 1},
     {&__pyx_n_s_cat, __pyx_k_cat, sizeof(__pyx_k_cat), 0, 0, 1, 1},
     {&__pyx_n_s_ceil, __pyx_k_ceil, sizeof(__pyx_k_ceil), 0, 0, 1, 1},
-    {&__pyx_n_u_celltrip, __pyx_k_celltrip, sizeof(__pyx_k_celltrip), 0, 1, 0, 1},
     {&__pyx_n_s_celltrip_policy, __pyx_k_celltrip_policy, sizeof(__pyx_k_celltrip_policy), 0, 0, 1, 1},
     {&__pyx_kp_s_celltrip_policy_py, __pyx_k_celltrip_policy_py, sizeof(__pyx_k_celltrip_policy_py), 0, 0, 1, 0},
     {&__pyx_n_s_changed_params, __pyx_k_changed_params, sizeof(__pyx_k_changed_params), 0, 0, 1, 1},
@@ -45552,7 +45552,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  *     def save_checkpoint(self, directory, name=None):             # <<<<<<<<<<<<<<
  *         # Defaults
- *         name = 'celltrip' if name is None else name
+ *         name = 'CellTRIP' if name is None else name
  */
   __pyx_tuple__102 = PyTuple_Pack(7, __pyx_n_s_self, __pyx_n_s_directory, __pyx_n_s_name, __pyx_n_s_fname, __pyx_n_s_policy_state, __pyx_n_s_s3_2, __pyx_n_s_f); if (unlikely(!__pyx_tuple__102)) __PYX_ERR(0, 1021, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__102);
@@ -47499,7 +47499,7 @@ if (!__Pyx_RefNanny) {
  * 
  *     def save_checkpoint(self, directory, name=None):             # <<<<<<<<<<<<<<
  *         # Defaults
- *         name = 'celltrip' if name is None else name
+ *         name = 'CellTRIP' if name is None else name
  */
   __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_6policy_3PPO_11save_checkpoint, 0, __pyx_n_s_PPO_save_checkpoint, NULL, __pyx_n_s_celltrip_policy, __pyx_d, ((PyObject *)__pyx_codeobj__103)); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 1021, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);

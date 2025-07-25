@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import datetime
 import json
+import os
 import warnings
 
 import numpy as np
@@ -174,12 +175,13 @@ class Worker:
         rank=0,
         learner=True,
         parent=None,  # Policy parent worker ref
+        **env_kwargs,
     ):
         # Detect device
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         # Parameters
-        self.env = env_init().to(device)
+        self.env = env_init(**env_kwargs).to(device)
         self.policy = policy_init(self.env).to(device)
         self.memory = memory_init(self.policy)
         self.num_learners = num_learners
@@ -410,7 +412,7 @@ def get_initializers(
     dataloader_kwargs_defaults.update(dataloader_kwargs)
     dataloader_kwargs = dataloader_kwargs_defaults
 
-    def env_init():
+    def env_init(**kwargs):
         # Create dataloader
         adatas = []
         if input_files is not None:
@@ -421,7 +423,7 @@ def get_initializers(
                 adatas += _utility.processing.merge_adatas(*merge_adatas, backed=backed)
         _utility.processing.test_adatas(*adatas, partition_cols=partition_cols)
         dataloader = _utility.processing.PreprocessFromAnnData(
-            *adatas, partition_cols=partition_cols, **dataloader_kwargs)
+            *adatas, partition_cols=partition_cols, **dataloader_kwargs, **kwargs)
         # modalities, adata_obs, adata_vars = dataloader.sample()
         # Return env
         return _environment.EnvironmentBase(
@@ -510,6 +512,11 @@ def train_celltrip(
         rank_decimal = 10**-(np.floor(np.log10((num_workers-1)//num_heads))+1) if num_workers > num_heads else 0
         rank = float(bundle_idx + child_num * rank_decimal)
         parent = workers[bundle_idx] if i >= num_heads else None
+        if i == 0 and checkpoint_dir is not None:
+            # Only export preprocessing on first, note that all workers still calculate individually
+            fname = (checkpoint_name if checkpoint_name is not None else 'CellTRIP') + '.pre'
+            preprocessing_export = os.path.join(checkpoint_dir, fname)
+        else: preprocessing_export = None
         w = (
             Worker
                 .options(
@@ -518,7 +525,7 @@ def train_celltrip(
                 .remote(
                     env_init=env_init, policy_init=policy_init, memory_init=memory_init,
                     num_learners=num_learners, num_heads=num_heads, rank=rank,
-                    learner=i<num_learners, parent=parent))
+                    learner=i<num_learners, parent=parent, preprocessing_export=preprocessing_export))
         workers.append(w)
     ray.get([w.is_ready.remote() for w in workers])  # Wait for initialization
     learners = workers[:len(workers)-num_exclusive_runners]

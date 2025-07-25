@@ -1020,7 +1020,7 @@ class PPO(nn.Module):
 
     def save_checkpoint(self, directory, name=None):
         # Defaults
-        name = 'celltrip' if name is None else name
+        name = 'CellTRIP' if name is None else name
 
         # Get all vars in order
         fname = os.path.join(directory, f'{name}-{int(self.policy_iteration.item()):0>4}.weights')

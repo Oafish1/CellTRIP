@@ -332,7 +332,7 @@ class EnvironmentBase:
                 for m in modalities])
             self.keys = adata_obs[0].index.to_numpy()
             # Add randomness to key to avoid culling in memory
-            if self.noise_std > 0:
+            if self.noise_std > 0 and self.input_noise:
                 noise_id = np.random.randint(2**32)
                 self.keys = [(k, noise_id) for k in self.keys]
 
@@ -591,7 +591,7 @@ class EnvironmentBase:
         return self.vel
     
     def get_keys(self, noise=True, stringify=True):
-        if not noise and self.noise_std > 0 and self.input_noise:
+        if not noise and (self.noise_std > 0 and self.input_noise):
             return list(map(lambda x: x[0], self.keys))
         if stringify: return list(map(str, self.keys))
         else: return self.keys
