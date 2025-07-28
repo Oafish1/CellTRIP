@@ -430,8 +430,7 @@ def get_initializers(
             dataloader, **environment_kwargs)
 
     # Default ~25Gb Forward, ~16Gb Update, at max capacity
-    policy_init = lambda env: _policy.PPO(
-        2*env.dim, np.array(env.dataloader.modal_dims)[env.input_modalities], env.dim, **policy_kwargs)  # update_iterations=2, minibatch_size=3e3,
+    policy_init = lambda env: _policy.create_agent_from_env(env)
 
     memory_init = lambda policy: _memory.AdvancedMemoryBuffer(
         sum(policy.modal_dims), split_args=policy.split_args, **memory_kwargs)

@@ -206,3 +206,14 @@ def center_states(states, dim):
     states = states.copy()
     states[:, :, :dim] -= states[:, :, :dim].mean(keepdims=True, axis=1)
     return states
+
+
+def generate_pinning_function(X, Y):
+    # Least-squares
+    A = np.hstack([X, np.ones((X.shape[0], 1))])
+    pinning_matrix = np.linalg.lstsq(A, Y, rcond=None)[0].numpy()
+    # Pinning function
+    def pin_points(points):
+        A = np.concatenate([points, np.ones((*points.shape[:-1], 1))], axis=-1)
+        return np.dot(A, pinning_matrix)
+    return pin_points, pinning_matrix

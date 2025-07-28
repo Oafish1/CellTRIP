@@ -1,3 +1,9 @@
+### 1.0.0+2025.7.27
+- Add `imputation_tutorial` notebook adding official support for imputing out-of-scope data
+- Eval and train modes for environment, with automatic variable resetting
+- Move pinning function to `utility.general` module
+- Several utility functions for easier usage, including `celltrip.policy.create_agent_from_env`
+
 ### 1.0.0+2025.7.25
 - Add saving and loading to `Preprocessing`
 - Automated `Preprocessing` export from training

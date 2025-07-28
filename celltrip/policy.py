@@ -840,6 +840,16 @@ class BufferStandardization(nn.Module):
 
 
 ### Training classes
+def create_agent_from_env(env, **kwargs):
+    return PPO(
+        2*env.dim,
+        # np.array(env.dataloader.modal_dims)[env.input_modalities],
+        np.array([m.shape[1] for m in env.get_modalities()])[env.input_modalities],
+        env.dim,
+        discrete=env.discrete,
+        **kwargs)
+
+
 class PPO(nn.Module):
     def __init__(
             self,

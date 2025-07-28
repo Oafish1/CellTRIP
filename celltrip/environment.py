@@ -156,6 +156,7 @@ class EnvironmentBase:
 
         # Initialize
         self.reset(resample=True, renoise=True)
+        self.stored_changes = {}
         # self.steps = 0
 
     def to(self, device):
@@ -164,6 +165,35 @@ class EnvironmentBase:
         self.vel = self.vel.to(self.device)
         self.modalities = [m.to(self.device) for m in self.modalities]
         self.noise = [m.to(self.device) for m in self.noise]
+        return self
+    
+    def train(self):
+        # Restore all conditions and clear stored memory
+        self.termination_conds = self.stored_changes['termination_conds']
+        self.max_time = self.stored_changes['max_time']
+        self.set_noise_std(self.stored_changes['noise_std'])
+        if 'noise' in self.stored_changes:
+            self.noise = self.stored_changes['noise']
+        self.stored_changes.clear()
+
+        return self
+    
+    def eval(self, store_noise=False):
+        # Remove random termination conditions
+        self.stored_changes['termination_conds'] = self.termination_conds
+        self.termination_conds['random'] = False
+
+        # Make max length 5x
+        self.stored_changes['max_time'] = self.max_time
+        self.max_time *= 5
+
+        # Set noise to zero
+        self.stored_changes['noise_std'] = self.noise_std
+        self.set_noise_std(0)
+        if store_noise:
+            self.stored_changes['noise'] = self.noise
+            self.noise = len(self.modalities)*[0]
+
         return self
 
     ### State functions
@@ -385,6 +415,8 @@ class EnvironmentBase:
         # Reset cache
         self.dist.clear()
         self.reset_cache()
+
+        return self
 
     def reset_cache(self):
         self.cached_dist_match = {}
