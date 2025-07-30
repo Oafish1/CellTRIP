@@ -186,6 +186,26 @@ def get_s3_handler_with_access(fname, default_block_size=100*2**20, default_cach
     return s3
 
 
+class open_s3_or_local:
+    def __init__(self, fname, flags):
+        self.fname = fname
+        self.flags = flags
+
+        # Open file
+        if fname.startswith('s3://'):
+            s3 = get_s3_handler_with_access(fname)
+            self.handler = s3.open(fname, flags)
+        else:
+            self.handler = open(fname, flags)
+            
+    def __enter__(self): return self.handler
+
+    def __exit__(self, exc_type, exc_value, traceback): self.close()
+        
+    def close(self):
+        self.handler.close()
+
+
 def padded_stack(arrays, method='zero'):
     batch_num = len(arrays)
     shape = np.array([arr.shape for arr in arrays])

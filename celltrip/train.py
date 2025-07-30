@@ -26,6 +26,7 @@ def simulate_until_completion(
     # Params
     assert not (keys is not None and reset_on_finish), 'Cannot manually set keys while `reset_on_finish` is `True`'
     if keys is None: keys = env.get_keys()
+    target_modalities = torch.concat(env.get_target_modalities(), dim=-1)
 
     # Store states
     if store_states: state_storage = [env.get_state()]
@@ -45,7 +46,7 @@ def simulate_until_completion(
             if cache_feature_embeds: actions, feature_embeds = actions
 
             # Step environment and get reward
-            rewards, finished, itemized_rewards = env.step(actions, return_itemized_rewards=True)
+            rewards, finished, itemized_rewards = env.step(actions, return_itemized_rewards=True, pinning_func_list=policy.pinning)
 
             # Store states
             if store_states: state_storage.append(env.get_state())
@@ -61,7 +62,10 @@ def simulate_until_completion(
             # Record rewards
             continue_condition = ep_timestep < max_timesteps
             if memory is not None: continue_condition *= ep_memories < max_memories
-            if memory is not None: memory.record_buffer(rewards=rewards, is_terminals=finished or not continue_condition)
+            if memory is not None: memory.record_buffer(
+                rewards=rewards, target_modalities=target_modalities,
+                is_truncateds=finished or not continue_condition,
+                is_naturals=finished)
 
             # Dummy return for testing
             # if dummy:
@@ -87,6 +91,7 @@ def simulate_until_completion(
                 if reset_on_finish:
                     env.reset()
                     keys = env.get_keys()
+                    target_modalities = torch.concat(env.get_target_modalities(), dim=-1)
                     feature_embeds = None
                 else: break
             # Escape
@@ -122,26 +127,16 @@ class RecordBuffer:
             self.write = lambda _: None
         elif self.logfile == 'cli':
             self.write = self._write_cli
-        elif self.logfile.startswith('s3://'):
-            # Get s3 handle and generate logfile
-            self.s3 = _utility.general.get_s3_handler_with_access(self.logfile)
-            self.s3.open(self.logfile, 'w').close()  # Create/erase
-            self.write = self._write_s3
         else:
-            open(self.logfile, 'w').close()  # Create/erase
-            self.write = self._write_disk
+            _utility.general.open_s3_or_local(self.logfile, 'w').close()  # Create/erase
+            self.write = self._write_s3_or_local
 
     def _write_cli(self):
         for record in self.buffer:
             print(json.dumps(record))
 
-    def _write_s3(self):
-        with self.s3.open(self.logfile, 'a') as f:
-            for record in self.buffer:
-                f.write(json.dumps(record) + '\n')
-
-    def _write_disk(self):
-        with open(self.logfile, 'a') as f:
+    def _write_s3_or_local(self):
+        with _utility.general.open_s3_or_local(self.logfile, 'a') as f:
             for record in self.buffer:
                 f.write(json.dumps(record) + '\n')
 
@@ -268,7 +263,7 @@ class Worker:
 
         # Synchronize reward normalization
         # self.memory.feed_new(self.policy.reward_standardization)
-        # self.policy.synchronize('learners')
+        # _policy.synchronize(self.policy, 'learners')
 
         # Perform update
         # with torch.autograd.detect_anomaly():
@@ -346,11 +341,11 @@ class Worker:
             _utility.general.set_policy_state(self.policy, policy_state)
         else:
             # Synchronize learners
-            if self.learner: self.policy.synchronize('learners')
+            if self.learner: _policy.synchronize(self.policy, 'learners')
 
             # Synchronize head learner and heads
             if not self.learner or (self.learner and self.rank == 0):
-                self.policy.synchronize('heads', broadcast=True)
+                _policy.synchronize(self.policy, 'heads', broadcast=True)
 
         # Mark sampled
         if mark_if_not_learner and not self.learner: self.memory.mark_sampled()
@@ -430,7 +425,7 @@ def get_initializers(
             dataloader, **environment_kwargs)
 
     # Default ~25Gb Forward, ~16Gb Update, at max capacity
-    policy_init = lambda env: _policy.create_agent_from_env(env)
+    policy_init = lambda env: _policy.create_agent_from_env(env, **policy_kwargs)
 
     memory_init = lambda policy: _memory.AdvancedMemoryBuffer(
         sum(policy.modal_dims), split_args=policy.split_args, **memory_kwargs)
@@ -513,9 +508,9 @@ def train_celltrip(
         parent = workers[bundle_idx] if i >= num_heads else None
         if i == 0 and checkpoint_dir is not None:
             # Only export preprocessing on first, note that all workers still calculate individually
-            fname = (checkpoint_name if checkpoint_name is not None else 'CellTRIP') + '.pre'
-            preprocessing_export = os.path.join(checkpoint_dir, fname)
-        else: preprocessing_export = None
+            fname = (checkpoint_name if checkpoint_name is not None else 'CellTRIP')
+            export = os.path.join(checkpoint_dir, fname)
+        else: export = None
         w = (
             Worker
                 .options(
@@ -524,7 +519,7 @@ def train_celltrip(
                 .remote(
                     env_init=env_init, policy_init=policy_init, memory_init=memory_init,
                     num_learners=num_learners, num_heads=num_heads, rank=rank,
-                    learner=i<num_learners, parent=parent, preprocessing_export=preprocessing_export))
+                    learner=i<num_learners, parent=parent, export=export))
         workers.append(w)
     ray.get([w.is_ready.remote() for w in workers])  # Wait for initialization
     learners = workers[:len(workers)-num_exclusive_runners]

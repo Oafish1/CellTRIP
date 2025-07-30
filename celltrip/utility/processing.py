@@ -79,20 +79,14 @@ class Preprocessing:
         return {**settings, **calculations}
 
     def save(self, fname):
-        if fname.startswith('s3://'):
-            s3 = _utility.general.get_s3_handler_with_access(fname)
-            with s3.open(fname, 'wb') as f: pickle.dump(self.get_state(), f)
-        else:
-            with open(fname, 'wb') as f: pickle.dump(self.get_state(), f)
+        with _utility.general.open_s3_or_local(fname, 'wb') as f:
+            pickle.dump(self.get_state(), f)
 
     def load(self, state):
         # Load from file if needed
         if isinstance(state, str):
-            if state.startswith('s3://'):
-                s3 = _utility.general.get_s3_handler_with_access(state)
-                with s3.open(state, 'rb') as f: state = pickle.load(f)
-            else:
-                with open(state, 'rb') as f: state = pickle.load(f)
+            with _utility.general.open_s3_or_local(state, 'rb') as f:
+                state = pickle.load(f)
 
         # Absorb
         self.standardize = state['standardize']
@@ -107,6 +101,8 @@ class Preprocessing:
         self.filter_mask = state['filter_mask']
         self.pca_class = state['pca_class']
         self.modal_dims = state['modal_dims']
+
+        return self
 
     def set_num_nodes(self, num_nodes):
         self.num_nodes = num_nodes
@@ -540,7 +536,7 @@ class PreprocessFromAnnData:
         *adatas,
         # Pre-trained
         preprocessing=None,
-        preprocessing_export=None,
+        export=None,
         # Arguments
         memory_efficient='auto',  # Also works on in-memory datasets
         partition_cols=None,
@@ -552,11 +548,7 @@ class PreprocessFromAnnData:
     ):
         self.adatas = adatas
         self.preprocessing = Preprocessing(**kwargs, seed=seed) if preprocessing is None or isinstance(preprocessing, str) else preprocessing
-        if isinstance(preprocessing, str):
-            try: self.preprocessing.load(preprocessing)
-            except:
-                warnings.warn(f'No preprocessing file "{preprocessing}" found. Regenerating on new data', RuntimeWarning)
-                preprocessing = None
+        if isinstance(preprocessing, str): self.preprocessing.load(preprocessing)
         self.seed = seed
 
         # RNG
@@ -577,6 +569,9 @@ class PreprocessFromAnnData:
                 partitions = np.unique(ft.reduce(np.union1d, adata_partitions))  # Unique for the case of 1 adata
                 chosen_partitions = self.rng.choice(partitions, max(1, np.floor(mask*len(partitions)).astype(int)), replace=False)
                 self.mask = np.isin(adata_partitions[0], chosen_partitions)
+        elif isinstance(mask, str):
+            with _utility.general.open_s3_or_local(mask, 'rb') as f:
+                self.mask = np.loadtxt(f)
         else: self.mask = mask
         if memory_efficient == 'auto':
             # Only activate if on disk
@@ -603,9 +598,11 @@ class PreprocessFromAnnData:
         self.fit(calculate=(preprocessing is None))
         self.modal_dims = self.preprocessing.modal_dims
 
-        # Export preprocessing
-        if preprocessing is None and preprocessing_export is not None:
-            self.preprocessing.save(preprocessing_export)
+        # Export preprocessing and mask
+        if export is not None:
+            self.preprocessing.save(f'{export}.pre')
+            with _utility.general.open_s3_or_local(f'{export}.mask', 'wb') as f:
+                np.savetxt(f, self.mask)
 
     def get_transformables(self):
         adata_obs = [adata.obs for adata in self.adatas]

@@ -34,7 +34,7 @@ class EnvironmentBase:
         # Rewards
         compute_rewards=True,
         reward_distance=None,
-        reward_expvar=None,
+        reward_pinning=None,
         lin_deg=1,  # What degree to compute for least squares (Experimental)
         reward_origin=None,
         penalty_bound=None,
@@ -130,7 +130,7 @@ class EnvironmentBase:
         self.lin_deg = lin_deg
         self.reward_scales = {
             'reward_distance': reward_distance,     # Emulate distances of each modality
-            'reward_expvar': reward_expvar,     # Explained variance
+            'reward_pinning': reward_pinning,     # Explained variance
             'reward_origin': reward_origin,         # Make sure the mean of positions is close to the origin
             'penalty_bound': penalty_bound,         # Don't touch the bounds
             'penalty_velocity': penalty_velocity,   # Don't move fast
@@ -143,7 +143,7 @@ class EnvironmentBase:
             # If all rewards are unset to zero, turn on default final rewards
             self.reward_scales = {
                 'reward_distance': 0,
-                'reward_expvar': 1,
+                'reward_pinning': 1,
                 'reward_origin': 0,
                 'penalty_bound': 0,
                 'penalty_velocity': 1,
@@ -197,7 +197,7 @@ class EnvironmentBase:
         return self
 
     ### State functions
-    def step(self, actions=None, *, delta=None, return_itemized_rewards=False):
+    def step(self, actions=None, *, delta=None, pinning_func_list=None, return_itemized_rewards=False):
         # Defaults
         if actions is None: actions = torch.zeros_like(self.vel, device=self.device)
         if delta is None: delta = self.delta
@@ -218,12 +218,12 @@ class EnvironmentBase:
                 reward_distance = get_reward_distance()
                 # reward_distance = 0
             else: reward_distance = torch.zeros(actions.shape[0], device=self.device)
-            # Expvar reward
-            get_reward_expvar = lambda: self.get_expvar(use_cache=True)
-            # get_reward_expvar = lambda: (self.get_expvar(use_cache=True)+self.epsilon).log().mean(dim=-1)
-            if self.reward_scales['reward_expvar'] != 0:
-                reward_expvar = get_reward_expvar()
-            else: reward_expvar = torch.zeros(actions.shape[0], device=self.device)
+            # Pinning reward
+            get_reward_pinning = lambda: self.get_pinning(use_cache=True, pinning_func_list=pinning_func_list)
+            # get_reward_pinning = lambda: (self.get_pinning(use_cache=True)+self.epsilon).log().mean(dim=-1)
+            if self.reward_scales['reward_pinning'] != 0:
+                reward_pinning = get_reward_pinning()
+            else: reward_pinning = torch.zeros(actions.shape[0], device=self.device)
             # Origin penalty
             get_reward_origin = lambda: self.get_distance_from_origin()
             # get_reward_origin = lambda: (self.get_distance_from_origin()+self.epsilon).log()
@@ -298,8 +298,8 @@ class EnvironmentBase:
         if self.compute_rewards:
             # Distance reward
             if self.reward_scales['reward_distance'] != 0: reward_distance -= get_reward_distance()
-            # Expvar reward
-            if self.reward_scales['reward_expvar'] != 0: reward_expvar -= get_reward_expvar()
+            # Pinning reward
+            if self.reward_scales['reward_pinning'] != 0: reward_pinning -= get_reward_pinning()
             # Origin reward
             if self.reward_scales['reward_origin'] != 0: reward_origin -= get_reward_origin()
             # Velocity penalty (Apply to ending velocity)
@@ -319,7 +319,7 @@ class EnvironmentBase:
             else: self.best = self.get_distance_match().mean(); self.lapses = 0
 
             reward_distance     *=  self.reward_scales['reward_distance']    * 1e-1/delta
-            reward_expvar       *=  self.reward_scales['reward_expvar']      * 1e-1/delta
+            reward_pinning       *=  self.reward_scales['reward_pinning']      * 1e-1/delta
             reward_origin       *=  self.reward_scales['reward_origin']      * 1e-1/delta
             penalty_bound       *=  self.reward_scales['penalty_bound']      * 1e0
             penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e0/delta
@@ -328,7 +328,7 @@ class EnvironmentBase:
         else:
             placeholder = torch.zeros(self.num_nodes, device=self.device)
             reward_distance = placeholder
-            reward_expvar = placeholder
+            reward_pinning = placeholder
             reward_origin = placeholder
             penalty_bound = placeholder
             penalty_velocity = placeholder
@@ -337,7 +337,7 @@ class EnvironmentBase:
         # Compute total reward
         rwd = (
             reward_distance
-            + reward_expvar
+            + reward_pinning
             + reward_origin
             + penalty_bound
             + penalty_velocity
@@ -346,7 +346,7 @@ class EnvironmentBase:
         ret = (rwd, finished)
         if return_itemized_rewards: ret += {
             'distance': reward_distance,
-            'expvar': reward_expvar,
+            'pinning': reward_pinning,
             'origin': reward_origin,
             'bound': penalty_bound,
             'velocity': penalty_velocity,
@@ -362,7 +362,7 @@ class EnvironmentBase:
                 for m in modalities])
             self.keys = adata_obs[0].index.to_numpy()
             # Add randomness to key to avoid culling in memory
-            if self.noise_std > 0 and self.input_noise:
+            if self.noise_std > 0 and (self.input_noise or self.target_noise):
                 noise_id = np.random.randint(2**32)
                 self.keys = [(k, noise_id) for k in self.keys]
 
@@ -420,7 +420,7 @@ class EnvironmentBase:
 
     def reset_cache(self):
         self.cached_dist_match = {}
-        self.cached_expvar = {}
+        self.cached_pinning = {}
 
     ### Input functions
     def add_velocities(self, velocities, node_ids=None):
@@ -493,41 +493,43 @@ class EnvironmentBase:
 
         return running
     
-    def get_expvar(self, targets=None, use_cache=False):
+    def get_pinning(self, targets=None, pinning_func_list=None, use_cache=False):
         # Defaults
         if targets is None: targets = self.target_modalities
         targets = tuple(targets)
 
         # Return if cached
-        if use_cache and targets in self.cached_expvar: return self.cached_expvar[targets]
+        if use_cache and targets in self.cached_pinning: return self.cached_pinning[targets]
 
         # Calculate least squares classification error
-        running_err = 0
-        for target in targets:
+        running_mse = 0
+        for i, target in enumerate(targets):
             m = self.modalities[target]
             if self.target_noise: m += self.noise[target]
-            A, B = torch.concat([self.pos.pow(deg+1) for deg in range(self.lin_deg)] + [torch.ones((self.pos.shape[0], 1), device=self.device)], dim=-1), m  # Could speed up a little by keeping ones vec, but not too expensive
-            # Match A norm to B norm
-            # A_norm = torch.linalg.matrix_norm(self.pos) * np.sqrt(B.shape[1]/self.pos.shape[1])
-            # B_norm = torch.linalg.matrix_norm(B)
-            # Make mean A var 1 over all dims (Doesn't converge)
-            # A_norm = self.pos.var(dim=0).mean(dim=-1)
-            # B_norm = 1
-            # No adjustment
-            A_norm = B_norm = 1
-            # Perform lstsq
-            X = torch.linalg.lstsq(A, B / B_norm).solution
-            err = (torch.matmul(A, X) * A_norm - B).square()
+            if pinning_func_list is None:
+                A, B = torch.concat([self.pos.pow(deg+1) for deg in range(self.lin_deg)] + [torch.ones((self.pos.shape[0], 1), device=self.device)], dim=-1), m  # Could speed up a little by keeping ones vec, but not too expensive
+                # Match A norm to B norm
+                # A_norm = torch.linalg.matrix_norm(self.pos) * np.sqrt(B.shape[1]/self.pos.shape[1])
+                # B_norm = torch.linalg.matrix_norm(B)
+                # Make mean A var 1 over all dims (Doesn't converge)
+                # A_norm = self.pos.var(dim=0).mean(dim=-1)
+                # B_norm = 1
+                # No adjustment
+                A_norm = B_norm = 1
+                # Perform lstsq
+                X = torch.linalg.lstsq(A, B / B_norm).solution
+                err = torch.matmul(A, X) * A_norm - B
+            else:
+                err = m - pinning_func_list[i](self.pos)
             # err = err.mean(dim=-1)
             # err = (err + self.epsilon).log().mean(dim=-1)
-            err = (err + self.epsilon).mean(dim=-1).log()
-            running_err += err
-        running_err = running_err / len(targets)
+            mse = (err.square() + self.epsilon).mean(dim=-1).log()
+            running_mse += mse / len(targets)
 
         # Cache result
-        self.cached_expvar[targets] = running_err
+        self.cached_pinning[targets] = running_mse
 
-        return running_err
+        return running_mse
     
     def get_distance_from_origin(self):
         if self.spherical: return self.pos.norm(dim=-1)
@@ -574,6 +576,12 @@ class EnvironmentBase:
             # NOTE: Only scaled for `self.dist` calculation
             m_dist = _utility.distance.euclidean_distance(m, scaled=True)
             self.dist[target] = m_dist
+
+    def disable_rewards(self):
+        self.compute_rewards = False
+
+    def enable_rewards(self):
+        self.compute_rewards = True
 
     def set_delta(self, delta):
         self.delta = delta
@@ -623,7 +631,7 @@ class EnvironmentBase:
         return self.vel
     
     def get_keys(self, noise=True, stringify=True):
-        if not noise and (self.noise_std > 0 and self.input_noise):
+        if not noise and (self.noise_std > 0 and (self.input_noise or self.target_noise)):
             return list(map(lambda x: x[0], self.keys))
         if stringify: return list(map(str, self.keys))
         else: return self.keys

@@ -57,24 +57,30 @@ class AdvancedMemoryBuffer:
 
         # Storage variables
         storage_keys = (
-            'keys',                 # Keys in the first dim of states (1D Tuple)
-            'states',               # State tensors of dim `keys x non-suffix features` (2D Tensor)
-            'actions',              # Actions (2D Tensor)
-            'action_logs',          # Action probabilities (2D Tensor)
-            'state_vals',           # Critic evaluation of state (1D Tensor)
-            'rewards',              # Rewards, list of lists (1D List)
-            'is_terminals',         # Booleans indicating if the terminal state has been reached (Bool)
-            'terminal_states',      # State tensors after terminal action (2D Tensor)
-            'terminal_state_vals')  # Critic evaluation of terminal state (1D Tensor)
+            'keys',                     # Keys in the first dim of states (1D Tuple)
+            'states',                   # State tensors of dim `keys x non-suffix features` (2D Tensor)
+            'actions',                  # Actions (2D Tensor)
+            'action_logs',              # Action probabilities (2D Tensor)
+            'state_vals',               # Critic evaluation of state (1D Tensor)
+            'rewards',                  # Rewards, list of lists (1D List)
+            'is_truncateds',            # Booleans indicating if the end state has been reached (Bool)
+            'is_naturals',               # The end state was reached by env rather than manually (Bool)
+            'terminal_states',          # State tensors after terminal action (2D Tensor)
+            'terminal_state_vals')      # Critic evaluation of terminal state (1D Tensor)
         storage_outcomes = (
-            'advantages',           # Advantages, list of tensors (1D Tensor)
-            'propagated_rewards',   # Propagated rewards, list of tensors (1D Tensor)
+            'advantages',               # Advantages, list of tensors (1D Tensor)
+            'propagated_rewards',       # Propagated rewards, list of tensors (1D Tensor)
             'prunes',
-            'staleness')            # Int indicating the staleness of the memory (Int)
+            'staleness')                # Int indicating the staleness of the memory (Int)
         self.storage = {k: [] for k in storage_keys+storage_outcomes}
+        temporary_keys = (
+            'target_modalities',)       # Target modalities corresponding to keys
+        self.temporary_storage = {k: None for k in temporary_keys}
         persistent_storage_keys = (
-            'suffixes',             # Suffixes corresponding to keys
-            'suffix_matrices')      # Orderings of suffixes
+            'suffixes',                  # Suffixes corresponding to keys
+            'target_suffixes',           # Target modalities corresponding to keys
+            'target_suffix_matrices',  # Target modalities corresponding to keys
+            'suffix_matrices')           # Orderings of suffixes
         self.persistent_storage = {k: {} for k in persistent_storage_keys}
         # Cache for variables which require computation
         self.variable_storage = {}
@@ -97,18 +103,23 @@ class AdvancedMemoryBuffer:
         "Record passed variables"
         # Check that passed variables haven't been stored yet for this record
         for k in kwargs:
-            assert k in self.storage, f'`{k}` not found in memory object'
-            assert not self.recorded[k], f'`{k}` has already been recorded for this record'
+            assert k in self.storage or k in self.temporary_storage, f'`{k}` not found in memory object'
+            if k in self.storage:
+                assert not self.recorded[k], f'`{k}` has already been recorded for this record'
 
         # Store new variables
         for k, v in kwargs.items():
             # Special cases
             if k == 'keys': v = tuple(_utility.general.gen_tolist(v))
-            elif k == 'is_terminals':
+            elif k == 'is_truncateds':
                 if not v:
                     for k1 in ('terminal_states', 'terminal_state_vals'):
                         self.storage[k1].append(None)
                         self.recorded[k1] = True
+            # Key skimmers
+            elif k == 'target_modalities':
+                self.temporary_storage['target_modalities'] = v.detach().cpu().numpy()
+                continue
             # Cast to device
             else:
                 try: v = _utility.processing.recursive_tensor_func(v, lambda x: x.detach().cpu().numpy())
@@ -124,15 +135,19 @@ class AdvancedMemoryBuffer:
             for j, k in enumerate(keys):
                 if k not in self.persistent_storage['suffixes']:
                     self.persistent_storage['suffixes'][k] = self.storage['states'][-1][j][-self.suffix_len:].copy()
+                if self.temporary_storage['target_modalities'] is not None and k not in self.persistent_storage['target_suffixes']:
+                    self.persistent_storage['target_suffixes'][k] = self.temporary_storage['target_modalities'][j].copy()
                 # Check that keys accurately map to suffixes
                 # NOTE: Slows down memory appending a small amount
-                else:
+                # else:
                     # sto_dev = self.storage['states'][-1][j][-self.suffix_len:].device
                     # if str(sto_dev) != 'cpu': warnings.warn(f'Tensor found on `{sto_dev}` in `AdvancedMemoryBuffer`.')
                     # assert np.isclose(self.storage['states'][-1][j][-self.suffix_len:], self.persistent_storage['suffixes'][k]).all(), (
                     #     f'Key `{k}` does not obey 1-to-1 mapping with suffixes')
-                    if len(self.persistent_storage['suffixes']) > 500_000: warnings.warn(
-                        'Number of cached keys has surpassed 500,000.')
+                if len(self.persistent_storage['suffixes']) > 500_000: warnings.warn(
+                    'Number of cached keys has surpassed 500,000.')
+                if len(self.persistent_storage['target_suffixes']) > 500_000: warnings.warn(
+                    'Number of cached keys has surpassed 500,000.')
 
             # Cut suffixes
             # Note: MUST BE CLONED otherwise stores whole unsliced tensor
@@ -201,7 +216,7 @@ class AdvancedMemoryBuffer:
             except:
                 print(unique_keys)
                 print(self.persistent_storage.keys())
-                assert False
+                raise RuntimeError('Something went wrong with suffix concatenation.')
             self.variable_storage['concatenated_buffer']['idx_to_suffix'] = new_suffix_idx
             state_lens = np.array(list(map(len, self.storage['keys'])))
             suffix_keys_padded = -np.ones((state_lens.shape[0], state_lens.max()), dtype=int)
@@ -296,6 +311,24 @@ class AdvancedMemoryBuffer:
                 torch.from_numpy(states[1]).to(torch.get_default_dtype()).to(self.device),
                 torch.from_numpy(states[2]).to(torch.bool).to(self.device)]
         return overall_indices, ret  # indices, data
+    
+    def get_terminal_pairs(self):
+        terminal_state_idx = np.argwhere(self.storage['is_naturals']).flatten()
+        keys, states = [], []
+        for i in terminal_state_idx:
+            keys.append(self.storage['keys'][i])
+            states.append(self.storage['terminal_states'][i])
+        states = np.concatenate(states, axis=0)
+        target_modalities = np.concatenate([
+            self._append_suffix(
+                keys=k,
+                suffix_key='target_suffixes',
+                suffix_matrix_key='target_suffix_matrices')
+            for k in keys], axis=0)
+        states = torch.from_numpy(states).to(self.device)
+        target_modalities = torch.from_numpy(target_modalities).to(self.device)
+        
+        return states, target_modalities
 
     def fast_sample(
         self, num_memories=None, chosen=None, replay_frac=None, max_samples_per_state=None,
@@ -547,7 +580,7 @@ class AdvancedMemoryBuffer:
 
         for i, (rewards, is_terminal, state_vals, terminal_state_vals, advantages, propagated_rewards) in enumerate(zip(
             self.storage['rewards'][::-1],
-            self.storage['is_terminals'][::-1],
+            self.storage['is_truncateds'][::-1],
             self.storage['state_vals'][::-1],
             self.storage['terminal_state_vals'][::-1],
             self.storage['advantages'][::-1],
@@ -694,10 +727,10 @@ class AdvancedMemoryBuffer:
             if cull_by_episode:
                 # Find start and end episode idx
                 start_idx = idx
-                while start_idx > 0 and not self.storage['is_terminals'][start_idx-1]:
+                while start_idx > 0 and not self.storage['is_truncateds'][start_idx-1]:
                     start_idx -= 1
                 end_idx = idx
-                while not self.storage['is_terminals'][end_idx]:
+                while not self.storage['is_truncateds'][end_idx]:
                     end_idx += 1
                 idxs = range(start_idx, end_idx+1)
             else: idxs = [idx]
@@ -746,6 +779,7 @@ class AdvancedMemoryBuffer:
         for k in stored_keys:
             if k not in unique_keys:
                 self.persistent_storage['suffixes'].pop(k)
+                self.persistent_storage['target_suffixes'].pop(k)
 
     def clear(self, clear_persistent=False):
         "Clear all memory"
@@ -756,6 +790,7 @@ class AdvancedMemoryBuffer:
     def clear_suffix_cache(self):
         "Clear cache"
         self.persistent_storage['suffix_matrices'].clear()
+        self.persistent_storage['target_suffix_matrices'].clear()
 
     def clear_var_cache(self):
         "Clear computed vars"
@@ -832,32 +867,37 @@ class AdvancedMemoryBuffer:
 
         return states
 
-    def _append_suffix(self, state, *, keys):
+    def _append_suffix(
+            self,
+            state=None,
+            *,
+            keys,
+            suffix_key='suffixes',
+            suffix_matrix_key='suffix_matrices'):
         "Append suffixes to state vector with optional cache for common key layouts"
         # Read from cache
         # NOTE: Strings from numpy arrays are slower as keys
-        if self.cache_suffix and keys in self.persistent_storage['suffix_matrices']:
-            suffix_matrix = self.persistent_storage['suffix_matrices'][keys]
-
+        if self.cache_suffix and keys in self.persistent_storage[suffix_matrix_key]:
+            suffix_matrix = self.persistent_storage[suffix_matrix_key][keys]
         else:
             # Aggregate suffixes
             suffix_matrix = []
             for k in keys:
-                val = self.persistent_storage['suffixes'][k]
+                val = self.persistent_storage[suffix_key][k]
                 suffix_matrix.append(val)
             suffix_matrix = np.stack(suffix_matrix, axis=0)
 
             # Add to cache
             if self.cache_suffix:
-                self.persistent_storage['suffix_matrices'][keys] = suffix_matrix
-                if len(self.persistent_storage['suffix_matrices']) == 101:
+                self.persistent_storage[suffix_matrix_key][keys] = suffix_matrix
+                if len(self.persistent_storage[suffix_matrix_key]) == 101:
                     warnings.warn(
-                        'Persistent storage cache has exceeded 100 entries,'
-                        ' please verify that there are over 100 unique environment'
-                        ' states in your data.', RuntimeWarning)
+                        f'Persistent storage cache has exceeded 100 entries,'
+                        f' please verify that there are over 100 unique environment'
+                        f' states in your data ({suffix_matrix_key}).', RuntimeWarning)
 
         # Append to state
-        return np.concat((state, suffix_matrix), axis=1)
+        return np.concat((state, suffix_matrix), axis=1) if state is not None else suffix_matrix
 
     def _flat_index_to_index(self, idx, inverse=False):
         """

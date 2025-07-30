@@ -1,3 +1,25 @@
+### 1.0.0+2025.7.30
+- Add `open_s3_or_local` context manager and simplify relevant saving/loading code throughout the library and notebooks
+- Inverse transform in `imputation_tutorial` notebook
+- Mask loading and exporting for `PreprocessFromAnnData`
+- More intuitive arguments for `create_agent_from_env` and handling for loading models without reference data
+- New mask visualization in `imputation_tutorial` notebook
+
+### 1.0.0+2025.7.29
+- Add `PinningNN` class in `policy` module to provide an alternative, absolute method to least-squares pinning
+- Add `enable_rewards` and `disable_rewards` toggle functions to `EnvironmentBase`
+- Add `get_terminal_pairs` function to `AdvancedMemoryBuffer` class for NN pinning training data querying
+- Add `is_naturals` to separate natural (env end) from manual (memory/step quota) termination
+- Add target modality storage in `AdvancedMemoryBuffer` class
+- Bugfix for `synchronization` which caused gradients to be added rather than averaged
+- Changes to `imputation_tutorial` to reflect new absolute pinning changes
+- Make time estimation in `runtime` reflect wall time rather than comp time
+- Move `synchronization` and `get_world_size` functions outside of `PPO` class
+- Optional pinning NN implementation in `EnvironmentBase` class
+- Rename `expvar` to `pinning` in `environment` module and `runtime` notebook
+- Rename `is_terminals` to `is_truncateds` to more accurately reflect bootstrapping capability
+- World size override in `synchronization` function
+
 ### 1.0.0+2025.7.27
 - Add `imputation_tutorial` notebook adding official support for imputing out-of-scope data
 - Eval and train modes for environment, with automatic variable resetting

@@ -837,15 +837,108 @@ class BufferStandardization(nn.Module):
         if std: x = x * self.std
         if mean: x = x + self.mean
         return x
+    
+
+class PinningNN(nn.Module):
+    def __init__(
+        self,
+        input_dim,
+        output_dim,
+        hidden_dim=None,
+        # Running
+        epochs=5,
+        epoch_size=1024,
+        batch_size=32,
+        # Matching
+        activation=nn.ReLU,
+        betas=(.99, .99),
+        lr=3e-4,
+        weight_decay=1e-5,
+        lr_iters=None,
+        lr_gamma=1,
+        **kwargs):
+        # Init
+        super().__init__()
+
+        # Arguments
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        if hidden_dim is None: hidden_dim = input_dim
+        self.epochs = epochs
+        self.epoch_size = epoch_size
+        self.batch_size = batch_size
+
+        # Create MLP
+        self.mlp = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            activation(), nn.Linear(hidden_dim, output_dim))
+        
+        # Optimizer and Scheduler
+        self.optimizer = torch.optim.Adam(self.mlp.parameters(), betas=betas, lr=lr, weight_decay=weight_decay, eps=1e-5)
+        if lr_iters is not None: self.scheduler = torch.optim.lr_scheduler.PolynomialLR(self.optimizer, total_iters=lr_iters)
+        else: self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
+        
+    def forward(self, X):
+        return self.mlp(X)
+    
+    def update(self, X, Y, world_size=None):
+        # Parameters
+        if world_size is None: world_size = get_world_size('learners')
+
+        # Batch calculation
+        epoch_size = np.ceil(self.epoch_size / world_size).astype(int)
+        batch_size = np.ceil(self.batch_size / world_size).astype(int)
+        batches = max(1, epoch_size // batch_size)
+
+        # Fallback for no samples
+        if X is None:
+            for _ in range(self.epochs*batches):
+                synchronize(self, 'learners', grad=True, override_world_size=world_size)
+            return 0
+
+        # X+Y dims: Trial x Cells x Features
+        # Prepare data
+        # X_view = X.view((-1, X.shape[-1]))
+        # Y_view = Y.view((-1, Y.shape[-1]))
+        num_samples = X.shape[0]
+
+        # Train
+        for epoch in range(self.epochs):
+            # Randomly sample
+            # epoch_idx = torch.randperm(num_samples)
+            epoch_idx = np.random.choice(num_samples, epoch_size, replace=num_samples < epoch_size)
+            epoch_loss = 0
+            for batch in range(batches):
+                # Compute prediction
+                batch_idx = epoch_idx[batch*batch_size:(batch+1)*batch_size]
+                Y_pred = self.mlp(X[batch_idx])
+                Y_true = Y[batch_idx]
+
+                # Compute loss
+                # TODO: Skip a few sync
+                loss = (Y_true-Y_pred).square().mean()
+                epoch_loss += loss.detach() / batches
+                loss.backward()
+                synchronize(self, 'learners', grad=True, override_world_size=world_size)  # Synchronize
+                self.optimizer.step()
+                self.optimizer.zero_grad()
+
+        # Iterate scheduler and return
+        self.scheduler.step()
+        return epoch_loss.cpu().item()
 
 
 ### Training classes
-def create_agent_from_env(env, **kwargs):
+def create_agent_from_env(env, pinning_modal_dims='auto', **kwargs):
+    if pinning_modal_dims == 'auto':
+        pinning_modal_dims = np.array([m.shape[1] for m in env.get_modalities()])[env.target_modalities]
     return PPO(
         2*env.dim,
         # np.array(env.dataloader.modal_dims)[env.input_modalities],
         np.array([m.shape[1] for m in env.get_modalities()])[env.input_modalities],
         env.dim,
+        pinning_dim=env.dim,
+        pinning_modal_dims=pinning_modal_dims,
         discrete=env.discrete,
         **kwargs)
 
@@ -856,6 +949,9 @@ class PPO(nn.Module):
             positional_dim,
             modal_dims,
             output_dim,
+            # Pinning
+            pinning_dim=None,
+            pinning_modal_dims=None,  # If not passed, doesn't perform pinning
             # Model Parameters
             # model=EntitySelfAttention, # sample_strategy 'random-proximity'
             model=EntitySelfAttentionLite,  # sample_strategy None
@@ -903,8 +999,12 @@ class PPO(nn.Module):
 
         # Parameters
         self.positional_dim = positional_dim
-        self.modal_dims = modal_dims.copy()
+        self.modal_dims = modal_dims
         self.output_dim = output_dim
+
+        # Pinning
+        self.pinning_dim = pinning_dim
+        self.pinning_modal_dims = pinning_modal_dims
 
         # Weights
         self.critic_weight = critic_weight
@@ -936,55 +1036,33 @@ class PPO(nn.Module):
         self.batch_size = batch_size
         self.minibatch_size = minibatch_size
         self.minibatch_memories = minibatch_memories
-        # self.load_level = load_level
-        # self.cast_level = cast_level
 
         # New policy
         self.actor_critic = model(positional_dim, modal_dims, output_dim, log_std_init=log_std_init, **kwargs)
-        # self.log_std_params = list(filter(lambda kv: kv[0] in ('log_std',), self.actor_critic.named_parameters()))
-        # self.critic_params = list(filter(lambda kv: kv[0].startswith('critic_'), self.actor_critic.named_parameters()))
-        # claimed_params = list(map(lambda kv: kv[0], self.log_std_params)) + list(map(lambda kv: kv[0], self.critic_params))
-        # self.actor_params = list(filter(lambda kv: kv[0] not in claimed_params, self.actor_critic.named_parameters()))
-        # self.optimizer = torch.optim.Adam([
-        #     {'params': self.log_std_params, 'lr': log_std_lr},
-        #     {'params': self.actor_params, 'lr': actor_lr},
-        #     {'params': self.critic_params, 'lr': critic_lr}],
-        #     betas=betas, weight_decay=weight_decay)
         self.optimizer = torch.optim.Adam(self.actor_critic.parameters(), betas=betas, lr=lr, weight_decay=weight_decay, eps=1e-5)
         if lr_iters is not None: self.scheduler = torch.optim.lr_scheduler.PolynomialLR(self.optimizer, total_iters=lr_iters)
         else: self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
 
         # Old policy
         self.actor_critic_old = model(positional_dim, modal_dims, output_dim, log_std_init=log_std_init, **kwargs)
-        # log_std_params = list(filter(lambda kv: kv[0] in ('log_std',), self.actor_critic_old.named_parameters()))
-        # critic_params = list(filter(lambda kv: kv[0].startswith('critic_'), self.actor_critic_old.named_parameters()))
-        # claimed_params = list(map(lambda kv: kv[0], log_std_params)) + list(map(lambda kv: kv[0], critic_params))
-        # actor_params = list(filter(lambda kv: kv[0] not in claimed_params, self.actor_critic_old.named_parameters()))
-        # self.optimizer_old = torch.optim.Adam([
-        #     {'params': log_std_params, 'lr': log_std_lr},
-        #     {'params': actor_params, 'lr': actor_lr},
-        #     {'params': critic_params, 'lr': critic_lr}],
-        #     betas=betas, weight_decay=weight_decay)
         self.optimizer_old = torch.optim.Adam(self.actor_critic_old.parameters(), betas=betas, lr=lr, weight_decay=weight_decay, eps=1e-5)
 
         # Non-grad params
         self.policy_iteration = nn.Parameter(torch.tensor(0.), requires_grad=False)
 
-        # Moving Buffer
-        # buffer_size = epoch_size
-        # if buffer_size is None: buffer_size = batch_size
-        # if buffer_size is None: buffer_size = minibatch_size
-        # buffer_size *= 10  # 10 full samples
-        # self.reward_standardization = BufferStandardization(buffer_size=buffer_size)
-        # self.return_standardization = BufferStandardization(buffer_size=buffer_size)
-
         # PopArt
-        # self.reward_standardization = ArtStandardization(beta=.5)
         self.input_standardization = PopArtStandardization(
             self.actor_critic.input_pos_layers, self.actor_critic.input_feat_layers,
             splits=(slice(0, self.positional_dim), slice(self.positional_dim, self.positional_dim+sum(self.modal_dims))), pre=True, beta=standardization_beta)
         self.return_standardization = PopArtStandardization(self.actor_critic.output_critic_layers, beta=standardization_beta)
-        
+
+        # Pinning (Assumes that the positional dim is pos+vel)
+        if self.pinning_modal_dims is not None:
+            self.pinning_dim = int(positional_dim/2) if self.pinning_dim is None else self.pinning_dim
+            self.pinning = nn.ModuleList([
+                PinningNN(self.pinning_dim, pinning_modal_dim, betas=betas, lr=lr, weight_decay=weight_decay, lr_iters=lr_iters, lr_gamma=lr_gamma, **kwargs)
+                for pinning_modal_dim in self.pinning_modal_dims])
+        else: self.pinning = None
 
         # Initialize
         orthogonal_init(self)
@@ -1006,11 +1084,6 @@ class PPO(nn.Module):
             else:
                 # print(f'None: {name}')
                 pass
-
-    # def to(self, device):
-    #     ret = super().to(device)
-    #     self.device = self.policy_iteration.device
-    #     return ret
 
     def get_policy_iteration(self):
         return int(self.policy_iteration.item())
@@ -1037,34 +1110,14 @@ class PPO(nn.Module):
         policy_state = _utility.general.get_policy_state(self)
 
         # Save
-        if fname.startswith('s3://'):
-            # Get s3 handler
-            s3 = _utility.general.get_s3_handler_with_access(fname)
-
-            # Get buffer
-            # buffer = io.BytesIO()
-            # torch.save(policy_state, buffer)
-
-            # Save
-            with s3.open(fname, 'wb') as f:
-                torch.save(policy_state, f)
-        else:
-            os.makedirs(directory, exist_ok=True)
-            torch.save(policy_state, fname)
-
+        with _utility.general.open_s3_or_local(fname, 'wb') as f: torch.save(policy_state, f)
+        # NOTE: Will no longer do `os.makedirs(directory, exist_ok=True)` for local
         return fname
 
     def load_checkpoint(self, fname):
         # Get from fname
-        if fname.startswith('s3://'):
-            # Get s3 handler
-            s3 = _utility.general.get_s3_handler_with_access(fname)
-
-            # Retrieve object from store
-            with s3.open(fname, 'rb') as f:
-                policy_state = torch.load(f, map_location=self.policy_iteration.device)
-        else:
-            policy_state = torch.load(fname, map_location=self.policy_iteration.device)
+        with _utility.general.open_s3_or_local(fname, 'rb') as f:
+            policy_state = torch.load(f, map_location=self.policy_iteration.device)
 
         # Load policy
         _utility.general.set_policy_state(self, policy_state)
@@ -1207,7 +1260,7 @@ class PPO(nn.Module):
         batch_size = int(min(batch_size, epoch_size))
 
         # Level adjustment
-        denominator = self.get_world_size('learners') if sync_iterations == 1 else 1  # Adjust sizes if gradients synchronized across GPUs
+        denominator = get_world_size('learners') if sync_iterations == 1 else 1  # Adjust sizes if gradients synchronized across GPUs
         # if epoch_size is not None:
         if not np.isinf(self.epoch_size): epoch_size = np.ceil(epoch_size / denominator).astype(int)
         # if batch_size is not None:
@@ -1323,7 +1376,7 @@ class PPO(nn.Module):
                 # Synchronize GPU policies and step
                 # NOTE: Synchronize gradients every batch if =1, else synchronize whole model
                 # NOTE: =1 keeps optimizers in sync without need for whole-model synchronization
-                if sync_iterations == 1: self.synchronize('learners', grad=True)  # Sync only grad
+                if sync_iterations == 1: synchronize(self, 'learners', grad=True)  # Sync only grad
                 if self.kl_early_stop and synchronized: self.copy_policy()
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.grad_clip)
                 self.optimizer.step()
@@ -1333,7 +1386,7 @@ class PPO(nn.Module):
                     sync_loop = (iterations) % sync_iterations == 0
                     last_epoch = iterations == update_iterations
                     if use_collective and (sync_loop or last_epoch):
-                        self.synchronize('learners')
+                        synchronize(self, 'learners')
                         synchronized = True
                     else: synchronized = False
 
@@ -1342,13 +1395,13 @@ class PPO(nn.Module):
                     self.input_standardization.update(batch_inputs)
                 if standardize_returns:
                     self.return_standardization.update(batch_returns)
-                    self.synchronize('learners', sync_list=self.return_standardization.parameters())
+                    synchronize(self, 'learners', sync_list=self.return_standardization.parameters())
 
                 # Update KL beta
                 # NOTE: Same as Torch KLPENPPOLoss implementation
                 if self.kl_early_stop or self.kl_beta != 0:
                     loss_kl_mean = loss_kl.detach().mean()
-                    self.synchronize('learners', sync_list=[loss_kl_mean])
+                    synchronize(self, 'learners', sync_list=[loss_kl_mean])
                     if not self.kl_early_stop:
                         exp_limit = 32
                         if loss_kl_mean < self.kl_target / 1.5 and self.kl_beta > 2**-exp_limit: self.kl_beta.data *= self.kl_beta_increment[0]
@@ -1385,44 +1438,35 @@ class PPO(nn.Module):
 
         # Update scheduler
         self.scheduler.step()
+
+        # Train pinning
+        X, Y = memory.get_terminal_pairs()
+        has_memories = torch.tensor(0., device=self.policy_iteration.device)
+        if X is not None: has_memories += 1
+        synchronize(self, 'learners', sync_list=[has_memories])
+        pinning_losses = {}
+        running_feat = 0
+        for i, (pinning, pinning_modal_dim) in enumerate(zip(self.pinning, self.pinning_modal_dims)):
+            if X is None: pinning.update(None, None, world_size=has_memories)
+            else: pinning_losses[f'Pinning Loss {i}'] = pinning.update(
+                X[..., :self.pinning_dim].to(self.policy_iteration.device),
+                Y[..., running_feat:running_feat+pinning_modal_dim].to(self.policy_iteration.device),
+                world_size=has_memories.item())
+            running_feat += pinning_modal_dim
+        assert running_feat == Y.shape[1], (
+            f'`pinning_modal_dims` sum ({running_feat}) does not match target modality combined length ({Y.shape[1]})')
+
         # Update records
         self.policy_iteration += 1
         self.copy_policy()
         # Return
+        total_losses_ret = {k: np.mean([v.item() for v in vl]) for k, vl in total_losses.items()}
+        total_losses_ret = {**total_losses_ret, **pinning_losses}  # TODO: Maybe revise
+        total_statistics_ret = {k: np.mean([v.item() for v in vl]) for k, vl in total_statistics.items()}
         return (
             iterations,
-            {k: np.mean([v.item() for v in vl]) for k, vl in total_losses.items()},
-            {k: np.mean([v.item() for v in vl]) for k, vl in total_statistics.items()})
-
-    def get_world_size(self, group='default', warn=False):
-        try:
-            world_size = col.get_collective_group_size(group)
-            if world_size == -1: raise RuntimeError
-            return world_size
-        except:
-            if warn: warnings.warn(f'No group "{group}" found.')
-            return 1
-
-    def synchronize(self, group='default', sync_list=None, grad=False, broadcast=None, allreduce=None):
-        # Defaults
-        if broadcast is None: broadcast = False
-        if allreduce is None: allreduce = not broadcast
-
-        # Collective operations
-        world_size = self.get_world_size(group)
-        if world_size == 1: return
-
-        # Sync
-        sync_list = self.parameters() if sync_list is None else sync_list
-        with torch.no_grad():
-            for w in sync_list:  # zip(self.state_dict(), self.parameters())
-                if grad: w = w.grad  # No in-place modification here
-                if w is None: continue
-                if w.dtype == torch.long: continue
-                if broadcast: col.broadcast(w, 0, group)
-                if allreduce:
-                    col.allreduce(w, group)
-                    if not grad: w /= world_size
+            total_losses_ret,
+            total_statistics_ret)
 
     def calculate_losses(
         self,
@@ -1499,3 +1543,35 @@ class PPO(nn.Module):
         loss = loss.mean()
 
         return loss, loss_ppo, loss_critic, loss_entropy, loss_kl, state_vals_new
+
+
+def get_world_size(group='default', warn=False):
+    try:
+        world_size = col.get_collective_group_size(group)
+        if world_size == -1: raise RuntimeError
+        return world_size
+    except:
+        if warn: warnings.warn(f'No group "{group}" found.')
+        return 1
+
+
+def synchronize(module, group='default', sync_list=None, grad=False, override_world_size=None, broadcast=None, allreduce=None):
+    # Defaults
+    if broadcast is None: broadcast = False
+    if allreduce is None: allreduce = not broadcast
+
+    # Collective operations
+    world_size = get_world_size(group)
+    if world_size == 1: return
+
+    # Sync
+    sync_list = module.parameters() if sync_list is None else sync_list
+    with torch.no_grad():
+        for w in sync_list:  # zip(module.state_dict(), module.parameters())
+            if grad: w = w.grad  # No in-place modification here
+            if w is None: continue
+            if w.dtype == torch.long: continue
+            if broadcast: col.broadcast(w, 0, group)
+            if allreduce:
+                col.allreduce(w, group)
+                w /= world_size if override_world_size is None else override_world_size
