@@ -147,6 +147,9 @@ Ray cluster status
 ray attach aws_config.yaml
 ray status
 
+Convert
+sh ../run_on_all_ext.sh ../convert_pdf_to_png.sh pdf
+
 TODO
 Find https://raw.githubusercontent.com/Oafish1/CellTRIP/refs/heads/main/plots, Replace ./plots to test images
 -->

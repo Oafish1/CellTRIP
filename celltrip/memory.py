@@ -314,6 +314,7 @@ class AdvancedMemoryBuffer:
     
     def get_terminal_pairs(self):
         terminal_state_idx = np.argwhere(self.storage['is_naturals']).flatten()
+        if len(terminal_state_idx) == 0: return None, None
         keys, states = [], []
         for i in terminal_state_idx:
             keys.append(self.storage['keys'][i])

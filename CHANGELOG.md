@@ -1,3 +1,87 @@
+### 1.0.0+2025.8.18
+- Change `PinningNN` default behavior and add QOL arguments
+- Figure notebook for Flysta3D dataset and plots
+- New first draft of Flysta3D figure
+- Non-relative environmental rewards and tuning
+- Use `ImageMagick` instead of `pdftoppm` in `convert_pdf_to_png.sh` script
+
+### 1.0.0+2025.8.17
+- Change pinning reward calculation
+- Readd feature embed caching
+- Regular standardization and no dragging for `PinningNN`
+- Tuning
+
+### 1.0.0+2025.8.16
+- Increase default hidden dimension sizes generally, automatically determine main hidden dim, shrinking 2x for 8 dims (64 -> 32)
+- Replace batch norms with layer norms due to validation issues
+
+### 1.0.0+2025.8.15
+- Extra standardization for PinningNN and revised "dragging" strategy
+- Finalize split state vision
+- Tune rewards, return velocity to relative measure and rebalance
+
+### 1.0.0+2025.8.14
+- Add PopArt standardization to `PinningNN` update, exclusively. This should replace dragging
+- Add segmenting to `pop_layer` function
+- Fix automatic dimension detection for `PopArt` when using `Segments`
+
+### 1.0.0+2025.8.13
+- Add segmenting to `pip_layer` function
+- Add standardization dragging to additional layers
+- Fix bug with `split_state` and `sample_strategy` as `None`
+
+### 1.0.0+2025.8.12
+- More testing and tuning
+
+### 1.0.0+2025.8.11
+- Add batch normalization to `PinningNN` and `EntitySelfAttentionLite`
+- Add keys to `EnvironmentBase.set_modalities`
+- Change all synchronizations to hard synchronizations for compatibility with Layer and Batch Norms
+
+### 1.0.0+2025.8.10
+- Add `exclusive` argument to `EnvironmentBase.set_termination_conds` for ease of use
+- Add `store_vars` and `restore_vars` functions to `EnvironmentBase`, fragmenting the use of `train` and `eval`
+
+### 1.0.0+2025.8.7
+- Analysis and architecture changes
+- More tuning
+
+### 1.0.0+2025.8.6
+- Add per-modality `Pinning Mean/STD` update return parameters
+- Implement VAE for pinning model
+
+### 1.0.0+2025.8.5
+- Add centering (dragging) for `PinningNN` update data to prevent model exploitation with far-away pinning target
+- Add `get_rank` function
+- Add pinning losses to `runtime` visualization
+- Add partial PIP to standardization for `PinningNN`
+- Add source rank to `synchronize` broadcast
+- Additional debugging losses for pinning
+- Automatic handling for number of samples below PCA dim
+- Separate PIP (Novel) and POP functions from PopArt implementation
+- Synchronization after PIP usage in `PinningNN.update`
+
+### 1.0.0+2025.8.4
+- Error visualization in `imputation_tutorial`
+- Fix in-place noise calculation and adjust default noise return behaviors
+- Model tuning to prevent overfitting
+
+### 1.0.0+2025.8.3
+- Fix bug with no termination case in `AdvancedMemoryBuffer.get_terminal_pairs`
+- Fix bugs with `world size = 0` and empty terminal states in `PinningNN.update`
+- Fix grad synchronization bug affecting partial `PinningNN` updates
+
+### 1.0.0+2025.8.1
+- More tuning
+
+### 1.0.0+2025.7.31
+- Significant tuning changes
+
+### 1.0.0+2025.7.30.1
+- Add pinning optimizers and schedulers to checkpoint
+- Change `merge_adatas` return behavior to not be inside list
+- Tweak env parameters to help with overfitting
+
 ### 1.0.0+2025.7.30
 - Add `open_s3_or_local` context manager and simplify relevant saving/loading code throughout the library and notebooks
 - Inverse transform in `imputation_tutorial` notebook
