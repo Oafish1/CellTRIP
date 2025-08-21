@@ -157,6 +157,7 @@ def train(config):
     environment_kwargs = {
         'input_modalities': config.input_modalities,
         'target_modalities': config.target_modalities, 'dim': config.dim}
+        # 'reward_pinning': 0, 'penalty_velocity': 1}
     initializers = celltrip.train.get_initializers(
         input_files=config.input_files, merge_files=config.merge_files,
         backed=config.backed, dataloader_kwargs=dataloader_kwargs,
@@ -166,10 +167,7 @@ def train(config):
 
     # Stages
     stage_functions = [
-        # lambda w: w.env.set_delta(.1),
-        # lambda w: w.env.set_delta(.05),
-        # lambda w: w.env.set_delta(.01),
-        # lambda w: w.env.set_delta(.005),
+        # lambda w: w.env.set_rewards(reward_pinning=1),
     ]
 
     # Run function

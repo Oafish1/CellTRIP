@@ -579,9 +579,10 @@ class AdvancedMemoryBuffer:
             rewards_max = torch.cat([rew for rew, stale in zip(self.storage['rewards'], self.storage['staleness']) if stale==0]).max()
             rewards_min = torch.cat([rew for rew, stale in zip(self.storage['rewards'], self.storage['staleness']) if stale==0]).min()
 
-        for i, (rewards, is_terminal, state_vals, terminal_state_vals, advantages, propagated_rewards) in enumerate(zip(
+        for i, (rewards, is_truncated, is_terminated, state_vals, terminal_state_vals, advantages, propagated_rewards) in enumerate(zip(
             self.storage['rewards'][::-1],
             self.storage['is_truncateds'][::-1],
+            self.storage['is_naturals'][::-1],
             self.storage['state_vals'][::-1],
             self.storage['terminal_state_vals'][::-1],
             self.storage['advantages'][::-1],
@@ -591,7 +592,7 @@ class AdvancedMemoryBuffer:
             # Skip if already calculated
             if advantages is None:
                 # Reset values and advantages if terminal
-                if is_terminal:
+                if is_truncated:
                     next_advantages = 0
                     next_state_vals = terminal_state_vals  # 0 for terminal not truncated
                 # Compute advantage
@@ -605,7 +606,7 @@ class AdvancedMemoryBuffer:
             # Compute rewards
             # Could remove this, but performance impact is minimal
             if propagated_rewards is None:
-                if is_terminal:
+                if is_truncated:
                     next_rewards = 0
                     if prune is not None: step_num = 0
                 next_rewards = rewards + gamma * next_rewards

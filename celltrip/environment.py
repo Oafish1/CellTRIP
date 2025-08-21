@@ -42,7 +42,7 @@ class EnvironmentBase:
         penalty_action=None,
         epsilon=1e-3,
         # Early stopping
-        max_time=2**7,
+        max_time=2**8,
         min_time=2**6,
         terminate_min_time=True,
         terminate_max_time=True,
@@ -147,7 +147,7 @@ class EnvironmentBase:
                 'reward_origin': 0,
                 'penalty_bound': 0,
                 'penalty_velocity': 1,
-                'penalty_action': 0,
+                'penalty_action': 1,
             }
         else:
             # Otherwise, set `None` rewards to zero
@@ -167,18 +167,15 @@ class EnvironmentBase:
         self.noise = [m.to(self.device) if isinstance(m, torch.Tensor) else m for m in self.noise]
         return self
     
-    def train(self):
+    def train(self, clear=True):
         # Restore all conditions and clear stored memory
-        self.termination_conds = self.stored_changes['termination_conds']
-        self.max_time = self.stored_changes['max_time']
-        self.set_noise_std(self.stored_changes['noise_std'])
-        if 'noise' in self.stored_changes:
-            self.noise = self.stored_changes['noise']
-        self.stored_changes.clear()
+        self.restore_vars(clear=clear)
 
         return self
     
-    def eval(self):
+    def eval(self, **kwargs):
+        # Store vars
+        self.store_vars(**kwargs)
         # Remove random termination conditions
         self.termination_conds['random'] = False
         # Make max length 5x
@@ -238,8 +235,8 @@ class EnvironmentBase:
             get_reward_pinning = lambda: self.get_pinning(use_cache=True, pinning_func_list=pinning_func_list)
             # get_reward_pinning = lambda: (self.get_pinning(use_cache=True)+self.epsilon).log().mean(dim=-1)
             if self.reward_scales['reward_pinning'] != 0:
-                # reward_pinning = get_reward_pinning()
-                reward_pinning = 0
+                reward_pinning = get_reward_pinning()
+                # reward_pinning = 0
             else: reward_pinning = torch.zeros(actions.shape[0], device=self.device)
             # Origin penalty
             get_reward_origin = lambda: self.get_distance_from_origin()
@@ -257,8 +254,8 @@ class EnvironmentBase:
                 # get_penalty_velocity = lambda: (self.vel.square().mean(dim=-1)+self.epsilon).log()
                 # get_penalty_velocity = lambda: self.vel.mean(dim=-1)
             if self.reward_scales['penalty_velocity'] != 0:
-                # penalty_velocity = get_penalty_velocity()
-                penalty_velocity = 0
+                penalty_velocity = get_penalty_velocity()
+                # penalty_velocity = 0
             else: penalty_velocity = torch.zeros(actions.shape[0], device=self.device)
 
         ### Step positions
@@ -337,10 +334,10 @@ class EnvironmentBase:
             else: self.best = self.get_distance_match().mean(); self.lapses = 0
 
             reward_distance     *=  self.reward_scales['reward_distance']    * 1e-1/delta
-            reward_pinning      *=  self.reward_scales['reward_pinning']     * 1e-5/delta
+            reward_pinning      *=  self.reward_scales['reward_pinning']     * 1e-1/delta  # 1e-6
             reward_origin       *=  self.reward_scales['reward_origin']      * 1e-1/delta
             penalty_bound       *=  self.reward_scales['penalty_bound']      * 1e0
-            penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e-4/delta
+            penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e-1/delta  # 1e-3
             penalty_action      *=  self.reward_scales['penalty_action']     * 1e-3
             # self.steps += 1
         else:
@@ -538,13 +535,13 @@ class EnvironmentBase:
                 X = torch.linalg.lstsq(A, B / B_norm).solution
                 err = torch.matmul(A, X) * A_norm - B
             else:
-                err = m - pinning_func_list[i](self.pos, input_standardization=False, output_standardization=False).detach()
+                err = m - pinning_func_list[i](self.pos, input_standardization=True, output_standardization=False).detach()
                 # err = pinning_func_list[i].output_standardization.apply(m) - pinning_func_list[i](self.pos, input_standardization=True).detach()
             mse = err.square().mean(dim=-1)
             # mse = (err.square() + self.epsilon).log().mean(dim=-1)
             # mse = (err.square() + self.epsilon).mean(dim=-1).log()
             # mse /= m.square().mean()  # Scale for fairness
-            # mse = -1 / (1 + mse)  # Transform
+            mse = -1 / (1 + mse)  # Transform
             running_mse += mse / len(targets)
 
         # Cache result

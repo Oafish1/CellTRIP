@@ -1,3 +1,20 @@
+### 1.0.0+2025.8.21
+- Figure changes
+- Readd deterministic eval to policy
+- Train mode performance is still better, need to find out why
+- Visualizations on newly performant model
+
+### 1.0.0+2025.8.20
+- Remove dropout
+- Remove normalization from ingress and output layers (!!)
+- Renaming and termination capability in `AdvancedMemoryBuffer.compute_advantages`
+- Revise Flysta3D visualizations
+- Significant tuning, readd relative weights and 1/(1+MSE) strategy for pinning reward (!!)
+
+### 1.0.0+2025.8.19
+- Add and preprocess `dyngen` dataset
+- Tuning for pinning architecture
+
 ### 1.0.0+2025.8.18
 - Change `PinningNN` default behavior and add QOL arguments
 - Figure notebook for Flysta3D dataset and plots

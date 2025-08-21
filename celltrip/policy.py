@@ -433,7 +433,7 @@ class EntitySelfAttentionLite(nn.Module):
         blocks=1,
         # Options
         activation=nn.PReLU,
-        dropout=.6,
+        dropout=0.,
         # Structure
         discrete=False,
         # independent_critic=True,
@@ -459,12 +459,9 @@ class EntitySelfAttentionLite(nn.Module):
         self.node_pos_embed = nn.Linear(positional_dim, hidden_dim)
         self.node_feat_embed = nn.Linear(num_feat_dims, hidden_dim)
         self.self_embed = nn.Sequential(
-            # TransposeLastIf3D(), nn.LayerNorm(hidden_dim), TransposeLastIf3D()
-            nn.LayerNorm(hidden_dim), activation(), nn.Dropout(dropout), nn.Linear(hidden_dim, hidden_dim),
-            nn.LayerNorm(hidden_dim), activation(), nn.Dropout(dropout))
+            activation(), nn.Dropout(dropout), nn.Linear(hidden_dim, hidden_dim))
         self.node_embed = nn.Sequential(
-            nn.LayerNorm(hidden_dim), activation(), nn.Dropout(dropout), nn.Linear(hidden_dim, hidden_dim),
-            nn.LayerNorm(hidden_dim), activation(), nn.Dropout(dropout))
+            activation(), nn.Dropout(dropout), nn.Linear(hidden_dim, hidden_dim))
         self.residual_attention_blocks = nn.ModuleList([
             ResidualAttentionBlock(hidden_dim, heads, activation=activation) for _ in range(blocks)])
         
@@ -475,11 +472,9 @@ class EntitySelfAttentionLite(nn.Module):
             self.critic_node_pos_embed = nn.Linear(positional_dim, hidden_dim)
             self.critic_node_feat_embed = nn.Linear(num_feat_dims, hidden_dim)
             self.critic_self_embed = nn.Sequential(
-                nn.LayerNorm(hidden_dim), activation(), nn.Dropout(dropout), nn.Linear(hidden_dim, hidden_dim),
-                nn.LayerNorm(hidden_dim), activation(), nn.Dropout(dropout))
+                activation(), nn.Dropout(dropout), nn.Linear(hidden_dim, hidden_dim))
             self.critic_node_embed = nn.Sequential(
-                nn.LayerNorm(hidden_dim), activation(), nn.Dropout(dropout), nn.Linear(hidden_dim, hidden_dim),
-                nn.LayerNorm(hidden_dim), activation(), nn.Dropout(dropout))
+                activation(), nn.Dropout(dropout), nn.Linear(hidden_dim, hidden_dim))
             self.critic_residual_attention_blocks = nn.ModuleList([
                 ResidualAttentionBlock(hidden_dim, heads, activation=activation) for _ in range(blocks)])
             
@@ -627,11 +622,11 @@ class EntitySelfAttentionLite(nn.Module):
 
 class DiscreteActions(nn.Module):
     # Discretized based on advice from https://arxiv.org/pdf/2004.00980
-    def __init__(self, input_dim, output_dims, hidden_dim=None, activation=nn.PReLU, dropout=.6, **kwargs):
+    def __init__(self, input_dim, output_dims, hidden_dim=None, activation=nn.PReLU, dropout=0., **kwargs):
         super().__init__(**kwargs)
 
         # Params
-        if hidden_dim is None: hidden_dim = 2*input_dim
+        if hidden_dim is None: hidden_dim = input_dim
 
         # Heads
         self.deciders = nn.ModuleList([
@@ -641,8 +636,8 @@ class DiscreteActions(nn.Module):
                 # activation(), nn.Linear(hidden_dim, output_dim),
 
                 # Layer norm + Dropout
-                nn.LayerNorm(input_dim), activation(), nn.Dropout(dropout), nn.Linear(input_dim, hidden_dim),
-                nn.LayerNorm(hidden_dim), activation(), nn.Dropout(dropout), nn.Linear(hidden_dim, output_dim),
+                nn.Dropout(dropout), nn.Linear(input_dim, hidden_dim),
+                activation(), nn.Dropout(dropout), nn.Linear(hidden_dim, output_dim),
 
                 # Batch norm + Dropout
                 # nn.BatchNorm1d(input_dim), activation(), nn.Dropout(dropout), nn.Linear(input_dim, hidden_dim),
@@ -676,7 +671,7 @@ class DiscreteActions(nn.Module):
 
 
 class ContinuousActions(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=None, activation=nn.PReLU, dropout=.6, log_std_init=0, **kwargs):
+    def __init__(self, input_dim, output_dim, hidden_dim=None, activation=nn.PReLU, dropout=0., log_std_init=0, **kwargs):
         super().__init__(**kwargs)
 
         # Params
@@ -691,8 +686,8 @@ class ContinuousActions(nn.Module):
             # nn.Tanh(),
 
             # Layer norm + Dropout
-            nn.LayerNorm(input_dim), activation(), nn.Dropout(dropout), nn.Linear(input_dim, hidden_dim),
-            nn.LayerNorm(hidden_dim), activation(), nn.Dropout(dropout), nn.Linear(hidden_dim, output_dim),
+            activation(), nn.Dropout(dropout), nn.Linear(input_dim, hidden_dim),
+            activation(), nn.Dropout(dropout), nn.Linear(hidden_dim, output_dim),
             nn.Tanh(),
 
             # Batch norm + Dropout
@@ -720,8 +715,8 @@ class ContinuousActions(nn.Module):
         #     validate_args=False)  # Speeds up computation
 
         # Define normal distribution
-        # std = self.log_std.exp() if self.training else 1e-7
-        std = self.log_std.exp()
+        std = self.log_std.exp() if self.training else 1e-7
+        # std = self.log_std.exp()
         # std = 1e-7
         dist = torch.distributions.Normal(loc=actions, scale=std)  # /np.sqrt(actions.shape[-1])
 
@@ -935,7 +930,7 @@ class PinningNN(nn.Module):
         weight_decay=1e-5,
         lr_iters=None,
         lr_gamma=1,
-        dropout=.6,
+        dropout=0.,
         **kwargs):
         # Init
         super().__init__()
@@ -961,7 +956,7 @@ class PinningNN(nn.Module):
 
             # Layer norm
             nn.Linear(input_dim, hidden_dim),
-            nn.LayerNorm(hidden_dim), activation(), nn.Dropout(dropout),
+            activation(), nn.Dropout(dropout),
             nn.Linear(hidden_dim, output_dim),
 
             # Batch norm
@@ -1010,11 +1005,17 @@ class PinningNN(nn.Module):
 
         # Standardization
         # self.input_standardization = PopArtStandardization(
-        #     [self.first_layer],  #  + self.extra_first_layers,
-        #     # segments=[[None] + [slice(self.input_dim) for _ in range(len(self.extra_first_layers))]],
+        #     [self.first_layer] + self.extra_first_layers,
+        #     segments=[[None] + [slice(self.input_dim) for _ in range(len(self.extra_first_layers))]],
         #     beta=standardization_beta, pre=True)
         self.input_standardization = PopArtStandardization(
-            dim=input_dim, beta=standardization_beta, pre=True)
+            [self.first_layer], beta=standardization_beta, pre=True)
+        # self.input_standardization = PopArtStandardization(
+        #     self.extra_first_layers,
+        #     segments=[[slice(self.input_dim) for _ in range(len(self.extra_first_layers))]],
+        #     beta=standardization_beta, pre=True)
+        # self.input_standardization = PopArtStandardization(
+        #     dim=input_dim, beta=standardization_beta, pre=True)
         self.output_standardization = PopArtStandardization([self.last_layer], beta=standardization_beta)
 
     def forward(self, X, input_standardization=True, output_standardization=False):
@@ -1138,8 +1139,11 @@ class PinningNN(nn.Module):
             print(self.input_standardization.std)
             print(self.input_standardization.apply(X_batch).mean(dim=0).abs().mean())
             print(self.input_standardization.apply(X_batch).std(dim=0).mean())
+            print(X_batch.mean(dim=0))
+            print(X_batch.std(dim=0))
             print(X_batch.mean(dim=0).abs().mean())
             print(X_batch.std(dim=0).mean())
+            print((self(X, input_standardization=False) - Y).square().mean())
             print()
 
         # Iterate scheduler and return
