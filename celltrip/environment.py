@@ -17,7 +17,7 @@ class EnvironmentBase:
         pos_bound=torch.inf,
         pos_rand_bound=1,
         vel_bound=1,
-        vel_rand_bound=0,
+        vel_rand_bound=1,
         uniform_bounds=False,
         force_bound=torch.inf,
         discrete_force=1,
@@ -42,8 +42,9 @@ class EnvironmentBase:
         penalty_action=None,
         epsilon=1e-3,
         # Early stopping
-        max_time=2**8,
         min_time=2**6,
+        max_time=2**7,
+        eval_time=2**5,  # [2**5, 2**6]
         terminate_min_time=True,
         terminate_max_time=True,
         terminate_random=True,
@@ -75,6 +76,7 @@ class EnvironmentBase:
             'random': terminate_random,
             'velocity': terminate_velocity,
             'bound': terminate_bound}
+        self.eval_time = eval_time
         self.vel_threshold = vel_threshold
         self.epsilon = epsilon
         self.noise_std = noise_std
@@ -250,7 +252,8 @@ class EnvironmentBase:
                 get_penalty_velocity = lambda: self.vel.norm(dim=-1)
                 # get_penalty_velocity = lambda: (self.vel.norm(dim=-1)+self.epsilon).log()
             else:
-                get_penalty_velocity = lambda: self.vel.square().mean(dim=-1)
+                # get_penalty_velocity = lambda: self.vel.square().mean(dim=-1)
+                get_penalty_velocity = lambda: self.vel.abs().mean(dim=-1)
                 # get_penalty_velocity = lambda: (self.vel.square().mean(dim=-1)+self.epsilon).log()
                 # get_penalty_velocity = lambda: self.vel.mean(dim=-1)
             if self.reward_scales['penalty_velocity'] != 0:
@@ -334,7 +337,7 @@ class EnvironmentBase:
             else: self.best = self.get_distance_match().mean(); self.lapses = 0
 
             reward_distance     *=  self.reward_scales['reward_distance']    * 1e-1/delta
-            reward_pinning      *=  self.reward_scales['reward_pinning']     * 1e-1/delta  # 1e-6
+            reward_pinning      *=  self.reward_scales['reward_pinning']     * 5e-1/delta  # 1e-6
             reward_origin       *=  self.reward_scales['reward_origin']      * 1e-1/delta
             penalty_bound       *=  self.reward_scales['penalty_bound']      * 1e0
             penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e-1/delta  # 1e-3
@@ -357,8 +360,12 @@ class EnvironmentBase:
             + penalty_bound
             + penalty_velocity
             + penalty_action)
-
-        ret = (rwd, finished)
+        
+        # Return
+        steady = np.abs(self.time - self.eval_time) < self.epsilon
+        # steady = self.time >= self.eval_time
+        # steady = (self.time >= self.eval_time[0]) and (self.time <= self.eval_time[1])
+        ret = (rwd, steady, finished)
         if return_itemized_rewards: ret += {
             'distance': reward_distance,
             'pinning': reward_pinning,
@@ -535,7 +542,7 @@ class EnvironmentBase:
                 X = torch.linalg.lstsq(A, B / B_norm).solution
                 err = torch.matmul(A, X) * A_norm - B
             else:
-                err = m - pinning_func_list[i](self.pos, input_standardization=True, output_standardization=False).detach()
+                err = m - pinning_func_list[i](self.pos, m, input_standardization=True, output_standardization=False).detach()
                 # err = pinning_func_list[i].output_standardization.apply(m) - pinning_func_list[i](self.pos, input_standardization=True).detach()
             mse = err.square().mean(dim=-1)
             # mse = (err.square() + self.epsilon).log().mean(dim=-1)
@@ -565,7 +572,7 @@ class EnvironmentBase:
 
     def finished(self):
         # Min threshold for stop
-        if self.termination_conds['min_time'] and self.time < self.min_time: return False, 'min_time'
+        if self.termination_conds['min_time'] and self.time < min(self.min_time, self.max_time): return False, 'min_time'
         # Boundary stop
         if self.termination_conds['bound'] and (self.pos.norm(dim=-1)-self.pos_bound > 0).any(): return True, 'bound'
         # Latency stop
@@ -598,15 +605,19 @@ class EnvironmentBase:
 
     def disable_rewards(self):
         self.compute_rewards = False
+        return self
 
     def enable_rewards(self):
         self.compute_rewards = True
+        return self
 
     def set_delta(self, delta):
         self.delta = delta
+        return self
 
     def set_noise_std(self, noise_std):
         self.noise_std = noise_std
+        return self
 
     def set_modalities(self, modalities, keys=None):
         # Set modalities
@@ -622,6 +633,8 @@ class EnvironmentBase:
         # Assert all modalities share the first dimension and reset num_nodes
         assert all(m.shape[0] == self.modalities[0].shape[0] for m in self.modalities)
         self.num_nodes = self.modalities[0].shape[0]
+        
+        return self
 
     def set_rewards(self, **new_reward_scales):
         # Check that all rewards are valid
@@ -631,6 +644,8 @@ class EnvironmentBase:
 
         # Set new rewards
         self.reward_scales.update(new_reward_scales)
+
+        return self
 
     def set_termination_conds(self, exclusive=False, **new_termination_conds):
         # Check that all rewards are valid

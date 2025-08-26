@@ -48,3 +48,6 @@ example*.yaml
 # Automatic generation
 **/downloads/*
 **/checkpoints/*
+
+# Manim
+**/media/*

@@ -1,9 +1,4 @@
 # %%
-# %load_ext autoreload
-# %autoreload 2
-
-
-# %%
 import argparse
 import os
 import random
@@ -34,9 +29,11 @@ group.add_argument('--partition_cols', type=str, nargs='+', help='Columns for da
 group.add_argument('--backed', action='store_true', help='Read data directly from disk or s3, saving memory at the cost of time')
 group.add_argument('--input_modalities', type=int, nargs='+', help='Input modalities to give to CellTRIP')
 group.add_argument('--target_modalities', type=int, nargs='+', help='Target modalities to emulate, dictates environment reward')
+group.add_argument('--spatial', type=int, nargs='+', help='Which modalities are spatial, dictates pinning strategy')
 # Algorithm
 group = parser.add_argument_group('Algorithm')
 group.add_argument('--dim', type=int, default=16, help='Dimensions in the output latent space')
+group.add_argument('--discrete', action='store_true', help='Use the discrete model rather than continuous')
 group.add_argument('--train_split', type=float, default=1., help='Fraction of input data to use as training')
 group.add_argument('--train_partitions', action='store_true', help='Split training/validation data across partitions rather than samples')
 # Computation
@@ -63,57 +60,66 @@ if not celltrip.utility.notebook.is_notebook():
     # ray job submit -- python train.py...
     config = parser.parse_args()
 else:
-    # experiment_name = 'scglue-both-new'
-    experiment_name = 'flysta3d-L3_b-single-250622'
+    experiment_name = 'MERFISH-250824'
     bucket_name = 'nkalafut-celltrip'
     # bucket_name = 'arn:aws:s3:us-east-2:245432013314:accesspoint/ray-nkalafut-celltrip'
     command = (
         # MERFISH
-        # f's3://{bucket_name}/MERFISH/expression.h5ad s3://{bucket_name}/MERFISH/spatial.h5ad --target_modalities 1 '
+        f's3://{bucket_name}/MERFISH/expression.h5ad s3://{bucket_name}/MERFISH/spatial.h5ad --target_modalities 1 --spatial 1 '
         # scGLUE
         # f's3://{bucket_name}/scGLUE/Chen-2019-RNA.h5ad s3://{bucket_name}/scGLUE/Chen-2019-ATAC.h5ad '
         # f's3://{bucket_name}/scGLUE/Chen-2019-RNA.h5ad s3://{bucket_name}/scGLUE/Chen-2019-ATAC.h5ad --input_modalities 0 --target_modalities 0 '
         # f'../data/scglue/Chen-2019-RNA.h5ad ../data/scglue/Chen-2019-ATAC.h5ad --input_modalities 0 --target_modalities 0 '
         # Flysta3D
         # f' '.join([f'--merge_files ' + ' ' .join([f's3://{bucket_name}/Flysta3D/{p}_{m}.h5ad' for p in ('E14-16h_a', 'E16-18h_a', 'L1_a', 'L2_a', 'L3_b')]) for m in ('expression', 'spatial')]) + ' '
-        # f'--target_modalities 1 '
-        # f'--partition_cols slice_ID '
-        f' '.join([f'--merge_files ' + ' ' .join([f's3://{bucket_name}/Flysta3D/{p}_{m}.h5ad' for p in ('L3_b',)]) for m in ('expression', 'spatial')]) + ' '
-        f'--target_modalities 1 '
-        f'--partition_cols slice_ID '
+        # f'--target_modalities 1 --spatial 1 '
+        # f'--partition_cols development '
+        # Particular stage Flysta
+        # f' '.join([f'--merge_files ' + ' ' .join([f's3://{bucket_name}/Flysta3D/{p}_{m}.h5ad' for p in ('L3_b',)]) for m in ('expression', 'spatial')]) + ' '
+        # f'--target_modalities 1 --spatial 1 '
+        # f'--partition_cols development '
         # Tahoe-100M
-        # '--merge_files ' + ' '.join('[f's3://{bucket_name}/Tahoe/plate{i}_filt_Vevo_Tahoe100M_WServicesFrom_ParseGigalab.h5ad' for i in range(1, 15)]) + ' '
+        # f'--merge_files ' + ' '.join([f's3://{bucket_name}/Tahoe/plate{i}_filt_Vevo_Tahoe100M_WServicesFrom_ParseGigalab.h5ad' for i in range(1, 15)]) + ' '
         # f'--partition_cols sample '
         # scMultiSim
         # f's3://{bucket_name}/scMultiSim/expression.h5ad s3://{bucket_name}/scMultiSim/peaks.h5ad '
+        # MERFISH Bench
+        # f's3://{bucket_name}/MERFISH_Bench/expression.h5ad s3://{bucket_name}/MERFISH_Bench/spatial.h5ad '
+        # f'--target_modalities 1 --spatial 1 '
         # TemporalBrain
         # f's3://{bucket_name}/TemporalBrain/expression.h5ad s3://{bucket_name}/TemporalBrain/peaks.h5ad '
         # f'--partition_cols "Donor ID" '
+        # Virtual Cell Challenge
+        # f's3://{bucket_name}/VirtualCell/vcc_flt_data.h5ad '
+        # f'--partition_cols target_gene '
+        # dyngen
+        # f's3://{bucket_name}/dyngen/logcounts.h5ad s3://{bucket_name}/dyngen/counts_protein.h5ad '
 
         f'--backed '
         # f'--dim 2 '
         # f'--dim 8 '
-        f'--dim 32 '
+        f'--dim 8 '
+        # f'--discrete '
 
         # Sample split
-        # f'--train_split .8 '
+        f'--train_split .8 '
         # Partition split
         # f'--train_split .6 '
         # f'--train_partitions '
         # Single slice
-        f'--train_split .0001 '
-        f'--train_partitions '
+        # f'--train_split .0001 '
+        # f'--train_partitions '
 
         f'--num_gpus 2 --num_learners 2 --num_runners 2 '
         f'--update_timesteps 1_000_000 '
-        f'--max_timesteps 200_000_000 '
+        f'--max_timesteps 800_000_000 '
         # f'--update_timesteps 100_000 '
         # f'--max_timesteps 100_000_000 '
         f'--dont_sync_across_nodes '
         f'--logfile s3://{bucket_name}/logs/{experiment_name}.log '
         f'--flush_iterations 1 '
-        # f'--checkpoint s3://nkalafut-celltrip/checkpoints/flysta3d-250616-0200.weights '
-        f'--checkpoint_iterations 25 '
+        # f'--checkpoint s3://nkalafut-celltrip/checkpoints/VCC-250821-1-0100.weights '
+        f'--checkpoint_iterations 50 '
         f'--checkpoint_dir s3://{bucket_name}/checkpoints '
         f'--checkpoint_name {experiment_name}')
     config = parser.parse_args(shlex.split(command))
@@ -156,18 +162,24 @@ def train(config):
         'mask_partitions': config.train_partitions}  # {'num_nodes': 20, 'pca_dim': 128}
     environment_kwargs = {
         'input_modalities': config.input_modalities,
-        'target_modalities': config.target_modalities, 'dim': config.dim}
-        # 'reward_pinning': 0, 'penalty_velocity': 1}
+        'target_modalities': config.target_modalities, 'dim': config.dim,
+        'discrete': config.discrete}  # , 'spherical': config.discrete
+    policy_kwargs = {'pinning_spatial': config.spatial}
+    memory_kwargs = {'device': 'cuda:0'}
     initializers = celltrip.train.get_initializers(
         input_files=config.input_files, merge_files=config.merge_files,
-        backed=config.backed, dataloader_kwargs=dataloader_kwargs,
-        partition_cols=config.partition_cols,
-        memory_kwargs={'device': 'cuda:0'},  # Skips casting, cutting time significantly for relatively small batch sizes
-        environment_kwargs=environment_kwargs)
+        backed=config.backed, partition_cols=config.partition_cols,
+        dataloader_kwargs=dataloader_kwargs,
+        environment_kwargs=environment_kwargs,
+        policy_kwargs=policy_kwargs,
+        memory_kwargs=memory_kwargs)  # Skips casting, cutting time significantly for relatively small batch sizes
 
     # Stages
     stage_functions = [
-        # lambda w: w.env.set_rewards(reward_pinning=1),
+        # lambda w: w.env.set_delta(.1),
+        # lambda w: w.env.set_delta(.05),
+        # lambda w: w.env.set_delta(.01),
+        # lambda w: w.env.set_delta(.005),
     ]
 
     # Run function
@@ -182,56 +194,6 @@ def train(config):
         stage_functions=stage_functions, logfile=config.logfile)
 
 ray.get(train.remote(config))
-
-
-# %% [markdown]
-# # Trial Code
-
-# %%
-# import numpy as np
-# import sklearn.ensemble
-# import sklearn.neural_network
-# import sklearn.tree
-# import torch
-# import torch.nn as nn
-
-
-# %%
-# # Generate data
-# X = torch.rand((1_000, 16))
-# Y = torch.rand((1_000, 32))
-
-# # Generate model
-# m = nn.Sequential(nn.Linear(16, 128), nn.ReLU(), nn.Linear(128, 32))
-# opt = torch.optim.Adam(m.parameters(), lr=1e-3)
-
-# # ML (.9s)
-# for i in range(1000):
-#     # batch_idx = np.random.choice(X.shape[0], 64, replace=False)
-#     logits = m(X)
-#     loss = (Y - logits).square().mean()
-#     loss.backward()
-#     opt.step()
-#     # if (i+1) % 10 == 0: print(f'{i+1:>2d}: {loss.detach():.3f}')
-
-# # Lstsq (.0Xs)
-# degree = 3
-# X_app = torch.hstack([X.pow(deg+1) for deg in range(degree)] + [torch.ones((X.shape[0], 1))])
-# trans = torch.linalg.lstsq(X_app, Y).solution
-# loss = (torch.matmul(X_app, trans) - Y).square().mean()
-
-# # MLP (.1s)
-# m = sklearn.neural_network.MLPRegressor((128,))
-# m.fit(X, Y)
-# loss = (Y - m.predict(X)).square().mean()
-
-
-# %%
-# m = sklearn.tree.DecisionTreeRegressor(max_depth=4)
-# m.fit(X, Y)
-# logits = m.predict(X)
-# loss = (Y - logits).square().mean()
-# loss
 
 
 # %% [markdown]

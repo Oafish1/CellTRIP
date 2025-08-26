@@ -32,7 +32,7 @@ class AdvancedMemoryBuffer:
         cull_by_episode=False,
         max_staleness=None,
         # Split
-        split_args={},
+        split_kwargs={},
         device='cpu',
     ):
         # User parameters
@@ -52,7 +52,7 @@ class AdvancedMemoryBuffer:
         if max_staleness is None:
             self.max_staleness = torch.inf if replay_frac > 0 else 0
         else: self.max_staleness = max_staleness
-        self.split_args = split_args
+        self.split_kwargs = split_kwargs
         self.device = device
 
         # Storage variables
@@ -200,6 +200,7 @@ class AdvancedMemoryBuffer:
         pre_cast = True  # Cast to tensor once during concatenation stage and never again
         pad_nodes = True  # Pad node array to avoid indexing
         general_storage_keys = ('actions', 'action_logs', 'state_vals', 'advantages', 'propagated_rewards')
+        assert self.storage['advantages'][0] is not None, 'Please run `self.compute_advantages` before indexing'
     
         # Pre concatenate vars
         if 'concatenated_buffer' not in self.variable_storage:
@@ -230,12 +231,23 @@ class AdvancedMemoryBuffer:
             # Concatenate states
             if pre_append: states = [self._append_suffix(s, keys=k) for k, s in zip(self.storage['keys'], self.storage['states'])]
             else: states = self.storage['states']
-            s01 = _utility.general.padded_stack(states, method='zero')
-            s2 =  _utility.general.padded_stack(list(map(lambda x: np.eye(x.shape[0], dtype=bool), states)), method='true')
+            # Handling for modifiable vision states
+            does_split = len(_utility.processing.split_state(states[0], **self.split_kwargs)) > 1
+            if does_split:
+                split_states = [_utility.processing.split_state(state, **self.split_kwargs) for state in states]
+                s0 = _utility.general.padded_stack([s[0] for s in split_states], method='zero')
+                s1 = _utility.general.padded_stack([s[1] for s in split_states], method='zero')
+                s2 =  _utility.general.padded_stack([s[2] for s in split_states], method='true')
+            # Regular
+            else:
+                s0 = _utility.general.padded_stack(states, method='zero')
+                s2 =  _utility.general.padded_stack(list(map(lambda x: np.eye(x.shape[0], dtype=bool), states)), method='true')
             if pre_cast:
-                s01 = torch.from_numpy(s01).to(torch.get_default_dtype()).to(self.device)  # Cast to tensor early to avoid repeated casting cost
+                s0 = torch.from_numpy(s0).to(torch.get_default_dtype()).to(self.device)  # Cast to tensor early to avoid repeated casting cost
+                if does_split: s1 = torch.from_numpy(s1).to(torch.get_default_dtype()).to(self.device)  # Cast to tensor early to avoid repeated casting cost
+                else: s1 = s0
                 s2 = torch.from_numpy(s2).to(torch.bool).to(self.device)
-            states = [s01, s01, s2]
+            states = [s0, s1, s2]
             self.variable_storage['concatenated_buffer']['states'] = states
             self.out = None
 
@@ -291,8 +303,8 @@ class AdvancedMemoryBuffer:
             suffix_grouped_indices[grouped_sample_mask] = suffix_idx
             # states[0][..., -self.suffix_len:] = self.variable_storage['concatenated_buffer']['suffixes'][suffix_grouped_indices.flatten()].reshape((*suffix_grouped_indices.shape, -1))
             # states[1][..., -self.suffix_len:] = self.variable_storage['concatenated_buffer']['suffixes'][self.variable_storage['concatenated_buffer']['suffix_indices'][unique_list_nums]]
-            s0_suffix = self.variable_storage['concatenated_buffer']['suffixes'][suffix_grouped_indices.flatten()].reshape((*suffix_grouped_indices.shape, -1))
-            s1_suffix = self.variable_storage['concatenated_buffer']['suffixes'][self.variable_storage['concatenated_buffer']['suffix_indices'][unique_list_nums]]
+            # s0_suffix = self.variable_storage['concatenated_buffer']['suffixes'][suffix_grouped_indices.flatten()].reshape((*suffix_grouped_indices.shape, -1))
+            # s1_suffix = self.variable_storage['concatenated_buffer']['suffixes'][self.variable_storage['concatenated_buffer']['suffix_indices'][unique_list_nums]]
             # states[0] = np.concatenate((states[0], s0_suffix), axis=-1)
             # states[1] = np.concatenate((states[1], s1_suffix), axis=-1)
         # Mask ragged fillers, uses -1 as indicator
@@ -307,27 +319,48 @@ class AdvancedMemoryBuffer:
         if pre_cast: ret['states'] = states
         else:
             ret['states'] = [
-                torch.from_numpy(states[0]).to(torch.get_default_dtype()).to(self.device),
-                torch.from_numpy(states[1]).to(torch.get_default_dtype()).to(self.device),
-                torch.from_numpy(states[2]).to(torch.bool).to(self.device)]
+                torch.from_numpy(states[0]).to(torch.get_default_dtype()).to(self.device),  # Source states (All timesteps x Nodes x Features)
+                torch.from_numpy(states[1]).to(torch.get_default_dtype()).to(self.device),  # Visible states (All timesteps x Visible nodes x Features)
+                torch.from_numpy(states[2]).to(torch.bool).to(self.device)]  # Attention mask (All timesteps x Nodes x Visible nodes)
         return overall_indices, ret  # indices, data
     
     def get_terminal_pairs(self):
+        # Get eligible states
         terminal_state_idx = np.argwhere(self.storage['is_naturals']).flatten()
         if len(terminal_state_idx) == 0: return None, None
         keys, states = [], []
         for i in terminal_state_idx:
             keys.append(self.storage['keys'][i])
-            states.append(self.storage['terminal_states'][i])
-        states = np.concatenate(states, axis=0)
-        target_modalities = np.concatenate([
+            states.append(self.storage['states'][i])  # 'terminal_states' would be more correct, but 'states' used for more generality because it doesn't matter that much
+        
+        # Format state returns
+        does_split = len(_utility.processing.split_state(states[0], **self.split_kwargs)) > 1
+        # Splittable
+        if does_split:
+            split_states = [_utility.processing.split_state(state, **self.split_kwargs) for state in states]
+            s0 = _utility.general.padded_stack([s[0] for s in split_states], method='zero')
+            s1 = _utility.general.padded_stack([s[1] for s in split_states], method='zero')
+            s2 = _utility.general.padded_stack([s[2] for s in split_states], method='true')
+            s0 = torch.from_numpy(s0).to(torch.get_default_dtype()).to(self.device)
+            s1 = torch.from_numpy(s1).to(torch.get_default_dtype()).to(self.device)
+            s2 = torch.from_numpy(s2).to(torch.bool).to(self.device)
+            states = [s0, s1, s2]
+        # Regular
+        else:
+            s01 = _utility.general.padded_stack(states, method='zero')
+            s2 =  _utility.general.padded_stack(list(map(lambda x: np.eye(x.shape[0], dtype=bool), states)), method='true')
+            s01 = torch.from_numpy(s01).to(torch.get_default_dtype()).to(self.device)
+            s2 = torch.from_numpy(s2).to(torch.bool).to(self.device)
+            states = [s01, s01, s2]
+
+        # Format data returns
+        target_modalities = _utility.general.padded_stack([
             self._append_suffix(
                 keys=k,
                 suffix_key='target_suffixes',
                 suffix_matrix_key='target_suffix_matrices')
-            for k in keys], axis=0)
-        states = torch.from_numpy(states).to(self.device)
-        target_modalities = torch.from_numpy(target_modalities).to(self.device)
+            for k in keys], method='zero')
+        target_modalities = torch.from_numpy(target_modalities).to(torch.get_default_dtype()).to(self.device)
         
         return states, target_modalities
 
@@ -460,7 +493,7 @@ class AdvancedMemoryBuffer:
                                 self.storage[k][list_num],
                                 keys=self.storage['keys'][list_num]),
                             idx=self_idx,
-                            **self.split_args)
+                            **self.split_kwargs)
                     
                 # Single value case
                 elif k in ('staleness',):
@@ -624,7 +657,7 @@ class AdvancedMemoryBuffer:
                 for i, (keys, states) in enumerate(zip(self.storage['keys'], self.storage[k1])):
                     if states is None: continue
                     state_split = _utility.processing.split_state(
-                        self._append_suffix(states, keys=keys), **self.split_args)
+                        self._append_suffix(states, keys=keys), **self.split_kwargs)
                     state_split = [t.to(policy.device) for t in state_split]
                     self.storage[k2][i] = policy.critic.evaluate_state(state_split).cpu().detach()
                     self.storage['advantages'][i] = None

@@ -714,7 +714,8 @@ def split_state(
     if not _utility.general.is_list_like(idx): idx = [idx]
     self_idx = idx
     del idx
-    device = state.device
+    is_numpy = isinstance(state, np.ndarray)
+    device = state.device if not is_numpy else 'cpu'
 
     # Enforce reproducibility
     if reproducible_strategy is not None: generator = torch.Generator(device=device)
@@ -726,13 +727,16 @@ def split_state(
     # Hashing method
     # NOTE: Tensors are hashed by object, so would be unreliable to directly hash tensor
     elif reproducible_strategy == 'hash':
-        generator.manual_seed(hash(str(state.detach().numpy())))
+        if not is_numpy: generator.manual_seed(hash(str(state.detach().numpy())))
+        else: generator.manual_seed(hash(str(state)))
     # First number
     elif reproducible_strategy == 'first':
-        generator.manual_seed((2**16*state.flatten()[0]).to(torch.long).item())
+        if not is_numpy: generator.manual_seed((2**16*state.flatten()[0]).to(torch.long).item())
+        else: generator.manual_seed((2**16*state.flatten()[0]).astype(int).item())
     # Mean value
     elif reproducible_strategy == 'mean':
-        generator.manual_seed((2**16*state.mean()).to(torch.long).item())
+        if not is_numpy: generator.manual_seed((2**16*state.mean()).to(torch.long).item())
+        else: generator.manual_seed((2**16*state.mean()).astype(int).item())
     # Set seed (not recommended)
     elif type(reproducible_strategy) != str:
         generator.manual_seed(reproducible_strategy)
@@ -898,3 +902,16 @@ def sample_and_cast(
     ret = smaller_data,
     if clip_sequential: ret += smaller_size,
     return _utility.general.clean_return(ret)
+
+
+def solve_rot_trans(A, B):
+    # Translational and rotational invariance (Transform A to B)
+    # https://nghiaho.com/?page_id=671
+    A_centroid = A.mean(keepdim=True, dim=-2)
+    B_centroid = B.mean(keepdim=True, dim=-2)
+    H = torch.matmul((A - A_centroid).T, (B - B_centroid))
+    U, S, V = torch.svd(H)
+    R = torch.matmul(U, V.T)
+    # Special reflection case not handled
+    t = B_centroid - torch.matmul(A_centroid, R)
+    return R, t  # torch.matmul(A, R) + t

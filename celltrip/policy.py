@@ -827,8 +827,8 @@ class PopArtStandardization(ArtStandardization):
                 # Get previous
                 mu = prev_mean
                 sigma = prev_std
-                mu_prime = self.mean
-                sigma_prime = self.std
+                mu_prime = self.mean if self.use_mean else mu
+                sigma_prime = self.std if self.use_std else sigma
                 if self.splits is not None:
                     mu, sigma, mu_prime, sigma_prime = mu[..., split], sigma[..., split], mu_prime[..., split], sigma_prime[..., split]
 
@@ -920,9 +920,10 @@ class PinningNN(nn.Module):
         epoch_size=1024,
         batch_size=64,
         # Standardization
-        # standardization_mute=.95,
         standardization_beta=3e-4,
         extra_first_layers=[],
+        # Architecture
+        spatial=False,
         # Matching
         activation=nn.PReLU,
         betas=(.99, .99),
@@ -943,60 +944,18 @@ class PinningNN(nn.Module):
         self.epochs = epochs
         self.epoch_size = epoch_size
         self.batch_size = batch_size
-        # self.standardization_mute = standardization_mute
         self.extra_first_layers = extra_first_layers
+        self.spatial = spatial
 
         # Create MLP
         self.mlp = nn.Sequential(
-            # 5 epochs is fine for this one
-            # nn.Linear(input_dim, hidden_dim), activation(), nn.Linear(hidden_dim, output_dim)
-
-            # Linear convex - sacrifices a bit of latent efficiency in integration for convex
-            # nn.Linear(input_dim, output_dim),
-
-            # Layer norm
             nn.Linear(input_dim, hidden_dim),
             activation(), nn.Dropout(dropout),
             nn.Linear(hidden_dim, output_dim),
-
-            # Batch norm
-            # nn.Linear(input_dim, hidden_dim),
-            # nn.BatchNorm1d(hidden_dim), activation(), nn.Dropout(dropout),
-            # nn.Linear(hidden_dim, output_dim),
-
-            # Complicated batch norm
-            # nn.Linear(input_dim, 2*hidden_dim),
-            # nn.BatchNorm1d(2*hidden_dim), activation(), nn.Dropout(dropout),
-            # nn.Linear(2*hidden_dim, 2*hidden_dim),
-            # nn.BatchNorm1d(2*hidden_dim), activation(), nn.Dropout(dropout),
-            # nn.Linear(2*hidden_dim, output_dim),
-            
-            # Potential
-            # activation(),
-            # nn.MultiheadAttention(hidden_dim, batch_first=True)  # Maybe add MHA for flysta?
-
-            # Somewhat complicated
-            # nn.Linear(input_dim, 2*hidden_dim), activation(),
-            # nn.Linear(2*hidden_dim, 2*hidden_dim), activation(),
-            # nn.Linear(2*hidden_dim, output_dim),
-
-            # AE
-            # nn.Linear(input_dim, 2*hidden_dim), activation(),
-            # nn.Linear(2*hidden_dim, hidden_dim),
-            # nn.Linear(hidden_dim, 2*hidden_dim), activation(),
-            # nn.Linear(2*hidden_dim, output_dim),
         )
         self.first_layer = self.mlp[0]
         self.last_layer = self.mlp[-1]
-
-        # Create VAE
-        # self.encoder = nn.Sequential(
-        #     nn.Linear(input_dim, 2*hidden_dim), activation(),
-        #     nn.Linear(2*hidden_dim, 2*hidden_dim))
-        # self.decoder = nn.Sequential(
-        #     nn.Linear(hidden_dim, 2*hidden_dim), activation(),
-        #     nn.Linear(2*hidden_dim, output_dim))
-        # self.first_layer = self.encoder[0]
+        self.forward = self.forward_mlp
         
         # Optimizer and Scheduler
         self.optimizer = torch.optim.Adam(self.parameters(), betas=betas, lr=lr, weight_decay=weight_decay, eps=1e-5)
@@ -1007,7 +966,7 @@ class PinningNN(nn.Module):
         # self.input_standardization = PopArtStandardization(
         #     [self.first_layer] + self.extra_first_layers,
         #     segments=[[None] + [slice(self.input_dim) for _ in range(len(self.extra_first_layers))]],
-        #     beta=standardization_beta, pre=True)
+        #     beta=standardization_beta, pre=True, use_mean=False)
         self.input_standardization = PopArtStandardization(
             [self.first_layer], beta=standardization_beta, pre=True)
         # self.input_standardization = PopArtStandardization(
@@ -1018,12 +977,25 @@ class PinningNN(nn.Module):
         #     dim=input_dim, beta=standardization_beta, pre=True)
         self.output_standardization = PopArtStandardization([self.last_layer], beta=standardization_beta)
 
-    def forward(self, X, input_standardization=True, output_standardization=False):
-        # self.first_layer = self.mlp[0]  # For compatibility
+    def forward_mlp(self, X, Y=None, input_standardization=True, output_standardization=False):
+        # Input standardization
         if input_standardization: X = self.input_standardization.apply(X)
+
+        # Calculation
         logit = self.mlp(X)
+
+        # Output standardization
         if not output_standardization: logit = self.output_standardization.remove(logit)
+
+        # Transform if needed
+        if self.spatial and Y is not None:  # Might want to cache at some point
+            R, t = _utility.processing.solve_rot_trans(logit, Y)
+            logit = torch.matmul(logit, R) + t
+
         return logit
+    
+    # def forward_att(self, q, k, v, input_standardization=True, output_standardization=False):
+    #     pass
         
     # def forward(self, X, return_logits=False):
     #     embedded, mu, logvar = self.encode(X, return_logits=True)
@@ -1044,7 +1016,7 @@ class PinningNN(nn.Module):
     # def decode(self, X):
     #     return self.decoder(X)
     
-    def update(self, X, Y, world_size=None):
+    def update(self, states, target_modality, world_size=None):
         # Parameters
         if world_size is None: world_size = get_world_size('learners')
 
@@ -1056,14 +1028,14 @@ class PinningNN(nn.Module):
         batch_size = np.ceil(self.batch_size / world_size).astype(int)
         batches = max(1, epoch_size // batch_size)
 
-        if X is not None:
-            # X+Y dims: Trial x Cells x Features
+        if states is not None:
             # Prepare data
-            # X_view = X.view((-1, X.shape[-1]))
-            # Y_view = Y.view((-1, Y.shape[-1]))
-            num_samples = X.shape[0]
-            # X_centered = X - X.mean(keepdim=True, dim=0)  # Enforce mean 0
-            # X_standardized = X_centered / X_centered.std(keepdim=True, dim=0)  # Enforce std 1
+            valid_mask = states[2].sum(dim=-1) <= 1
+            idx_to_sample = torch.argwhere(valid_mask)[:, 0]
+            num_samples = valid_mask.sum().cpu().item()
+
+            # Spatial data cache
+            transform_cache = {}
 
             # Train
             for epoch in range(self.epochs):
@@ -1074,27 +1046,49 @@ class PinningNN(nn.Module):
                 for batch in range(batches):
                     # Subsample
                     batch_idx = epoch_idx[batch*batch_size:(batch+1)*batch_size]
-                    X_batch = X[batch_idx]
-                    Y_batch = Y[batch_idx]
+                    X_batch = states[0][states[2].sum(dim=-1) <= 1][batch_idx]
+                    Y_batch = target_modality[states[2].sum(dim=-1) <= 1][batch_idx]
 
                     # Compute normal prediction
-                    # X_standardized = self.input_standardization.apply(X_batch)
-                    # Y_standardized = self.output_standardization.apply(Y_batch)
-                    # Y_pred = self(X_standardized)
                     Y_pred = self(X_batch, input_standardization=True, output_standardization=False)
-                    loss = (Y_batch - Y_pred).square().mean()  # Reconstruction, also doesn't care about important features when standardized
+
+                    # Transform if needed
+                    if self.spatial:
+                        batch_sample_idx = idx_to_sample[batch_idx]
+                        for sidx in torch.unique(batch_sample_idx):
+                            # Calculate unknown transforms using all available data
+                            if sidx not in transform_cache:
+                                with torch.no_grad():  # Try without this too, but need to move cache inwards (CAUSES ERROR WITHOUT)
+                                    X_sample = self(states[0][sidx][valid_mask[sidx]], input_standardization=True, output_standardization=False)
+                                Y_sample = target_modality[sidx][valid_mask[sidx]]
+                                transform_cache[sidx.cpu().item()] = _utility.processing.solve_rot_trans(X_sample, Y_sample)
+
+                        # Stack transforms
+                        # print('a')
+                        # try:
+                        #     transform_cache[batch_sample_idx[0].cpu().item()][0]
+                        # except Exception as e:
+                        #     print(f'An unexpected error occurred: {e}')
+                        # print(transform_cache)
+                        # print(batch_sample_idx[0])
+                        # assert False
+                        # print('b')
+                        R, t = [torch.stack([transform_cache[sidx.cpu().item()][i] for sidx in batch_sample_idx], dim=0) for i in range(2)]  # Problem line
+                        Y_pred = Y_pred.unsqueeze(dim=-2)
+                        Y_pred = torch.matmul(Y_pred, R) + t
+                        Y_pred = Y_pred.squeeze(dim=-2)
+
+                    # Losses
+                    # KLD_loss = -.5 * (1 + torch.log(X_batch.var(dim=0)) - X_batch.mean(dim=0).square() - X_batch.var(dim=0)).mean(dim=-1)
+                    MSE_loss = (Y_batch - Y_pred).square().mean(dim=-1)  # Reconstruction, also doesn't care about important features when standardized
+                    # loss = (1/(1+KLD_loss)) * MSE_loss.mean(dim=0)
+                    loss = MSE_loss.mean(dim=0)
 
                     # Compute VAE prediction
                     # imputed, embedded, mu, logvar = self(X_batch, return_logits=True)
                     # reconstruction_loss = (Y_batch - imputed).square().mean(dim=-1)
                     # kld_loss = -.5 * (1 + logvar - mu.square() - logvar.exp()).mean(dim=-1)
-                    # loss = (reconstruction_loss + 0 * kld_loss).mean(dim=0)
-
-                    # CLI
-                    # print(reconstruction_loss.mean())
-                    # print(kld_loss.mean())
-                    # print(loss.mean())
-                    # print()
+                    # loss = (reconstruction_loss + kld_loss).mean(dim=0)
 
                     # Compute loss and step
                     epoch_loss += loss.detach() / batches
@@ -1109,52 +1103,29 @@ class PinningNN(nn.Module):
 
         # Fallback for no samples
         else:
-            # Initialize relevant weights, wish there was a better solution (grad sync)
-            # loss = self(torch.zeros((1, self.input_dim), device=self.first_layer.weight.device)).mean()
-            # loss.backward()
             # Main synchronizations
             for _ in range(self.epochs*batches):
-                # self.optimizer.zero_grad(set_to_none=False)  # Prevents skipping grads
                 zero_parameters(self.parameters())  # Zero all parameters, very sketchy (non-grad sync)
                 synchronize(self, 'learners', grad=False, override_world_size=world_size)
-                # self.optimizer.step()
-            # self.optimizer.zero_grad()
-
-        # Apply PIP to standardize latent space
-        # if X is not None: X_mean, X_var = X.mean(dim=0), X.var(dim=0)
-        # else: X_mean, X_var = [torch.zeros(self.input_dim, device=self.first_layer.weight.device) for _ in range(2)]
-        # synchronize(self, 'learners', sync_list=[X_mean, X_var], override_world_size=world_size)
-        # X_std = X_var.sqrt()
-        # mu_prime = self.standardization_mute*X_mean  # Move toward mean of zero
-        # sigma_prime = self.standardization_mute*X_std + (1-self.standardization_mute)  # Move toward STD of 1
-        # pip_layer(self.first_layer, (X_mean, X_std), (mu_prime, sigma_prime))
-        # for layer in self.extra_first_layers:
-        #     pip_layer(layer, (X_mean, X_std), (mu_prime, sigma_prime), segment=slice(X_mean.shape[0]))
-        # TODO: Dragging for PopArt - actually, if not standardized in forward, this works
-        # TODO: More flexible, allow for STDs not actually one for different features
-
-        # CLI
-        if X is not None:
-            print(self.input_standardization.mean)
-            print(self.input_standardization.std)
-            print(self.input_standardization.apply(X_batch).mean(dim=0).abs().mean())
-            print(self.input_standardization.apply(X_batch).std(dim=0).mean())
-            print(X_batch.mean(dim=0))
-            print(X_batch.std(dim=0))
-            print(X_batch.mean(dim=0).abs().mean())
-            print(X_batch.std(dim=0).mean())
-            print((self(X, input_standardization=False) - Y).square().mean())
-            print()
 
         # Iterate scheduler and return
         self.scheduler.step()
-        return epoch_loss.cpu().item() if X is not None else torch.nan
+        return epoch_loss.cpu().item() if states is not None else torch.nan
 
 
 ### Training classes
-def create_agent_from_env(env, pinning_modal_dims='auto', **kwargs):
+def create_agent_from_env(env, pinning_modal_dims='auto', pinning_spatial=None, **kwargs):
+    # Defaults
+    if pinning_spatial is None: pinning_spatial = []
     if pinning_modal_dims == 'auto':
+        # pinning_modal_dims
         pinning_modal_dims = np.array([m.shape[1] for m in env.get_modalities()])[env.target_modalities]
+        # pinning_spatial
+        new_pinning_spatial = [i for i, tm in enumerate(env.target_modalities) if tm in pinning_spatial]
+        assert len(pinning_spatial) == len(new_pinning_spatial), f'Some modalities not found as targets in `pinning_spatial`'
+        pinning_spatial = new_pinning_spatial
+
+    # Return PPO instance
     return PPO(
         2*env.dim,
         # np.array(env.dataloader.modal_dims)[env.input_modalities],
@@ -1162,6 +1133,7 @@ def create_agent_from_env(env, pinning_modal_dims='auto', **kwargs):
         env.dim,
         pinning_dim=env.dim,
         pinning_modal_dims=pinning_modal_dims,
+        pinning_spatial=pinning_spatial,
         discrete=env.discrete,
         **kwargs)
 
@@ -1175,6 +1147,7 @@ class PPO(nn.Module):
             # Pinning
             pinning_dim=None,
             pinning_modal_dims=None,  # If not passed, doesn't perform pinning
+            pinning_spatial=[],
             # Model Parameters
             # model=EntitySelfAttention, # sample_strategy 'random-proximity'
             model=EntitySelfAttentionLite,  # sample_strategy None
@@ -1228,6 +1201,7 @@ class PPO(nn.Module):
         # Pinning
         self.pinning_dim = pinning_dim
         self.pinning_modal_dims = pinning_modal_dims
+        self.pinning_spatial = pinning_spatial
 
         # Weights
         self.critic_weight = critic_weight
@@ -1246,12 +1220,11 @@ class PPO(nn.Module):
         self.forward_batch_size = forward_batch_size
         # NOTE: Assumes output corresponds to positional dims if not explicitly provided
         if sample_dim is None: sample_dim = output_dim
-        self.split_args = {
+        self.split_kwargs = {
             'max_nodes': vision_size,
             'sample_strategy': sample_strategy,
             'reproducible_strategy': reproducible_strategy,
-            'sample_dim': sample_dim,
-        }
+            'sample_dim': sample_dim}
         self.update_iterations = update_iterations
         self.sync_iterations = sync_iterations
         self.pool_size = pool_size
@@ -1284,11 +1257,11 @@ class PPO(nn.Module):
             self.pinning_dim = int(positional_dim/2) if self.pinning_dim is None else self.pinning_dim
             self.pinning = nn.ModuleList([
                 PinningNN(
-                    self.pinning_dim, pinning_modal_dim,
+                    self.pinning_dim, pinning_modal_dim, spatial=(i in self.pinning_spatial),
                     betas=betas, lr=lr, weight_decay=weight_decay, lr_iters=lr_iters, lr_gamma=lr_gamma,
-                    extra_first_layers=self.actor_critic.input_feat_layers,
+                    extra_first_layers=self.actor_critic.input_pos_layers,
                     standardization_beta=standardization_beta, **kwargs)
-                for pinning_modal_dim in self.pinning_modal_dims])
+                for i, pinning_modal_dim in enumerate(self.pinning_modal_dims)])
         else: self.pinning = None
 
         # Initialize
@@ -1314,6 +1287,10 @@ class PPO(nn.Module):
 
     def get_policy_iteration(self):
         return int(self.policy_iteration.item())
+    
+    def set_vision_size(self, vision_size):
+        # NOTE: Does not currently update memory object
+        self.split_kwargs['max_nodes'] = vision_size
     
     def copy_policy(self, _invert=False):
         "Copy new policy weights onto old policy"
@@ -1376,7 +1353,7 @@ class PPO(nn.Module):
             state = _utility.processing.split_state(
                 self.input_standardization.apply(compressed_state),
                 idx=self_idx,
-                **self.split_args)
+                **self.split_kwargs)
             feature_embeds_arg_use = [(sfe[self_idx], nfe) for sfe, nfe in feature_embeds_arg] if feature_embeds_arg is not None else None
             if not terminal:
                 action_sub, action_log_sub, state_val_sub, feature_embeds_sub = self.actor_critic(
@@ -1668,26 +1645,28 @@ class PPO(nn.Module):
         self.scheduler.step()
 
         # Train pinning
-        X, Y = memory.get_terminal_pairs()
+        states, target_modalities = memory.get_terminal_pairs()
         has_memories = torch.tensor(0., device=self.policy_iteration.device)
-        if X is not None: has_memories += 1
+        if states is not None:
+            states[0], states[1] = states[0][..., :self.pinning_dim], states[1][..., :self.pinning_dim]
+            has_memories += 1
         synchronize(self, 'learners', sync_list=[has_memories], override_world_size=1)
         has_memories = int(has_memories.cpu().item())
         running_feat = 0; pinning_losses = {}
         for i, (pinning, pinning_modal_dim) in enumerate(zip(self.pinning, self.pinning_modal_dims)):
-            if X is None: pinning.update(None, None, world_size=has_memories)
+            if states is None: pinning.update(None, None, world_size=has_memories)
             else:
-                X_sub = X[..., :self.pinning_dim].to(self.policy_iteration.device)
-                Y_sub = Y[..., running_feat:running_feat+pinning_modal_dim].to(self.policy_iteration.device)
-                pinning_losses[f'Pinning Mean {i}'] = X_sub.mean(dim=0).mean().cpu().item()
-                pinning_losses[f'Pinning Abs Mean {i}'] = X_sub.mean(dim=0).abs().mean().cpu().item()
-                pinning_losses[f'Pinning STD {i}'] = X_sub.std(dim=0).mean().cpu().item()
+                X_sub = states[0][states[2].sum(dim=2) <= 1].to(self.policy_iteration.device)
+                Y_sub = target_modalities[..., running_feat:running_feat+pinning_modal_dim].to(self.policy_iteration.device)
+                pinning_losses[f'Pinning Mean'] = X_sub.mean(dim=0).mean().cpu().item()  # Calculated multiple times, but no big performance hit
+                pinning_losses[f'Pinning Abs Mean'] = X_sub.mean(dim=0).abs().mean().cpu().item()
+                pinning_losses[f'Pinning STD'] = X_sub.std(dim=0).mean().cpu().item()
                 pinning_losses[f'Pinning Loss {i}'] = pinning.update(
-                    X_sub, Y_sub, world_size=has_memories)
+                    states, Y_sub, world_size=has_memories)
             running_feat += pinning_modal_dim
-        if Y is not None:
-            assert running_feat == Y.shape[1], (
-                f'`pinning_modal_dims` sum ({running_feat}) does not match target modality combined length ({Y.shape[1]})')
+        if target_modalities is not None:
+            assert running_feat == target_modalities.shape[-1], (
+                f'`pinning_modal_dims` sum ({running_feat}) does not match target modality combined length ({target_modalities.shape[1]})')
 
         # Update records
         self.policy_iteration += 1

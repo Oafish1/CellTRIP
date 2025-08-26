@@ -1,3 +1,37 @@
+### 1.0.0+2025.8.25
+- Add `tutorial` and reorganize analysis notebooks
+- Bugfixes for `PinningNN` spatial calculations
+- Decent models for `dyngen`, `Flysta3D`, `MERFISH`, and `VCC`
+- Fix `fsspec` verbosity
+- Functioning spatial implementations and tests
+
+### 1.0.0+2025.8.24
+- Add `utility.processing.solve_rot_trans` to transform into spatial measurements
+- Add spatial compatibility to `PPO`, `PinningNN`, and training script with corresponding arguments and caching
+- Annotations for steps in `runtime` loss plot
+- Correct model ingress layers being input to `PinningNN`
+- Fix casting for `get_terminal_pairs` function
+- Ignore `Manim` media folders
+- Remove target line from KL plot in `runtime` notebook
+- Revert environment timestep ranges in favor of static intermediate evaluation timepoint
+- Segmented `target_modalities` output from `get_terminal_pairs`
+- Use symlog for pinning chart in `runtime`
+
+### 1.0.0+2025.8.23
+- Add MHA-compatible return to `get_terminal_pairs`
+- Add numpy capability to `split_state` function
+- Add vision compatibility to `AdvancedMemoryBuffer`
+- Additional sanity checks in `EnvironmentBase`
+- Aggregate some pinning statistics across modalities
+- Experimental timestep training ranges for `PinningNN`
+- Tuning of model weights and re-addition of dragging to combat forced late convergence
+
+### 1.0.0+2025.8.22
+- Add `eval_time` parameter to `EnvironmentBase` to control training data for `PinningNN`, previously just terminal state (!!)
+- Add `Manim` to animation toolkit
+- Train mode performance is caused by shorter env and nodes still moving
+- Tuning
+
 ### 1.0.0+2025.8.21
 - Figure changes
 - Readd deterministic eval to policy
@@ -9,7 +43,7 @@
 - Remove normalization from ingress and output layers (!!)
 - Renaming and termination capability in `AdvancedMemoryBuffer.compute_advantages`
 - Revise Flysta3D visualizations
-- Significant tuning, readd relative weights and 1/(1+MSE) strategy for pinning reward (!!)
+- Significant tuning, readd relative weights and `1/(1+MSE)` strategy for pinning reward (!!)
 
 ### 1.0.0+2025.8.19
 - Add and preprocess `dyngen` dataset

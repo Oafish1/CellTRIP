@@ -46,7 +46,7 @@ def simulate_until_completion(
             if cache_feature_embeds: actions, feature_embeds = actions
 
             # Step environment and get reward
-            rewards, finished, itemized_rewards = env.step(actions, return_itemized_rewards=True, pinning_func_list=policy.pinning)
+            rewards, steady, finished, itemized_rewards = env.step(actions, return_itemized_rewards=True, pinning_func_list=policy.pinning)
 
             # Store states
             if store_states: state_storage.append(env.get_state())
@@ -65,7 +65,7 @@ def simulate_until_completion(
             if memory is not None: memory.record_buffer(
                 rewards=rewards, target_modalities=target_modalities,
                 is_truncateds=finished or not continue_condition,
-                is_naturals=finished)
+                is_naturals=steady)
 
             # Dummy return for testing
             # if dummy:
@@ -429,7 +429,7 @@ def get_initializers(
     policy_init = lambda env: _policy.create_agent_from_env(env, **policy_kwargs)
 
     memory_init = lambda policy: _memory.AdvancedMemoryBuffer(
-        sum(policy.modal_dims), split_args=policy.split_args, **memory_kwargs)
+        sum(policy.modal_dims), split_kwargs=policy.split_kwargs, **memory_kwargs)
     
     return (env_init, policy_init, memory_init)
 
