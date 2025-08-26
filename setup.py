@@ -107,6 +107,7 @@ setup(
             # 'fastplotlib[notebook,imgui]',  # imgui needed `sudo apt install xorg-dev cmake`
             'h5py',
             'ipympl',
+            # 'manim',  # sudo apt install build-essential python3-dev libcairo2-dev libpango1.0-dev
             'matplotlib',
             'nbconvert',
             'pandas',

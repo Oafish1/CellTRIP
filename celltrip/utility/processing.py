@@ -31,9 +31,9 @@ class Preprocessing:
         # Standardize
         standardize=True,
         # Filtering
-        top_variant=int(5e3),
+        top_variant=int(1e5),  # Top 100k by default
         # PCA
-        pca_dim=2**8,  # TODO: Add auto-handling for less PCA than samples
+        pca_dim=2**9,  # 512, TODO: Add auto-handling for less PCA than samples
         # Fitting
         seed=None,
         # Subsampling
@@ -112,6 +112,7 @@ class Preprocessing:
         self.is_sparse_transform = [scipy.sparse.issparse(m) for m in modalities]
         if isinstance(self.top_variant, int): self.top_variant = len(modalities) * [self.top_variant]
         if isinstance(self.pca_dim, int): self.pca_dim = len(modalities) * [self.pca_dim]
+        num_samples = [m.shape[0] for m in modalities]
         modal_feature_nums = [m.shape[1] for m in modalities]
 
         # Standardize
@@ -163,9 +164,15 @@ class Preprocessing:
             for i in range(len(modalities)):
                 if self.pca_dim[i] is not None and modal_feature_nums[i] <= self.pca_dim[i]:
                     warnings.warn(
-                        f'Modality {i} too small for PCA ({modal_feature_nums[i]} features), skipping',
+                        f'Modality {i} too small for PCA ({modal_feature_nums[i]} features), skipping.',
                         RuntimeWarning)
                     self.pca_dim[i] = None
+                elif self.pca_dim[i] and num_samples[i] <= self.pca_dim[i]:
+                    warnings.warn(
+                        f'Modality {i} too few samples for intended PCA features ({modal_feature_nums[i]}), '
+                        f'reducing to {num_samples[i]}.',
+                        RuntimeWarning)
+                    self.pca_dim[i] = num_samples[i]
             self.pca_class = [
                 None if dim is None else
                 sklearn.decomposition.PCA(
@@ -244,6 +251,8 @@ class Preprocessing:
         # PCA
         if self.pca_dim is not None:
             modalities = [p.transform(m) if p is not None else m for m, p in zip(modalities, self.pca_class[sm])]
+        # Scaling
+        # m1 * m1.shape[1] / np.sqrt(preprocessing.pca_class[0].explained_variance_).sum()
         
         # Return
         # NOTE: Returns features before PCA transformation, also always dense
@@ -351,7 +360,7 @@ class Preprocessing:
                 # selected_partition = _utility.general.rolled_index(
                 #     unique_partition_vals, np.random.choice(np.prod(list(map(len, unique_partition_vals)))))
                 if user_selected_partition: assert np.array([selected_partition == upv for upv in unique_partition_vals]).any(), f'Partition not found, "{selected_partition}".'
-                elif selected_partition is None: selected_partition = np.random.choice(unique_partition_vals)
+                else: selected_partition = np.random.choice(unique_partition_vals)
                 masks = [
                     np.prod([
                         adata_ob[col] == val
@@ -360,7 +369,6 @@ class Preprocessing:
                 modal_sizes = [mask.sum() for mask in masks]
                 if sum(modal_sizes) > 0: break
                 if user_selected_partition: raise RuntimeError(f'Partition "{selected_partition}" had no matching entries.')
-                selected_partition = None
 
             # Apply
             if modalities is not None:
@@ -399,6 +407,7 @@ class Preprocessing:
         if modalities is not None: ret += (modalities,)
         if adata_obs is not None: ret += (adata_obs,)
         if return_partition: ret += (selected_partition,)
+        # print(selected_partition)
         return _utility.general.clean_return(ret)
 
 
@@ -503,12 +512,12 @@ def read_adatas(*fnames, backed=False):
 
 def merge_adatas(*adatas, backed=False, join_vars='inner'):
     if not backed:
-        adatas = ad.concat(adatas)  # TODO: Test
+        adata = ad.concat(adatas)  # TODO: Test
     else:
-        adatas = [ad.experimental.AnnCollection(adatas, join_vars=join_vars)]
-        adatas[0].var = adatas[0].adatas[0].var
+        adata = ad.experimental.AnnCollection(adatas, join_vars=join_vars)
+        adata.var = adata.adatas[0].var
         
-    return adatas
+    return adata
 
 
 def test_adatas(*adatas, partition_cols=None):
@@ -690,8 +699,9 @@ def split_state(
     state,
     idx=None,
     sample_strategy='random-proximity',
+    lite=True,
     # Strategy kwargs
-    max_nodes=None,
+    max_nodes=torch.inf,
     reproducible_strategy='mean',
     sample_dim=None,  # Should be the dim of the env
     return_mask=False,
@@ -700,32 +710,12 @@ def split_state(
     # Skip if indicated 
 
     # Parameters
-    if idx is None: idx = np.arange(state.shape[0]).tolist()
+    if idx is None: idx = np.arange(state.shape[0])
     if not _utility.general.is_list_like(idx): idx = [idx]
     self_idx = idx
     del idx
-    device = state.device
-
-    # Batch input for Lite model
-    if sample_strategy is None:
-        # All processing case
-        if len(self_idx) == state.shape[0]:
-            # This optimization saves a lot of time
-            if (self_idx[:-1] < self_idx[1:]).all(): return state,
-            elif (np.unique(self_idx) == np.arange(state.shape[0])).all(): return state[self_idx],
-
-        # Subset case
-        self_entity = state[self_idx]
-        node_entities = state  # Could remove the self_idx in the case len == 1, but doesn't really matter
-        mask = torch.eye(state.shape[0], dtype=torch.bool, device=device)[self_idx]
-        return self_entity, node_entities, mask
-
-    # Get self features for each node
-    self_entity = state[self_idx]
-
-    # Get node features for each state
-    node_mask = torch.eye(state.shape[0], dtype=torch.bool, device=device)
-    node_mask = ~node_mask
+    is_numpy = isinstance(state, np.ndarray)
+    device = state.device if not is_numpy else 'cpu'
 
     # Enforce reproducibility
     if reproducible_strategy is not None: generator = torch.Generator(device=device)
@@ -737,18 +727,47 @@ def split_state(
     # Hashing method
     # NOTE: Tensors are hashed by object, so would be unreliable to directly hash tensor
     elif reproducible_strategy == 'hash':
-        generator.manual_seed(hash(str(state.detach().numpy())))
+        if not is_numpy: generator.manual_seed(hash(str(state.detach().numpy())))
+        else: generator.manual_seed(hash(str(state)))
     # First number
     elif reproducible_strategy == 'first':
-        generator.manual_seed((2**16*state.flatten()[0]).to(torch.long).item())
+        if not is_numpy: generator.manual_seed((2**16*state.flatten()[0]).to(torch.long).item())
+        else: generator.manual_seed((2**16*state.flatten()[0]).astype(int).item())
     # Mean value
     elif reproducible_strategy == 'mean':
-        generator.manual_seed((2**16*state.mean()).to(torch.long).item())
+        if not is_numpy: generator.manual_seed((2**16*state.mean()).to(torch.long).item())
+        else: generator.manual_seed((2**16*state.mean()).astype(int).item())
     # Set seed (not recommended)
     elif type(reproducible_strategy) != str:
         generator.manual_seed(reproducible_strategy)
     else:
         raise ValueError(f'Reproducible strategy \'{reproducible_strategy}\' not found.')
+
+    # Batch input for Lite model
+    if lite:
+        # All processing case
+        if max_nodes >= state.shape[0] and len(self_idx) == state.shape[0]:
+            # This optimization saves a lot of time
+            if (self_idx[:-1] < self_idx[1:]).all(): return state,
+            elif (np.unique(self_idx) == np.arange(state.shape[0])).all(): return state[self_idx],
+
+        # Subset case
+        self_entity = state[self_idx]
+        node_entities = state  # Could remove the self_idx in the case len == 1, but doesn't really matter
+        mask = torch.eye(state.shape[0], dtype=torch.bool, device=device)[self_idx]
+        # Random mask if needed
+        if max_nodes <= node_entities.shape[0]:
+            idx = torch.randperm(node_entities.shape[0], device=device, generator=generator)[:max_nodes]
+            node_entities = node_entities[idx]
+            mask = mask[:, idx]  # Technically has a slight chance to error at low `max_nodes` numbers
+        return self_entity, node_entities, mask
+
+    # Get self features for each node
+    self_entity = state[self_idx]
+
+    # Get node features for each state
+    node_mask = torch.eye(state.shape[0], dtype=torch.bool, device=device)
+    node_mask = ~node_mask
 
     # Enforce max nodes
     num_nodes = state.shape[0] - 1
@@ -883,3 +902,16 @@ def sample_and_cast(
     ret = smaller_data,
     if clip_sequential: ret += smaller_size,
     return _utility.general.clean_return(ret)
+
+
+def solve_rot_trans(A, B):
+    # Translational and rotational invariance (Transform A to B)
+    # https://nghiaho.com/?page_id=671
+    A_centroid = A.mean(keepdim=True, dim=-2)
+    B_centroid = B.mean(keepdim=True, dim=-2)
+    H = torch.matmul((A - A_centroid).T, (B - B_centroid))
+    U, S, V = torch.svd(H)
+    R = torch.matmul(U, V.T)
+    # Special reflection case not handled
+    t = B_centroid - torch.matmul(A_centroid, R)
+    return R, t  # torch.matmul(A, R) + t

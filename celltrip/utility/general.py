@@ -142,17 +142,29 @@ def overwrite_dict(original, modification, copy=True):
 
 
 def get_policy_state(policy):
-    return {
+    state_dicts = {
         'policy': policy.state_dict(),
         'optimizer': policy.optimizer.state_dict(),
-        'scheduler': policy.scheduler.state_dict(),
-    }
+        'scheduler': policy.scheduler.state_dict()}
+    if policy.pinning is not None:
+        for i in range(len(policy.pinning)):
+            state_dicts = {
+                **state_dicts,
+                f'pinning{i}_optimizer': policy.pinning[i].optimizer.state_dict(),
+                f'pinning{i}_scheduler': policy.pinning[i].scheduler.state_dict()}
+    return state_dicts
 
 
 def set_policy_state(policy, state_dicts):
     policy.load_state_dict(state_dicts['policy'])
     policy.optimizer.load_state_dict(state_dicts['optimizer'])
     policy.scheduler.load_state_dict(state_dicts['scheduler'])
+    if policy.pinning is not None:
+        if 'pinning0_optimizer' in state_dicts:
+            for i in range(len(policy.pinning)):
+                policy.pinning[i].optimizer.load_state_dict(state_dicts[f'pinning{i}_optimizer'])
+                policy.pinning[i].scheduler.load_state_dict(state_dicts[f'pinning{i}_scheduler'])
+        else: warnings.warn('Pinning initialized but optimizer not found in loaded state dict', RuntimeWarning)
 
 
 def set_device_recursive(state_dict, device):

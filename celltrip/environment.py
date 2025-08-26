@@ -13,22 +13,22 @@ class EnvironmentBase:
         # Data
         *modalities_or_dataloader,
         # Creation
-        dim=16,
+        dim=8,
         pos_bound=torch.inf,
         pos_rand_bound=1,
-        vel_bound=torch.inf,
-        vel_rand_bound=0,
+        vel_bound=1,
+        vel_rand_bound=1,
         uniform_bounds=False,
         force_bound=torch.inf,
         discrete_force=1,
         friction_force=0,
         delta=.1,  # .2
-        discrete=False,  # True
-        spherical=True,  # True
+        discrete=False,
+        spherical=False,
         # Targets
         input_modalities=None,  # Which modalities are given as input
         target_modalities=None,  # Which modalities are targets
-        noise_std=.1,  # Noise to apply to input modalities
+        noise_std=.1,  # Noise to apply to input and/or target modalities
         input_noise=False,
         target_noise=False,
         # Rewards
@@ -42,8 +42,9 @@ class EnvironmentBase:
         penalty_action=None,
         epsilon=1e-3,
         # Early stopping
-        max_time=25,
-        min_time=15,
+        min_time=2**6,
+        max_time=2**7,
+        eval_time=2**5,  # [2**5, 2**6]
         terminate_min_time=True,
         terminate_max_time=True,
         terminate_random=True,
@@ -75,6 +76,7 @@ class EnvironmentBase:
             'random': terminate_random,
             'velocity': terminate_velocity,
             'bound': terminate_bound}
+        self.eval_time = eval_time
         self.vel_threshold = vel_threshold
         self.epsilon = epsilon
         self.noise_std = noise_std
@@ -164,37 +166,50 @@ class EnvironmentBase:
         self.pos = self.pos.to(self.device)
         self.vel = self.vel.to(self.device)
         self.modalities = [m.to(self.device) for m in self.modalities]
-        self.noise = [m.to(self.device) for m in self.noise]
+        self.noise = [m.to(self.device) if isinstance(m, torch.Tensor) else m for m in self.noise]
         return self
     
-    def train(self):
+    def train(self, clear=True):
         # Restore all conditions and clear stored memory
+        self.restore_vars(clear=clear)
+
+        return self
+    
+    def eval(self, **kwargs):
+        # Store vars
+        self.store_vars(**kwargs)
+        # Remove random termination conditions
+        self.termination_conds['random'] = False
+        # Make max length 5x
+        self.max_time *= 5
+        # Set noise to zero
+        self.set_noise_std(0)
+        self.noise = len(self.modalities)*[0]
+
+        return self
+    
+    def restore_vars(self, clear=False):
+        # Return if empty
+        if len(self.stored_changes) == 0: return self
+
+        # Restore from memory
         self.termination_conds = self.stored_changes['termination_conds']
         self.max_time = self.stored_changes['max_time']
         self.set_noise_std(self.stored_changes['noise_std'])
         if 'noise' in self.stored_changes:
             self.noise = self.stored_changes['noise']
-        self.stored_changes.clear()
+        if clear: self.stored_changes.clear()
 
         return self
     
-    def eval(self, store_noise=False):
-        # Remove random termination conditions
+    def store_vars(self, store_noise=False):
         self.stored_changes['termination_conds'] = self.termination_conds
-        self.termination_conds['random'] = False
-
-        # Make max length 5x
         self.stored_changes['max_time'] = self.max_time
-        self.max_time *= 5
-
-        # Set noise to zero
         self.stored_changes['noise_std'] = self.noise_std
-        self.set_noise_std(0)
-        if store_noise:
-            self.stored_changes['noise'] = self.noise
-            self.noise = len(self.modalities)*[0]
+        if store_noise: self.stored_changes['noise'] = self.noise
 
         return self
+
 
     ### State functions
     def step(self, actions=None, *, delta=None, pinning_func_list=None, return_itemized_rewards=False):
@@ -223,6 +238,7 @@ class EnvironmentBase:
             # get_reward_pinning = lambda: (self.get_pinning(use_cache=True)+self.epsilon).log().mean(dim=-1)
             if self.reward_scales['reward_pinning'] != 0:
                 reward_pinning = get_reward_pinning()
+                # reward_pinning = 0
             else: reward_pinning = torch.zeros(actions.shape[0], device=self.device)
             # Origin penalty
             get_reward_origin = lambda: self.get_distance_from_origin()
@@ -236,8 +252,10 @@ class EnvironmentBase:
                 get_penalty_velocity = lambda: self.vel.norm(dim=-1)
                 # get_penalty_velocity = lambda: (self.vel.norm(dim=-1)+self.epsilon).log()
             else:
-                get_penalty_velocity = lambda: self.vel.square().mean(dim=-1)
-                get_penalty_velocity = lambda: self.vel.mean(dim=-1)
+                # get_penalty_velocity = lambda: self.vel.square().mean(dim=-1)
+                get_penalty_velocity = lambda: self.vel.abs().mean(dim=-1)
+                # get_penalty_velocity = lambda: (self.vel.square().mean(dim=-1)+self.epsilon).log()
+                # get_penalty_velocity = lambda: self.vel.mean(dim=-1)
             if self.reward_scales['penalty_velocity'] != 0:
                 penalty_velocity = get_penalty_velocity()
                 # penalty_velocity = 0
@@ -319,10 +337,10 @@ class EnvironmentBase:
             else: self.best = self.get_distance_match().mean(); self.lapses = 0
 
             reward_distance     *=  self.reward_scales['reward_distance']    * 1e-1/delta
-            reward_pinning       *=  self.reward_scales['reward_pinning']      * 1e-1/delta
+            reward_pinning      *=  self.reward_scales['reward_pinning']     * 5e-1/delta  # 1e-6
             reward_origin       *=  self.reward_scales['reward_origin']      * 1e-1/delta
             penalty_bound       *=  self.reward_scales['penalty_bound']      * 1e0
-            penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e0/delta
+            penalty_velocity    *=  self.reward_scales['penalty_velocity']   * 1e-1/delta  # 1e-3
             penalty_action      *=  self.reward_scales['penalty_action']     * 1e-3
             # self.steps += 1
         else:
@@ -342,8 +360,12 @@ class EnvironmentBase:
             + penalty_bound
             + penalty_velocity
             + penalty_action)
-
-        ret = (rwd, finished)
+        
+        # Return
+        steady = np.abs(self.time - self.eval_time) < self.epsilon
+        # steady = self.time >= self.eval_time
+        # steady = (self.time >= self.eval_time[0]) and (self.time <= self.eval_time[1])
+        ret = (rwd, steady, finished)
         if return_itemized_rewards: ret += {
             'distance': reward_distance,
             'pinning': reward_pinning,
@@ -359,8 +381,8 @@ class EnvironmentBase:
             modalities, adata_obs, _ = self.dataloader.sample(**kwargs)
             self.set_modalities([
                 torch.tensor(m, device=self.device)
-                for m in modalities])
-            self.keys = adata_obs[0].index.to_numpy()
+                for m in modalities],
+                keys=adata_obs[0].index.to_numpy())
             # Add randomness to key to avoid culling in memory
             if self.noise_std > 0 and (self.input_noise or self.target_noise):
                 noise_id = np.random.randint(2**32)
@@ -505,7 +527,7 @@ class EnvironmentBase:
         running_mse = 0
         for i, target in enumerate(targets):
             m = self.modalities[target]
-            if self.target_noise: m += self.noise[target]
+            if self.target_noise: m = m + self.noise[target]
             if pinning_func_list is None:
                 A, B = torch.concat([self.pos.pow(deg+1) for deg in range(self.lin_deg)] + [torch.ones((self.pos.shape[0], 1), device=self.device)], dim=-1), m  # Could speed up a little by keeping ones vec, but not too expensive
                 # Match A norm to B norm
@@ -520,14 +542,18 @@ class EnvironmentBase:
                 X = torch.linalg.lstsq(A, B / B_norm).solution
                 err = torch.matmul(A, X) * A_norm - B
             else:
-                err = m - pinning_func_list[i](self.pos)
-            # err = err.mean(dim=-1)
-            # err = (err + self.epsilon).log().mean(dim=-1)
-            mse = (err.square() + self.epsilon).mean(dim=-1).log()
+                err = m - pinning_func_list[i](self.pos, m, input_standardization=True, output_standardization=False).detach()
+                # err = pinning_func_list[i].output_standardization.apply(m) - pinning_func_list[i](self.pos, input_standardization=True).detach()
+            mse = err.square().mean(dim=-1)
+            # mse = (err.square() + self.epsilon).log().mean(dim=-1)
+            # mse = (err.square() + self.epsilon).mean(dim=-1).log()
+            # mse /= m.square().mean()  # Scale for fairness
+            mse = -1 / (1 + mse)  # Transform
             running_mse += mse / len(targets)
 
         # Cache result
         self.cached_pinning[targets] = running_mse
+        # print(running_mse)
 
         return running_mse
     
@@ -546,7 +572,7 @@ class EnvironmentBase:
 
     def finished(self):
         # Min threshold for stop
-        if self.termination_conds['min_time'] and self.time < self.min_time: return False, 'min_time'
+        if self.termination_conds['min_time'] and self.time < min(self.min_time, self.max_time): return False, 'min_time'
         # Boundary stop
         if self.termination_conds['bound'] and (self.pos.norm(dim=-1)-self.pos_bound > 0).any(): return True, 'bound'
         # Latency stop
@@ -579,19 +605,27 @@ class EnvironmentBase:
 
     def disable_rewards(self):
         self.compute_rewards = False
+        return self
 
     def enable_rewards(self):
         self.compute_rewards = True
+        return self
 
     def set_delta(self, delta):
         self.delta = delta
+        return self
 
     def set_noise_std(self, noise_std):
         self.noise_std = noise_std
+        return self
 
-    def set_modalities(self, modalities):
+    def set_modalities(self, modalities, keys=None):
         # Set modalities
         self.modalities = modalities
+
+        # Set keys
+        self.keys = keys if keys is not None else list(range(modalities[0].shape[0]))
+        assert len(self.keys) == modalities[0].shape[0], 'Modal length must match key array length'
 
         # Reset pre-calculated inter-node dist
         # self.calculate_dist(self.target_modalities)
@@ -599,6 +633,8 @@ class EnvironmentBase:
         # Assert all modalities share the first dimension and reset num_nodes
         assert all(m.shape[0] == self.modalities[0].shape[0] for m in self.modalities)
         self.num_nodes = self.modalities[0].shape[0]
+        
+        return self
 
     def set_rewards(self, **new_reward_scales):
         # Check that all rewards are valid
@@ -609,14 +645,24 @@ class EnvironmentBase:
         # Set new rewards
         self.reward_scales.update(new_reward_scales)
 
-    def set_termination_conds(self, **new_termination_conds):
+        return self
+
+    def set_termination_conds(self, exclusive=False, **new_termination_conds):
         # Check that all rewards are valid
         for k in new_termination_conds:
             if k not in self.termination_conds:
                 raise LookupError(f'`{k}` not found in rewards')
+            
+        # Exclusive case
+        if exclusive:
+            for k in self.termination_conds:
+                if k not in new_termination_conds:
+                    new_termination_conds[k] = False
 
         # Set new rewards
         self.termination_conds.update(new_termination_conds)
+
+        return self
 
     def set_positions(self, pos):
         self.pos = pos
@@ -642,7 +688,7 @@ class EnvironmentBase:
     def get_input_modalities(self, **kwargs):
         return self.get_modalities(**kwargs, _indices=self.input_modalities)
 
-    def get_modalities(self, noise=False, _indices=None):
+    def get_modalities(self, noise=True, _indices=None):
         if _indices is None: _indices = list(range(len(self.modalities)))
         return [m+n if noise else m for i, (m, n) in enumerate(zip(self.modalities, self.noise)) if i in _indices]
 

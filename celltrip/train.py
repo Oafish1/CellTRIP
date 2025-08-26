@@ -20,7 +20,7 @@ from . import utility as _utility
 def simulate_until_completion(
     env, policy, memory=None, keys=None,
     max_timesteps=np.inf, max_memories=np.inf, reset_on_finish=False,
-    cache_feature_embeds=True, store_states=False, flush=True,
+    cache_feature_embeds=False, store_states=False, flush=True,  # CHANGED CACHE TO FALSE FOR TRAINING
     dummy=False, verbose=False):
     # NOTE: Does not flush buffer
     # Params
@@ -46,7 +46,7 @@ def simulate_until_completion(
             if cache_feature_embeds: actions, feature_embeds = actions
 
             # Step environment and get reward
-            rewards, finished, itemized_rewards = env.step(actions, return_itemized_rewards=True, pinning_func_list=policy.pinning)
+            rewards, steady, finished, itemized_rewards = env.step(actions, return_itemized_rewards=True, pinning_func_list=policy.pinning)
 
             # Store states
             if store_states: state_storage.append(env.get_state())
@@ -65,7 +65,7 @@ def simulate_until_completion(
             if memory is not None: memory.record_buffer(
                 rewards=rewards, target_modalities=target_modalities,
                 is_truncateds=finished or not continue_condition,
-                is_naturals=finished)
+                is_naturals=steady)
 
             # Dummy return for testing
             # if dummy:
@@ -216,7 +216,8 @@ class Worker:
         # Perform rollout
         result = simulate_until_completion(
             self.env, self.policy, self.memory,
-            reset_on_finish=(num_new is not None), **max_kwargs,
+            reset_on_finish=(num_new is not None), cache_feature_embeds=True,
+            **max_kwargs,
             **kwargs)
         
         # Reset and clean
@@ -415,7 +416,7 @@ def get_initializers(
         if merge_files is not None:
             for merge_files_rec in merge_files:
                 merge_adatas = _utility.processing.read_adatas(*merge_files_rec, backed=backed)
-                adatas += _utility.processing.merge_adatas(*merge_adatas, backed=backed)
+                adatas.append(_utility.processing.merge_adatas(*merge_adatas, backed=backed))
         _utility.processing.test_adatas(*adatas, partition_cols=partition_cols)
         dataloader = _utility.processing.PreprocessFromAnnData(
             *adatas, partition_cols=partition_cols, **dataloader_kwargs, **kwargs)
@@ -428,7 +429,7 @@ def get_initializers(
     policy_init = lambda env: _policy.create_agent_from_env(env, **policy_kwargs)
 
     memory_init = lambda policy: _memory.AdvancedMemoryBuffer(
-        sum(policy.modal_dims), split_args=policy.split_args, **memory_kwargs)
+        sum(policy.modal_dims), split_kwargs=policy.split_kwargs, **memory_kwargs)
     
     return (env_init, policy_init, memory_init)
 
