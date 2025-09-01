@@ -524,10 +524,12 @@ class EnvironmentBase:
         if use_cache and targets in self.cached_pinning: return self.cached_pinning[targets]
 
         # Calculate least squares classification error
-        running_mse = 0
+        running_loss = 0
         for i, target in enumerate(targets):
             m = self.modalities[target]
             if self.target_noise: m = m + self.noise[target]
+
+            # Least squares
             if pinning_func_list is None:
                 A, B = torch.concat([self.pos.pow(deg+1) for deg in range(self.lin_deg)] + [torch.ones((self.pos.shape[0], 1), device=self.device)], dim=-1), m  # Could speed up a little by keeping ones vec, but not too expensive
                 # Match A norm to B norm
@@ -541,21 +543,36 @@ class EnvironmentBase:
                 # Perform lstsq
                 X = torch.linalg.lstsq(A, B / B_norm).solution
                 err = torch.matmul(A, X) * A_norm - B
+
+            # Pinning NN
             else:
-                err = m - pinning_func_list[i](self.pos, m, input_standardization=True, output_standardization=False).detach()
-                # err = pinning_func_list[i].output_standardization.apply(m) - pinning_func_list[i](self.pos, input_standardization=True).detach()
+                err = m - pinning_func_list[i](self.pos, m).detach()
+                # err = pinning_func_list[i].compute_loss(pinning_func_list[i](self.pos, m).detach(), m)
+
+            # Final computation
             mse = err.square().mean(dim=-1)
+            # mse = (err.square() / m.var(keepdim=True, dim=0)).mean(dim=-1)  # Scaled MSE, mainly for slice samples which have varying positions - could also do this in prepro - kinda bad for PCA
+            mse /= m.square().mean()  # Scale for fairness
+            loss = -1 / (1 + mse)  # Transform
+            # mae = err.abs().mean(dim=-1)
+            # loss = -1 / (1 + mae)  # Transform
             # mse = (err.square() + self.epsilon).log().mean(dim=-1)
             # mse = (err.square() + self.epsilon).mean(dim=-1).log()
-            # mse /= m.square().mean()  # Scale for fairness
-            mse = -1 / (1 + mse)  # Transform
-            running_mse += mse / len(targets)
+            # loss = (err.abs().mean(dim=-1) + 1).log()
+            running_loss += loss / len(targets)
+            
+            # CLI
+            # if np.random.rand() < .001:
+            #     print(self.time)
+            #     print(mse.mean())
+            #     print(loss.mean())
+            #     print()
 
         # Cache result
-        self.cached_pinning[targets] = running_mse
+        self.cached_pinning[targets] = running_loss
         # print(running_mse)
 
-        return running_mse
+        return running_loss
     
     def get_distance_from_origin(self):
         if self.spherical: return self.pos.norm(dim=-1)

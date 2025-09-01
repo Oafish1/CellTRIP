@@ -1,3 +1,39 @@
+### 1.0.0+2025.9.1
+- Add separate kwarg passthrough arguments for `actor_critic` and `pinning` modules
+- Pinning structure changes
+- Tuning
+
+### 1.0.0+2025.8.31
+- `EnvironmentBase` code clarifications
+- Pinning MSE scaling
+
+### 1.0.0+2025.8.30
+- Tuning and additional testing
+
+### 1.0.0+2025.8.29
+- Add `nan` value handling to `PreprocessFromAnnData` 
+- Add slight change compatibility to `PPO.load_checkpoint` function and associated utility function
+- Remove `nan` values from relevant datasets
+
+### 1.0.0+2025.8.28
+- Add `CancerVel` and `MERFISH30k` datasets
+
+### 1.0.0+2025.8.27
+- Bugfixes to `compute_loss` usage
+- QOL changes to `general_analysis` visualizations
+- Transition to `MAE` rather than `MSE`
+- Various loss tuning strategies
+
+### 1.0.0+2025.8.26
+- Add experimental MMD and STD losses for pinning and environment
+- Better exporting from `flysta_analysis`
+- Figure changes for `flysta`
+- More changes to `tutorial` notebook
+
+### 1.0.0+2025.8.25.1
+- Clean `tutorial` notebook and make static visualizations more intuitive
+- Fix `boto` suppression
+
 ### 1.0.0+2025.8.25
 - Add `tutorial` and reorganize analysis notebooks
 - Bugfixes for `PinningNN` spatial calculations

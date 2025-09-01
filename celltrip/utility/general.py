@@ -2,6 +2,7 @@ import warnings
 
 import h5py
 import numpy as np
+import pandas as pd
 import torch
 
 
@@ -155,8 +156,8 @@ def get_policy_state(policy):
     return state_dicts
 
 
-def set_policy_state(policy, state_dicts):
-    policy.load_state_dict(state_dicts['policy'])
+def set_policy_state(policy, state_dicts, **kwargs):
+    policy.load_state_dict(state_dicts['policy'], **kwargs)
     policy.optimizer.load_state_dict(state_dicts['optimizer'])
     policy.scheduler.load_state_dict(state_dicts['scheduler'])
     if policy.pinning is not None:
@@ -249,3 +250,16 @@ def generate_pinning_function(X, Y):
         A = np.concatenate([points, np.ones((*points.shape[:-1], 1))], axis=-1)
         return np.dot(A, pinning_matrix)
     return pin_points, pinning_matrix
+
+
+def nan_substitution(x):
+    if pd.isna(x):
+        warnings.warn('Found NAN data in one or more partition columns, replacing with "_NA".')
+        return '_NA'
+    return x
+
+
+def nan_error(x):
+    if pd.isna(x):
+        raise ValueError('Found NAN data in one or more partition columns.')
+    return x

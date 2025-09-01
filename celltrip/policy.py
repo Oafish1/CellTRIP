@@ -909,6 +909,40 @@ class BufferStandardization(nn.Module):
         return x
     
 
+# https://github.com/yiftachbeer/mmd_loss_pytorch/blob/master/mmd_loss.py  # TODO (rewrite RBF and MMDLoss)
+# class RBF(nn.Module):
+#     def __init__(self, n_kernels=5, mul_factor=2.0, bandwidth=None):
+#         super().__init__()
+#         self.bandwidth_multipliers = nn.Parameter(
+#             mul_factor ** (torch.arange(n_kernels) - n_kernels // 2),
+#             requires_grad=False)
+#         self.bandwidth = bandwidth
+
+#     def get_bandwidth(self, L2_distances):
+#         if self.bandwidth is None:
+#             n_samples = L2_distances.shape[0]
+#             return L2_distances.data.sum() / (n_samples ** 2 - n_samples)
+#         return self.bandwidth
+
+#     def forward(self, X):
+#         L2_distances = torch.cdist(X, X) ** 2
+#         return torch.exp(-L2_distances[None, ...] / (self.get_bandwidth(L2_distances) * self.bandwidth_multipliers)[:, None, None]).sum(dim=0)
+
+
+# class MMDLoss(nn.Module):
+#     def __init__(self, kernel=RBF):
+#         super().__init__()
+#         self.kernel = kernel()
+
+#     def forward(self, X, Y):
+#         K = self.kernel(torch.vstack([X, Y]))
+#         X_size = X.shape[0]
+#         XX = K[:X_size, :X_size].mean()
+#         XY = K[:X_size, X_size:].mean()
+#         YY = K[X_size:, X_size:].mean()
+#         return XX - 2 * XY + YY
+
+
 class PinningNN(nn.Module):
     def __init__(
         self,
@@ -926,9 +960,9 @@ class PinningNN(nn.Module):
         spatial=False,
         # Matching
         activation=nn.PReLU,
-        betas=(.99, .99),
-        lr=3e-4,
-        weight_decay=1e-5,
+        # betas=(.99, .99),
+        # lr=3e-4,
+        # weight_decay=1e-5,
         lr_iters=None,
         lr_gamma=1,
         dropout=0.,
@@ -949,18 +983,32 @@ class PinningNN(nn.Module):
 
         # Create MLP
         self.mlp = nn.Sequential(
+            # Basic
             nn.Linear(input_dim, hidden_dim),
             activation(), nn.Dropout(dropout),
             nn.Linear(hidden_dim, output_dim),
+
+            # Complex
+            # nn.Linear(input_dim, hidden_dim),
+            # activation(), nn.Dropout(dropout),
+            # nn.Linear(hidden_dim, hidden_dim),
+            # nn.LayerNorm(hidden_dim), activation(), nn.Dropout(dropout),
+            # nn.Linear(hidden_dim, hidden_dim),
+            # activation(), nn.Dropout(dropout),
+            # nn.Linear(hidden_dim, output_dim),
         )
         self.first_layer = self.mlp[0]
         self.last_layer = self.mlp[-1]
         self.forward = self.forward_mlp
         
         # Optimizer and Scheduler
-        self.optimizer = torch.optim.Adam(self.parameters(), betas=betas, lr=lr, weight_decay=weight_decay, eps=1e-5)
+        # self.optimizer = torch.optim.Adam(self.parameters(), betas=betas, lr=lr, weight_decay=weight_decay, eps=1e-5)
+        self.optimizer = torch.optim.AdamW(self.parameters())
         if lr_iters is not None: self.scheduler = torch.optim.lr_scheduler.PolynomialLR(self.optimizer, total_iters=lr_iters)
         else: self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
+
+        # Loss
+        # self.mmd_loss = MMDLoss()
 
         # Standardization
         # self.input_standardization = PopArtStandardization(
@@ -1015,6 +1063,15 @@ class PinningNN(nn.Module):
 
     # def decode(self, X):
     #     return self.decoder(X)
+
+    def compute_loss(self, Y_pred, Y_true, mean=False):
+        # KLD_loss = -.5 * (1 + torch.log(X_batch.var(dim=0)) - X_batch.mean(dim=0).square() - X_batch.var(dim=0)).mean(dim=-1)
+        # STD_loss = (Y_pred.std(dim=0) - Y_batch.std(dim=0)).square().mean(dim=-1)
+        # MMD_loss = self.mmd_loss(Y_true, Y_pred)
+        # MAE_loss = (Y_true - Y_pred).abs().mean(dim=-1).mean(dim=0)
+        MSE_loss = (Y_true - Y_pred).square().mean(dim=-1).mean(dim=0)  # Reconstruction, also doesn't care about important features when standardized
+        loss = MSE_loss
+        return loss
     
     def update(self, states, target_modality, world_size=None):
         # Parameters
@@ -1064,25 +1121,13 @@ class PinningNN(nn.Module):
                                 transform_cache[sidx.cpu().item()] = _utility.processing.solve_rot_trans(X_sample, Y_sample)
 
                         # Stack transforms
-                        # print('a')
-                        # try:
-                        #     transform_cache[batch_sample_idx[0].cpu().item()][0]
-                        # except Exception as e:
-                        #     print(f'An unexpected error occurred: {e}')
-                        # print(transform_cache)
-                        # print(batch_sample_idx[0])
-                        # assert False
-                        # print('b')
                         R, t = [torch.stack([transform_cache[sidx.cpu().item()][i] for sidx in batch_sample_idx], dim=0) for i in range(2)]  # Problem line
                         Y_pred = Y_pred.unsqueeze(dim=-2)
                         Y_pred = torch.matmul(Y_pred, R) + t
                         Y_pred = Y_pred.squeeze(dim=-2)
 
                     # Losses
-                    # KLD_loss = -.5 * (1 + torch.log(X_batch.var(dim=0)) - X_batch.mean(dim=0).square() - X_batch.var(dim=0)).mean(dim=-1)
-                    MSE_loss = (Y_batch - Y_pred).square().mean(dim=-1)  # Reconstruction, also doesn't care about important features when standardized
-                    # loss = (1/(1+KLD_loss)) * MSE_loss.mean(dim=0)
-                    loss = MSE_loss.mean(dim=0)
+                    loss = self.compute_loss(Y_pred, Y_batch)
 
                     # Compute VAE prediction
                     # imputed, embedded, mu, logvar = self(X_batch, return_logits=True)
@@ -1154,11 +1199,11 @@ class PPO(nn.Module):
             # Forward
             log_std_init=0,
             forward_batch_size=int(5e4),
-            vision_size=torch.inf,  # NOTE: Not used in Lite model
+            vision_size=torch.inf,
             # sample_strategy='random-proximity',
             sample_strategy=None,  # NOTE: Not used in Lite model
             sample_dim=None,
-            reproducible_strategy='mean',  # NOTE: Not used in Lite model
+            reproducible_strategy='mean',
             # Weights
             epsilon_ppo=.2,
             epsilon_critic=torch.inf,
@@ -1189,6 +1234,8 @@ class PPO(nn.Module):
             minibatch_memories=1_000_000,
             # load_level='minibatch',  # TODO: Allow for loading at batch with compression
             # cast_level='minibatch',
+            actor_critic_kwargs={},
+            pinning_kwargs={},
             **kwargs,
     ):
         super().__init__()
@@ -1234,13 +1281,13 @@ class PPO(nn.Module):
         self.minibatch_memories = minibatch_memories
 
         # New policy
-        self.actor_critic = model(positional_dim, modal_dims, output_dim, log_std_init=log_std_init, **kwargs)
+        self.actor_critic = model(positional_dim, modal_dims, output_dim, log_std_init=log_std_init, **actor_critic_kwargs)
         self.optimizer = torch.optim.Adam(self.actor_critic.parameters(), betas=betas, lr=lr, weight_decay=weight_decay, eps=1e-5)
         if lr_iters is not None: self.scheduler = torch.optim.lr_scheduler.PolynomialLR(self.optimizer, total_iters=lr_iters)
         else: self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
 
         # Old policy
-        self.actor_critic_old = model(positional_dim, modal_dims, output_dim, log_std_init=log_std_init, **kwargs)
+        self.actor_critic_old = model(positional_dim, modal_dims, output_dim, log_std_init=log_std_init, **actor_critic_kwargs)
         self.optimizer_old = torch.optim.Adam(self.actor_critic_old.parameters(), betas=betas, lr=lr, weight_decay=weight_decay, eps=1e-5)
 
         # Non-grad params
@@ -1258,9 +1305,10 @@ class PPO(nn.Module):
             self.pinning = nn.ModuleList([
                 PinningNN(
                     self.pinning_dim, pinning_modal_dim, spatial=(i in self.pinning_spatial),
-                    betas=betas, lr=lr, weight_decay=weight_decay, lr_iters=lr_iters, lr_gamma=lr_gamma,
+                    # betas=betas, lr=lr, weight_decay=weight_decay,
+                    lr_iters=lr_iters, lr_gamma=lr_gamma,
                     extra_first_layers=self.actor_critic.input_pos_layers,
-                    standardization_beta=standardization_beta, **kwargs)
+                    standardization_beta=standardization_beta, **pinning_kwargs)
                 for i, pinning_modal_dim in enumerate(self.pinning_modal_dims)])
         else: self.pinning = None
 
@@ -1318,13 +1366,13 @@ class PPO(nn.Module):
         # NOTE: Will no longer do `os.makedirs(directory, exist_ok=True)` for local
         return fname
 
-    def load_checkpoint(self, fname):
+    def load_checkpoint(self, fname, **kwargs):  # Can pass `strict=False` to ignore missing entries
         # Get from fname
         with _utility.general.open_s3_or_local(fname, 'rb') as f:
             policy_state = torch.load(f, map_location=self.policy_iteration.device)
 
         # Load policy
-        _utility.general.set_policy_state(self, policy_state)
+        _utility.general.set_policy_state(self, policy_state, **kwargs)
         return self
 
     def forward(

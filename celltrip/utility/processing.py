@@ -575,6 +575,7 @@ class PreprocessFromAnnData:
                     adata.obs[partition_cols]
                     .apply(lambda r: tuple(r[col] for col in r.index), axis=1).to_numpy()
                     for adata in self.adatas]
+                # Errors here may indicate the presence of `nan` in some of the partition values
                 partitions = np.unique(ft.reduce(np.union1d, adata_partitions))  # Unique for the case of 1 adata
                 chosen_partitions = self.rng.choice(partitions, max(1, np.floor(mask*len(partitions)).astype(int)), replace=False)
                 self.mask = np.isin(adata_partitions[0], chosen_partitions)
