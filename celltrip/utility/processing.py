@@ -31,7 +31,7 @@ class Preprocessing:
         # Standardize
         standardize=True,
         # Filtering
-        top_variant=int(1e5),  # Top 100k by default
+        top_variant=int(1e6),  # Top 1M by default
         # PCA
         pca_dim=2**9,  # 512, TODO: Add auto-handling for less PCA than samples
         # Fitting
@@ -193,7 +193,32 @@ class Preprocessing:
             
         return self
 
-    def transform(self, modalities, adata_vars=None, force_filter=True, subset_features=None, subset_modality=None, *args, **kwargs):
+    def transform(self, modalities, *, adata_vars=None, force_filter=True, subset_features=None, subset_modality=None, batch_size=None, **kwargs):
+        # Recursion
+        if batch_size is not None:
+            usable_kwargs = dict(
+                adata_vars=adata_vars,
+                force_filter=force_filter,
+                subset_features=subset_features,
+                subset_modality=subset_modality,
+                batch_size=None)
+            num_nodes = [m.shape[0] for m in modalities]
+            assert (np.array(num_nodes) == num_nodes[0]).all(), f'Batching only permitted for modalities with equal first dimension, found {num_nodes}.'
+            num_nodes = num_nodes[0]
+            processed_modalities = []
+            processed_adata_vars = None
+            for batch in range(np.ceil(num_nodes / batch_size).astype(int)):
+                print(batch)
+                ret = self.transform([m[batch*batch_size:(batch+1)*batch_size] for m in modalities], **usable_kwargs)
+                if adata_vars is not None:
+                    processed_modalities.append(ret[0])
+                    processed_adata_vars = ret[1]  # All the same
+                else: processed_modalities.append(ret)
+            processed_modalities = [np.concatenate([ms[i] for ms in processed_modalities], axis=0) for i in range(len(modalities))]
+            ret = (processed_modalities,)
+            if processed_adata_vars is not None: ret += (processed_adata_vars,)
+            return _utility.general.clean_return(ret)
+        
         # Default
         # NOTE: `subset_modality` currently incompatible with list arguments, kind of hacky
         if subset_features is not None:
@@ -423,6 +448,16 @@ class LazyComputation:
             self.func = self.init_func(*self.args, **self.kwargs)
         return self.func(x)
     
+
+def chunk_X(adata, *, chunk_size, func=None):
+    # NOTE: Only works on dense arrays
+    proc = []
+    for i in range(np.ceil(adata.shape[0] / chunk_size).astype(int)):
+        data = adata[i*chunk_size:(i+1)*chunk_size].X
+        if func is not None: data = func(data)
+        proc.append(data)
+    return np.concatenate(proc, axis=0)
+
 
 def read_adatas(*fnames, backed=False):
     # Params
@@ -689,7 +724,7 @@ class PreprocessFromAnnData:
         sampled_modalities = [adata[adata_ob.index.to_numpy()].X for adata, adata_ob in zip(self.adatas, sampled_adata_obs)]
         processed_adata_obs = sampled_adata_obs
         processed_modalities, processed_adata_vars = self.preprocessing.transform(
-            sampled_modalities, adata_vars, force_filter=True)
+            sampled_modalities, adata_vars=adata_vars, force_filter=True)
 
         ret = (processed_modalities, processed_adata_obs, processed_adata_vars)
         if return_partition: ret += (partition,)
@@ -705,6 +740,7 @@ def split_state(
     max_nodes=torch.inf,
     reproducible_strategy='mean',
     sample_dim=None,  # Should be the dim of the env
+    force_split=False,
     return_mask=False,
 ):
     "Split full state matrix into individual inputs, self_idx is an optional array"
@@ -747,7 +783,7 @@ def split_state(
     # Batch input for Lite model
     if lite:
         # All processing case
-        if max_nodes >= state.shape[0] and len(self_idx) == state.shape[0]:
+        if not force_split and max_nodes >= state.shape[0] and len(self_idx) == state.shape[0]:
             # This optimization saves a lot of time
             if (self_idx[:-1] < self_idx[1:]).all(): return state,
             elif (np.unique(self_idx) == np.arange(state.shape[0])).all(): return state[self_idx],
@@ -755,7 +791,9 @@ def split_state(
         # Subset case
         self_entity = state[self_idx]
         node_entities = state  # Could remove the self_idx in the case len == 1, but doesn't really matter
-        mask = torch.eye(state.shape[0], dtype=torch.bool, device=device)[self_idx]
+        mask = torch.zeros((len(self_idx), state.shape[0]), dtype=torch.bool, device=device)
+        mask[list(range(len(self_idx))), self_idx] = True
+        # mask = torch.eye(state.shape[0], dtype=torch.bool, device=device)[self_idx]
         # Random mask if needed
         if max_nodes <= node_entities.shape[0]:
             idx = torch.randperm(node_entities.shape[0], device=device, generator=generator)[:max_nodes]

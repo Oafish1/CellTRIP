@@ -172,16 +172,15 @@ class EnvironmentBase:
     def train(self, clear=True):
         # Restore all conditions and clear stored memory
         self.restore_vars(clear=clear)
-
         return self
     
-    def eval(self, **kwargs):
+    def eval(self, time_scale=5, **kwargs):
         # Store vars
         self.store_vars(**kwargs)
         # Remove random termination conditions
         self.termination_conds['random'] = False
         # Make max length 5x
-        self.max_time *= 5
+        self.max_time *= time_scale
         # Set noise to zero
         self.set_noise_std(0)
         self.noise = len(self.modalities)*[0]
@@ -209,7 +208,6 @@ class EnvironmentBase:
         if store_noise: self.stored_changes['noise'] = self.noise
 
         return self
-
 
     ### State functions
     def step(self, actions=None, *, delta=None, pinning_func_list=None, return_itemized_rewards=False):
@@ -332,9 +330,6 @@ class EnvironmentBase:
                 penalty_action = -force.norm(dim=-1)
             else: penalty_action = -actions.square().mean(dim=-1)
 
-            ### Management
-            if self.get_distance_match().mean() < self.best: self.lapses += delta
-            else: self.best = self.get_distance_match().mean(); self.lapses = 0
 
             reward_distance     *=  self.reward_scales['reward_distance']    * 1e-1/delta
             reward_pinning      *=  self.reward_scales['reward_pinning']     * 5e-1/delta  # 1e-6
@@ -360,6 +355,10 @@ class EnvironmentBase:
             + penalty_bound
             + penalty_velocity
             + penalty_action)
+        
+        # Management
+        if rwd.mean() < self.best: self.lapses += delta
+        else: self.best = rwd.mean(); self.lapses = 0
         
         # Return
         steady = np.abs(self.time - self.eval_time) < self.epsilon
@@ -553,7 +552,7 @@ class EnvironmentBase:
             mse = err.square().mean(dim=-1)
             # mse = (err.square() / m.var(keepdim=True, dim=0)).mean(dim=-1)  # Scaled MSE, mainly for slice samples which have varying positions - could also do this in prepro - kinda bad for PCA
             mse /= m.square().mean()  # Scale for fairness
-            loss = -1 / (1 + mse)  # Transform
+            loss = -1 / (1 + 10*mse)  # Transform
             # mae = err.abs().mean(dim=-1)
             # loss = -1 / (1 + mae)  # Transform
             # mse = (err.square() + self.epsilon).log().mean(dim=-1)
@@ -630,6 +629,10 @@ class EnvironmentBase:
 
     def set_delta(self, delta):
         self.delta = delta
+        return self
+    
+    def set_max_time(self, max_time):
+        self.max_time = max_time
         return self
 
     def set_noise_std(self, noise_std):

@@ -951,8 +951,8 @@ class PinningNN(nn.Module):
         hidden_dim=None,
         # Running
         epochs=5,  # Higher epochs needed for more complex model
-        epoch_size=1024,
-        batch_size=64,
+        epoch_size=2**10,  # 1024,
+        batch_size=2**6,  # 64
         # Standardization
         standardization_beta=3e-4,
         extra_first_layers=[],
@@ -960,9 +960,9 @@ class PinningNN(nn.Module):
         spatial=False,
         # Matching
         activation=nn.PReLU,
-        # betas=(.99, .99),
-        # lr=3e-4,
-        # weight_decay=1e-5,
+        betas=(.99, .99),
+        lr=3e-4,
+        weight_decay=1e-5,
         lr_iters=None,
         lr_gamma=1,
         dropout=0.,
@@ -1002,8 +1002,8 @@ class PinningNN(nn.Module):
         self.forward = self.forward_mlp
         
         # Optimizer and Scheduler
-        # self.optimizer = torch.optim.Adam(self.parameters(), betas=betas, lr=lr, weight_decay=weight_decay, eps=1e-5)
-        self.optimizer = torch.optim.AdamW(self.parameters())
+        self.optimizer = torch.optim.Adam(self.parameters(), betas=betas, lr=lr, weight_decay=weight_decay, eps=1e-5)
+        # self.optimizer = torch.optim.AdamW(self.parameters())
         if lr_iters is not None: self.scheduler = torch.optim.lr_scheduler.PolynomialLR(self.optimizer, total_iters=lr_iters)
         else: self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_gamma)
 
@@ -1092,7 +1092,7 @@ class PinningNN(nn.Module):
             num_samples = valid_mask.sum().cpu().item()
 
             # Spatial data cache
-            transform_cache = {}
+            # transform_cache = {}
 
             # Train
             for epoch in range(self.epochs):
@@ -1105,18 +1105,21 @@ class PinningNN(nn.Module):
                     batch_idx = epoch_idx[batch*batch_size:(batch+1)*batch_size]
                     X_batch = states[0][states[2].sum(dim=-1) <= 1][batch_idx]
                     Y_batch = target_modality[states[2].sum(dim=-1) <= 1][batch_idx]
+                    X_stand = self.input_standardization.apply(X_batch)  # Intentional double-application of std to simulate actual std
 
                     # Compute normal prediction
-                    Y_pred = self(X_batch, input_standardization=True, output_standardization=False)
+                    Y_pred = self(X_stand)
 
                     # Transform if needed
                     if self.spatial:
+                        # Spatial data cache
+                        transform_cache = {}
                         batch_sample_idx = idx_to_sample[batch_idx]
                         for sidx in torch.unique(batch_sample_idx):
                             # Calculate unknown transforms using all available data
                             if sidx not in transform_cache:
                                 with torch.no_grad():  # Try without this too, but need to move cache inwards (CAUSES ERROR WITHOUT)
-                                    X_sample = self(states[0][sidx][valid_mask[sidx]], input_standardization=True, output_standardization=False)
+                                    X_sample = self(states[0][sidx][valid_mask[sidx]])
                                 Y_sample = target_modality[sidx][valid_mask[sidx]]
                                 transform_cache[sidx.cpu().item()] = _utility.processing.solve_rot_trans(X_sample, Y_sample)
 
@@ -1305,7 +1308,7 @@ class PPO(nn.Module):
             self.pinning = nn.ModuleList([
                 PinningNN(
                     self.pinning_dim, pinning_modal_dim, spatial=(i in self.pinning_spatial),
-                    # betas=betas, lr=lr, weight_decay=weight_decay,
+                    betas=betas, lr=lr, weight_decay=weight_decay,
                     lr_iters=lr_iters, lr_gamma=lr_gamma,
                     extra_first_layers=self.actor_critic.input_pos_layers,
                     standardization_beta=standardization_beta, **pinning_kwargs)

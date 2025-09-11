@@ -1,3 +1,43 @@
+### 1.0.0+2025.9.10
+- Better `flysta` modeling
+- Clean saved plots
+- Export ignores
+- Figure updates
+- Fix labeling bug in `flysta` perturbation visualization
+- Knockdown generation in `flysta_generate`
+- Real interpolation plotting
+- `transform_and_center` utility function
+
+### 1.0.0+2025.9.9
+- Additional dragging strategies for `PinningNN`
+- Error tolerance in `run_notebook` script
+- Fix partial split bug in `AdvancedMemoryBuffer`
+- More tuning for `flysta3D`
+- Scaling fix in `flysta3D` total visualization
+
+### 1.0.0+2025.9.8
+- More tuning for `flysta3D`
+- Real `flysta3D` analyses
+- `flysta3D` generation notebook, `flysta_generate`
+
+### 1.0.0+2025.9.5
+- Update tutorial with memory and missing spatial modality considerations
+
+### 1.0.0+2025.9.4
+- Bugfixes for `simulate_until_completion` continuance
+- Full runs for `flysta3D`
+- Lapse update for `EnvironmentBase`
+
+### 1.0.0+2025.9.3
+- Add `chunk_X` function to allow for chunking `s3fs`-read files
+- Add `progress_bar` to `simulate_until_completion`
+- Change `s3fs` default cache type to `mmap` from `background`, trading a slight performance hit for better stability
+- Change default `top_variant` to `1M`
+- Full data runs made possible with `skip_states` option in `simulate_until_completion` and preprocessing batching
+
+### 1.0.0+2025.9.2
+- Add OT pseudocell transition analysis framework
+
 ### 1.0.0+2025.9.1
 - Add separate kwarg passthrough arguments for `actor_critic` and `pinning` modules
 - Pinning structure changes

@@ -3,6 +3,7 @@ import warnings
 import h5py
 import numpy as np
 import pandas as pd
+import sklearn
 import torch
 
 
@@ -186,13 +187,13 @@ def get_s3_handler_with_access(fname, default_block_size=100*2**20, default_cach
     import s3fs
     try:
         # Caching methods (https://filesystem-spec.readthedocs.io/en/latest/_modules/fsspec/caching.html) ordered by speed
-        s3 = s3fs.S3FileSystem(default_block_size=default_block_size, default_cache_type=default_cache_type)  # background, mmap, blockcache, readahead, bytes
+        s3 = s3fs.S3FileSystem(default_block_size=default_block_size, default_cache_type=default_cache_type, default_fill_cache=False)  # background, mmap, blockcache, readahead, bytes
         try: s3.ls(fname.split('/')[2])
         except: s3.ls('/'.join(fname.split('/')[2:4]))
     except:
         warnings.warn('No suitable credentials found for s3 '
                       'access, using anonymous mode')
-        s3 = s3fs.S3FileSystem(anon=True)
+        s3 = s3fs.S3FileSystem(default_block_size=default_block_size, default_cache_type=default_cache_type, default_fill_cache=False, anon=True)
         try: s3.ls(fname.split('/')[2])
         except: s3.ls('/'.join(fname.split('/')[2:4]))
 
@@ -263,3 +264,11 @@ def nan_error(x):
     if pd.isna(x):
         raise ValueError('Found NAN data in one or more partition columns.')
     return x
+
+
+def transform_and_center(X, pca=None, return_pca=False):
+    if pca is None: pca = sklearn.decomposition.PCA(random_state=42).fit(X)
+    trans_X = pca.transform(X)
+    trans_cent_X = trans_X - trans_X.mean(axis=0)
+    if return_pca: return trans_cent_X, pca
+    return trans_cent_X

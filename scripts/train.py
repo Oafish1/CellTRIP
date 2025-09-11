@@ -158,13 +158,18 @@ def train(config):
 
     # Initialization
     dataloader_kwargs = {
-        'num_nodes': [2**9, 2**11], 'mask': config.train_split,
+        'num_nodes': [2**9, 2**11],
+        # 'num_nodes': None,
+        'mask': config.train_split,
         'mask_partitions': config.train_partitions}  # {'num_nodes': 20, 'pca_dim': 128}
     environment_kwargs = {
         'input_modalities': config.input_modalities,
         'target_modalities': config.target_modalities, 'dim': config.dim,
         'discrete': config.discrete}  # , 'spherical': config.discrete
-    policy_kwargs = {'pinning_spatial': config.spatial}
+    policy_kwargs = {
+        'forward_batch_size': int(1e3),
+        'vision_size': int(1e3),
+        'pinning_spatial': config.spatial}
     memory_kwargs = {'device': 'cuda:0'}
     initializers = celltrip.train.get_initializers(
         input_files=config.input_files, merge_files=config.merge_files,

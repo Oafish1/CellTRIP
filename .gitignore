@@ -51,3 +51,7 @@ example*.yaml
 
 # Manim
 **/media/*
+
+# Saved data
+*.npy
+*.csv

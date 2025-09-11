@@ -8,6 +8,7 @@ import numpy as np
 import ray
 import ray.util.collective as col
 import torch
+import tqdm
 
 from . import decorator as _decorator
 from . import environment as _environment
@@ -20,16 +21,24 @@ from . import utility as _utility
 def simulate_until_completion(
     env, policy, memory=None, keys=None,
     max_timesteps=np.inf, max_memories=np.inf, reset_on_finish=False,
-    cache_feature_embeds=False, store_states=False, flush=True,  # CHANGED CACHE TO FALSE FOR TRAINING
-    dummy=False, verbose=False):
+    cache_feature_embeds=False, store_states=False, skip_states=1,
+    flush=True, verbose=False, progress_bar=False):
     # NOTE: Does not flush buffer
     # Params
     assert not (keys is not None and reset_on_finish), 'Cannot manually set keys while `reset_on_finish` is `True`'
     if keys is None: keys = env.get_keys()
     target_modalities = torch.concat(env.get_target_modalities(), dim=-1)
 
+    # Pbar
+    if progress_bar: pbar = tqdm.tqdm()
+
     # Store states
-    if store_states: state_storage = [env.get_state()]
+    if store_states:
+        if isinstance(store_states, str):
+            get_store_state = lambda: env.get_state().to(store_states)
+        else:
+            get_store_state = lambda: env.get_state()
+        state_storage = [get_store_state()]
 
     # Simulation
     ep_timestep = 0; ep_memories = 0; ep_reward = 0; ep_itemized_reward = defaultdict(lambda: 0); finished = False
@@ -48,9 +57,6 @@ def simulate_until_completion(
             # Step environment and get reward
             rewards, steady, finished, itemized_rewards = env.step(actions, return_itemized_rewards=True, pinning_func_list=policy.pinning)
 
-            # Store states
-            if store_states: state_storage.append(env.get_state())
-
             # Tracking
             ts_reward = rewards.cpu().mean()
             ep_reward = ep_reward + ts_reward
@@ -62,10 +68,14 @@ def simulate_until_completion(
             # Record rewards
             continue_condition = ep_timestep < max_timesteps
             if memory is not None: continue_condition *= ep_memories < max_memories
+            finished_condition = finished or not continue_condition
             if memory is not None: memory.record_buffer(
                 rewards=rewards, target_modalities=target_modalities,
-                is_truncateds=finished or not continue_condition,
+                is_truncateds=finished_condition,
                 is_naturals=steady)
+
+            # Store states
+            if store_states and ((ep_timestep % skip_states == 0) or finished_condition) : state_storage.append(get_store_state())  # TODO: Revise `skip_states` and `store_states`
 
             # Dummy return for testing
             # if dummy:
@@ -77,13 +87,16 @@ def simulate_until_completion(
             #             if memory is not None: memory.append_memory({k: v[-1:] for k, v in memory.storage.items()})
             #             if store_states: state_storage.append(env.get_state)
             #         memory.storage['is_terminals'][-1] = True
+
+            # Pbar
+            if progress_bar: pbar.update(1)
         
             # CLI
             if verbose and ((ep_timestep % 200 == 0) or ep_timestep in (100,) or finished):
                 print(f'Timestep {ep_timestep:>4} - Reward {ts_reward:.3f}')
         
             # Record terminals and reset if needed
-            if finished or not continue_condition:
+            if finished_condition:
                 state = env.get_state(include_modalities=True)
                 policy(state, keys=keys, memory=memory, terminal=True, feature_embeds=feature_embeds)
             # Reset if needed
@@ -96,6 +109,9 @@ def simulate_until_completion(
                 else: break
             # Escape
             if not continue_condition: break
+
+    # Pbar
+    if progress_bar: pbar.close()
 
     # Flush
     if flush and memory: memory.flush_buffer()
