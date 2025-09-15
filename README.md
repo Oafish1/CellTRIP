@@ -111,7 +111,16 @@ python -m pip install --no-binary=h5py h5py
 
 Compiling requirements
 Make sure Ray is 2.43.0!
-python -m pip freeze -r requirements.in | sed -e '/@/d' -e 's/+.*//' -e '/nvidia-.*/d' > requirements.txt
+python -m pip freeze -r requirements.in | sed -e '/@/d' \
+    -e 's/+.*//' \
+    -e '/nvidia-.*/d' \
+    -e '/manim*/d' \
+    -e '/pycairo*/d' \
+    -e '/ManimPango*/d' \
+    -e '/mayavi*/d' \
+    > requirements.txt
+# python -m pip freeze | grep -f requirements.in > requirements.txt
+# python -m pip freeze -q -r requirements.in | sed '/freeze/,$ d' > requirements.txt
 
 Run local
 ray start --disable-usage-stats --node-ip-address 100.85.187.118 --head --port=6379 --dashboard-host=0.0.0.0

@@ -13,6 +13,7 @@ nbconvert
 numpy
 pandas
 pip-tools
+POT
 ray[client,default]
 rds2py
 s3fs

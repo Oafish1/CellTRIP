@@ -1,3 +1,32 @@
+### 1.0.0+2025.9.14
+- Add EMD evaluation for interpolation
+- Additional model runs
+- Additional notations in `tutorial` notebook
+- Many new performance visualizations
+- New perturbation prioritization methods
+- New validation enrichments for `flysta` knockdown analysis
+- Perturbation enrichment visualization for `flysta`
+- Requirements file corrections
+- Schematic and `flysta` figure changes
+
+### 1.0.0+2025.9.13
+- Add alternate mask loading methods to training arguments and `PreprocessFromAnnData`
+- Adjust `requirements.txt` generation
+- Colorbar for `flysta` perturbation
+- New `CancerVel` train mask column
+- New `PerturbMM` dataset
+- New perturbation runs on `flysta`
+- Setup file corrections
+
+### 1.0.0+2025.9.12
+- Interesting sample technique for perturbation plot
+- Styling adjustments to perturbation plot
+
+### 1.0.0+2025.9.11
+- Add control to perturbation
+- Adjust knockdown centering to account for variable drift
+- Bugfix with filtered `var` in `AnnDataCollection` for perturbation generation
+
 ### 1.0.0+2025.9.10
 - Better `flysta` modeling
 - Clean saved plots

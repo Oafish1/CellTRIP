@@ -432,6 +432,7 @@ class Preprocessing:
         if modalities is not None: ret += (modalities,)
         if adata_obs is not None: ret += (adata_obs,)
         if return_partition: ret += (selected_partition,)
+        print(selected_partition)
         # print(selected_partition)
         return _utility.general.clean_return(ret)
 
@@ -447,16 +448,22 @@ class LazyComputation:
         if self.func is None:
             self.func = self.init_func(*self.args, **self.kwargs)
         return self.func(x)
+
+
+def chunk(full_data, *, chunk_size, index_func=None, func=None):
+    # NOTE: Only works on dense arrays
+    proc = []
+    for i in range(np.ceil(full_data.shape[0] / chunk_size).astype(int)):
+        data = full_data[i*chunk_size:(i+1)*chunk_size]
+        if index_func is not None: data = index_func(data)
+        if func is not None: data = func(data)
+        proc.append(data)
+    return np.concatenate(proc, axis=0)
     
 
 def chunk_X(adata, *, chunk_size, func=None):
     # NOTE: Only works on dense arrays
-    proc = []
-    for i in range(np.ceil(adata.shape[0] / chunk_size).astype(int)):
-        data = adata[i*chunk_size:(i+1)*chunk_size].X
-        if func is not None: data = func(data)
-        proc.append(data)
-    return np.concatenate(proc, axis=0)
+    return chunk(adata, chunk_size=chunk_size, index_func=lambda m: m.X, func=func)
 
 
 def read_adatas(*fnames, backed=False):
@@ -584,8 +591,8 @@ class PreprocessFromAnnData:
         # Arguments
         memory_efficient='auto',  # Also works on in-memory datasets
         partition_cols=None,
-        mask=None,  # List or int indicating pct of keepable samples
-        mask_partitions=False,  # Mask whole partitions if `mask` is provided as int
+        mask=None,  # List or float indicating fraction of keepable samples
+        mask_partitions=False,  # Mask whole partitions if `mask` is provided as float
         fit_sample='auto',
         seed=None,
         **kwargs
@@ -615,8 +622,9 @@ class PreprocessFromAnnData:
                 chosen_partitions = self.rng.choice(partitions, max(1, np.floor(mask*len(partitions)).astype(int)), replace=False)
                 self.mask = np.isin(adata_partitions[0], chosen_partitions)
         elif isinstance(mask, str):
-            with _utility.general.open_s3_or_local(mask, 'rb') as f:
-                self.mask = np.loadtxt(f)
+            if mask in adatas[0].obs.columns: self.mask = adatas[0].obs[mask].to_numpy()
+            else:
+                with _utility.general.open_s3_or_local(mask, 'rb') as f: self.mask = np.loadtxt(f)
         else: self.mask = mask
         if memory_efficient == 'auto':
             # Only activate if on disk

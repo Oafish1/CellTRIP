@@ -1105,10 +1105,11 @@ class PinningNN(nn.Module):
                     batch_idx = epoch_idx[batch*batch_size:(batch+1)*batch_size]
                     X_batch = states[0][states[2].sum(dim=-1) <= 1][batch_idx]
                     Y_batch = target_modality[states[2].sum(dim=-1) <= 1][batch_idx]
-                    X_stand = self.input_standardization.apply(X_batch)  # Intentional double-application of std to simulate actual std
+                    # X_stand = self.input_standardization.apply(X_batch)  # Intentional double-application of std to simulate actual std
 
                     # Compute normal prediction
-                    Y_pred = self(X_stand)
+                    Y_pred = self(X_batch)
+                    # Y_pred = self(X_stand)
 
                     # Transform if needed
                     if self.spatial:
@@ -1201,8 +1202,8 @@ class PPO(nn.Module):
             model=EntitySelfAttentionLite,  # sample_strategy None
             # Forward
             log_std_init=0,
-            forward_batch_size=int(5e4),
-            vision_size=torch.inf,
+            forward_batch_size=1_000,  # int(5e4),
+            vision_size=1_000,  # torch.inf,
             # sample_strategy='random-proximity',
             sample_strategy=None,  # NOTE: Not used in Lite model
             sample_dim=None,

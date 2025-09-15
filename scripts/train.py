@@ -1,4 +1,9 @@
 # %%
+# %load_ext autoreload
+# %autoreload 2
+
+
+# %%
 import argparse
 import os
 import random
@@ -34,7 +39,8 @@ group.add_argument('--spatial', type=int, nargs='+', help='Which modalities are 
 group = parser.add_argument_group('Algorithm')
 group.add_argument('--dim', type=int, default=16, help='Dimensions in the output latent space')
 group.add_argument('--discrete', action='store_true', help='Use the discrete model rather than continuous')
-group.add_argument('--train_split', type=float, default=1., help='Fraction of input data to use as training')
+group.add_argument('--train_mask', type=str, help='File or `obs` column containing boolean training mask')
+group.add_argument('--train_split', type=float, default=1., help='Fraction of input data to use as training. Overwritten by `train_mask`')
 group.add_argument('--train_partitions', action='store_true', help='Split training/validation data across partitions rather than samples')
 # Computation
 group = parser.add_argument_group('Computation')
@@ -60,40 +66,54 @@ if not celltrip.utility.notebook.is_notebook():
     # ray job submit -- python train.py...
     config = parser.parse_args()
 else:
-    experiment_name = 'MERFISH-250824'
+    # experiment_name = 'flysta-250909-5'
+    # experiment_name = 'MERFISH30k-250830'
+    experiment_name = 'CancerVel-250913'
     bucket_name = 'nkalafut-celltrip'
-    # bucket_name = 'arn:aws:s3:us-east-2:245432013314:accesspoint/ray-nkalafut-celltrip'
     command = (
-        # MERFISH
-        f's3://{bucket_name}/MERFISH/expression.h5ad s3://{bucket_name}/MERFISH/spatial.h5ad --target_modalities 1 --spatial 1 '
         # scGLUE
         # f's3://{bucket_name}/scGLUE/Chen-2019-RNA.h5ad s3://{bucket_name}/scGLUE/Chen-2019-ATAC.h5ad '
         # f's3://{bucket_name}/scGLUE/Chen-2019-RNA.h5ad s3://{bucket_name}/scGLUE/Chen-2019-ATAC.h5ad --input_modalities 0 --target_modalities 0 '
         # f'../data/scglue/Chen-2019-RNA.h5ad ../data/scglue/Chen-2019-ATAC.h5ad --input_modalities 0 --target_modalities 0 '
+        # Tahoe-100M
+        # f'--merge_files ' + ' '.join([f's3://{bucket_name}/Tahoe/plate{i}_filt_Vevo_Tahoe100M_WServicesFrom_ParseGigalab.h5ad' for i in range(1, 15)]) + ' '
+        # f'--partition_cols sample '
+
+        # scMultiSim
+        # f's3://{bucket_name}/scMultiSim/expression.h5ad s3://{bucket_name}/scMultiSim/peaks.h5ad '
+        # dyngen
+        # f's3://{bucket_name}/dyngen/logcounts.h5ad s3://{bucket_name}/dyngen/counts_protein.h5ad '
+
+        # MERFISH
+        # f's3://{bucket_name}/MERFISH/expression.h5ad s3://{bucket_name}/MERFISH/spatial.h5ad --target_modalities 1 --spatial 1 '
+        # MERFISH Bench
+        # f's3://{bucket_name}/MERFISH_Bench/expression.h5ad s3://{bucket_name}/MERFISH_Bench/spatial.h5ad '
+        # f'--target_modalities 1 --spatial 1 '
+        # MERFISH30k
+        # f's3://{bucket_name}/MERFISH30k/comb.h5ad s3://{bucket_name}/MERFISH30k/spatial.h5ad '
+        # f'--target_modalities 1 --spatial 1 '
+        # f'--partition_cols slice_id '
+
         # Flysta3D
         # f' '.join([f'--merge_files ' + ' ' .join([f's3://{bucket_name}/Flysta3D/{p}_{m}.h5ad' for p in ('E14-16h_a', 'E16-18h_a', 'L1_a', 'L2_a', 'L3_b')]) for m in ('expression', 'spatial')]) + ' '
         # f'--target_modalities 1 --spatial 1 '
         # f'--partition_cols development '
         # Particular stage Flysta
-        # f' '.join([f'--merge_files ' + ' ' .join([f's3://{bucket_name}/Flysta3D/{p}_{m}.h5ad' for p in ('L3_b',)]) for m in ('expression', 'spatial')]) + ' '
+        # f' '.join([f'--merge_files ' + ' ' .join([f's3://{bucket_name}/Flysta3D/{p}_{m}.h5ad' for p in ('L2_a',)]) for m in ('expression', 'spatial')]) + ' '
         # f'--target_modalities 1 --spatial 1 '
         # f'--partition_cols development '
-        # Tahoe-100M
-        # f'--merge_files ' + ' '.join([f's3://{bucket_name}/Tahoe/plate{i}_filt_Vevo_Tahoe100M_WServicesFrom_ParseGigalab.h5ad' for i in range(1, 15)]) + ' '
-        # f'--partition_cols sample '
-        # scMultiSim
-        # f's3://{bucket_name}/scMultiSim/expression.h5ad s3://{bucket_name}/scMultiSim/peaks.h5ad '
-        # MERFISH Bench
-        # f's3://{bucket_name}/MERFISH_Bench/expression.h5ad s3://{bucket_name}/MERFISH_Bench/spatial.h5ad '
-        # f'--target_modalities 1 --spatial 1 '
+
         # TemporalBrain
         # f's3://{bucket_name}/TemporalBrain/expression.h5ad s3://{bucket_name}/TemporalBrain/peaks.h5ad '
         # f'--partition_cols "Donor ID" '
+
         # Virtual Cell Challenge
         # f's3://{bucket_name}/VirtualCell/vcc_flt_data.h5ad '
         # f'--partition_cols target_gene '
-        # dyngen
-        # f's3://{bucket_name}/dyngen/logcounts.h5ad s3://{bucket_name}/dyngen/counts_protein.h5ad '
+        # CancerVel
+        # NOTE: Make sure to check here that NAN sgAssign partitions are chosen
+        f's3://{bucket_name}/CancerVel/expression.h5ad '
+        # f'--partition_cols days '  # sgAssignNew
 
         f'--backed '
         # f'--dim 2 '
@@ -101,12 +121,14 @@ else:
         f'--dim 8 '
         # f'--discrete '
 
+        # Column split
+        f'--train_mask known_not_d6'  # CancerVel
         # Sample split
-        f'--train_split .8 '
+        # f'--train_split .8 '
         # Partition split
-        # f'--train_split .6 '
+        # f'--train_split .8 '
         # f'--train_partitions '
-        # Single slice
+        # Single partition
         # f'--train_split .0001 '
         # f'--train_partitions '
 
@@ -118,7 +140,7 @@ else:
         f'--dont_sync_across_nodes '
         f'--logfile s3://{bucket_name}/logs/{experiment_name}.log '
         f'--flush_iterations 1 '
-        # f'--checkpoint s3://nkalafut-celltrip/checkpoints/VCC-250821-1-0100.weights '
+        # f'--checkpoint s3://nkalafut-celltrip/checkpoints/MERFISH30k-250829-1-0400.weights '
         f'--checkpoint_iterations 50 '
         f'--checkpoint_dir s3://{bucket_name}/checkpoints '
         f'--checkpoint_name {experiment_name}')
@@ -160,24 +182,25 @@ def train(config):
     dataloader_kwargs = {
         'num_nodes': [2**9, 2**11],
         # 'num_nodes': None,
-        'mask': config.train_split,
+        'mask': config.train_split if config.train_mask is None else config.train_mask,
         'mask_partitions': config.train_partitions}  # {'num_nodes': 20, 'pca_dim': 128}
     environment_kwargs = {
         'input_modalities': config.input_modalities,
-        'target_modalities': config.target_modalities, 'dim': config.dim,
+        'target_modalities': config.target_modalities,
+        'dim': config.dim,
         'discrete': config.discrete}  # , 'spherical': config.discrete
     policy_kwargs = {
         'forward_batch_size': int(1e3),
         'vision_size': int(1e3),
         'pinning_spatial': config.spatial}
-    memory_kwargs = {'device': 'cuda:0'}
+    memory_kwargs = {'device': 'cuda:0'}  # Skips casting, cutting time significantly for relatively small batch sizes
     initializers = celltrip.train.get_initializers(
         input_files=config.input_files, merge_files=config.merge_files,
         backed=config.backed, partition_cols=config.partition_cols,
         dataloader_kwargs=dataloader_kwargs,
         environment_kwargs=environment_kwargs,
         policy_kwargs=policy_kwargs,
-        memory_kwargs=memory_kwargs)  # Skips casting, cutting time significantly for relatively small batch sizes
+        memory_kwargs=memory_kwargs)
 
     # Stages
     stage_functions = [
@@ -215,15 +238,20 @@ ray.get(train.remote(config))
 # config.update_timesteps = 100_000
 # config.max_timesteps = 20_000_000
 
-# dataloader_kwargs = {'num_nodes': [2**9, 2**11], 'mask': config.train_split}  # {'num_nodes': [2**9, 2**11], 'pca_dim': 128}
+# dataloader_kwargs = {
+#     'num_nodes': [2**9, 2**11], 'mask': config.train_split,
+#     'mask_partitions': config.train_partitions}  # {'num_nodes': 20, 'pca_dim': 128}
 # environment_kwargs = {
 #     'input_modalities': config.input_modalities,
-#     'target_modalities': config.target_modalities, 'dim': config.dim}
+#     'target_modalities': config.target_modalities, 'dim': config.dim,
+#     'discrete': config.discrete}  # , 'spherical': config.discrete
+# policy_kwargs = {'pinning_spatial': config.spatial, 'minibatch_size': 10_000}
+# memory_kwargs = {'device': 'cuda:0'}
 # env_init, policy_init, memory_init = celltrip.train.get_initializers(
 #     input_files=config.input_files, merge_files=config.merge_files,
 #     partition_cols=config.partition_cols,
 #     backed=config.backed, dataloader_kwargs=dataloader_kwargs,
-#     policy_kwargs={'minibatch_size': 10_000},
+#     policy_kwargs=policy_kwargs,
 #     # memory_kwargs={'device': 'cuda:0'},  # Skips casting, cutting time significantly for relatively small batch sizes
 #     environment_kwargs=environment_kwargs)
 

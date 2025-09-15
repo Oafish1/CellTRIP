@@ -111,10 +111,12 @@ setup(
             'matplotlib',
             'nbconvert',
             'pandas',
+            'POT',
             'rds2py',
             's3fs',
             'scanpy',
             'scikit-learn>=1.4.2',  # Needs ~1.4.2
+            'scipy',
             'seaborn',
             'tqdm',
             'umap-learn',
