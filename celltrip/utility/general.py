@@ -201,13 +201,13 @@ def get_s3_handler_with_access(fname, default_block_size=100*2**20, default_cach
 
 
 class open_s3_or_local:
-    def __init__(self, fname, flags):
+    def __init__(self, fname, flags, s3_kwargs={}):
         self.fname = fname
         self.flags = flags
 
         # Open file
         if fname.startswith('s3://'):
-            s3 = get_s3_handler_with_access(fname)
+            s3 = get_s3_handler_with_access(fname, **s3_kwargs)
             self.handler = s3.open(fname, flags)
         else:
             self.handler = open(fname, flags)
@@ -272,3 +272,20 @@ def transform_and_center(X, pca=None, return_pca=False):
     trans_cent_X = trans_X - trans_X.mean(axis=0)
     if return_pca: return trans_cent_X, pca
     return trans_cent_X
+
+
+def compute_discrete_ot_matrix(
+        X, Y,
+        numItermax=1_000_000,
+        **kwargs):
+    import ot
+
+    # Solve discrete EMD
+    a, b = ot.utils.unif(X.shape[0]), ot.utils.unif(Y.shape[0])
+    M_raw = ot.dist(X, Y)
+    M = M_raw / M_raw.max()
+    OT_mat = ot.emd(a, b, M, numItermax=numItermax, **kwargs)
+    # OT_mat = ot.solve(M, a, b)
+    # OT_mat = ot.sinkhorn(a, b, M, 1e-1)
+
+    return a, b, M_raw, OT_mat

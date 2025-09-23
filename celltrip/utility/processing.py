@@ -28,6 +28,8 @@ class Preprocessing:
     "Apply modifications to input modalities based on given arguments. Takes np.array as input"
     def __init__(
         self,
+        # Log1p
+        pre_log=False,
         # Standardize
         standardize=True,
         # Filtering
@@ -43,6 +45,7 @@ class Preprocessing:
         device=None,
         **kwargs,
     ):
+        self.pre_log = pre_log
         self.standardize = standardize
         self.top_variant = top_variant
         self.pca_dim = pca_dim
@@ -58,10 +61,26 @@ class Preprocessing:
         # Data
         self.is_sparse_transform = None
 
+    def init_vars(self, num_modalities):
+        if isinstance(self.top_variant, int): self.top_variant = num_modalities * [self.top_variant]
+        if isinstance(self.pca_dim, int): self.pca_dim = num_modalities * [self.pca_dim]
+        if isinstance(self.pre_log, bool): self.pre_log = num_modalities * [self.pre_log]
+        elif (
+            isinstance(self.pre_log, list)
+            and (
+                len(self.pre_log)==0
+                or (
+                    isinstance(self.pre_log[0], int)  # `bool` is a subclass of `int`
+                    and not isinstance(self.pre_log[0], bool)
+        ))):
+            true_idx = self.pre_log
+            self.pre_log = [i in true_idx for i in range(num_modalities)]
+
     def get_state(self):
         # Settings
         # NOTE: Seeds and device omitted
         settings = {
+            'pre_log': self.pre_log,
             'standardize': self.standardize,
             'top_variant': self.top_variant,
             'pca_dim': self.pca_dim,
@@ -77,18 +96,10 @@ class Preprocessing:
             'modal_dims': self.modal_dims}
         
         return {**settings, **calculations}
-
-    def save(self, fname):
-        with _utility.general.open_s3_or_local(fname, 'wb') as f:
-            pickle.dump(self.get_state(), f)
-
-    def load(self, state):
-        # Load from file if needed
-        if isinstance(state, str):
-            with _utility.general.open_s3_or_local(state, 'rb') as f:
-                state = pickle.load(f)
-
+    
+    def set_state(self, state):
         # Absorb
+        if 'pre_log' in state: self.pre_log = state['pre_log']
         self.standardize = state['standardize']
         self.top_variant = state['top_variant']
         self.pca_dim = state['pca_dim']
@@ -102,7 +113,24 @@ class Preprocessing:
         self.pca_class = state['pca_class']
         self.modal_dims = state['modal_dims']
 
+        # Defaults
+        self.init_vars(len(self.modal_dims))  # For the uninitialized case
+
         return self
+
+    def save(self, fname):
+        with _utility.general.open_s3_or_local(fname, 'wb') as f:
+            pickle.dump(self.get_state(), f)
+
+        return self
+
+    def load(self, state):
+        # Load from file if needed
+        if isinstance(state, str):
+            with _utility.general.open_s3_or_local(state, 'rb') as f:
+                state = pickle.load(f)
+
+        return self.set_state(state)
 
     def set_num_nodes(self, num_nodes):
         self.num_nodes = num_nodes
@@ -110,10 +138,17 @@ class Preprocessing:
     def fit(self, modalities, *, total_statistics=False, **kwargs):
         # Parameters
         self.is_sparse_transform = [scipy.sparse.issparse(m) for m in modalities]
-        if isinstance(self.top_variant, int): self.top_variant = len(modalities) * [self.top_variant]
-        if isinstance(self.pca_dim, int): self.pca_dim = len(modalities) * [self.pca_dim]
+        self.init_vars(len(modalities))
         num_samples = [m.shape[0] for m in modalities]
         modal_feature_nums = [m.shape[1] for m in modalities]
+
+        # Log
+        if self.pre_log is not None:
+            modalities = [
+                m if not m_log else
+                np.log1p(m) if not m_sparse else
+                m.log1p()
+                for m, m_sparse, m_log in zip(modalities, self.is_sparse_transform, self.pre_log)]
 
         # Standardize
         if self.standardize or self.top_variant is not None:
@@ -121,14 +156,12 @@ class Preprocessing:
                 np.mean(m, axis=0 if not total_statistics else None, keepdims=True)
                 if not m_sparse else
                 np.array(np.mean(m, axis=0 if not total_statistics else None).reshape((1, -1)))
-                for m, m_sparse in zip(modalities, self.is_sparse_transform)
-            ]
+                for m, m_sparse in zip(modalities, self.is_sparse_transform)]
             get_standardize_std = lambda total_statistics: [
                 np.std(m, axis=0 if not total_statistics else None, keepdims=True)
                 if not m_sparse else
                 np.array(np.sqrt(m.power(2).mean(axis=0 if not total_statistics else None) - np.square(m.mean(axis=0 if not total_statistics else None))).reshape((1, -1)))
-                for m, m_sparse in zip(modalities, self.is_sparse_transform)
-            ]
+                for m, m_sparse in zip(modalities, self.is_sparse_transform)]
             self.standardize_std = get_standardize_std(total_statistics)
 
         # Filtering
@@ -142,8 +175,7 @@ class Preprocessing:
             self.filter_mask = [
                 np.argsort(std[0])[:-int(var+1):-1]
                 if var is not None and std[0].shape[0] > var else None
-                for std, var in zip(st_std, self.top_variant)
-            ]
+                for std, var in zip(st_std, self.top_variant)]
             modalities = [m[:, mask] if mask is not None else m for m, mask in zip(modalities, self.filter_mask)]
             
             # Mask mean and std if needed
@@ -245,6 +277,14 @@ class Preprocessing:
                 # NOTE: Creates a view of the object
                 adata_vars = [adata_var.iloc[mask] if mask is not None else adata_var for adata_var, mask in zip(adata_vars, self.filter_mask[sm])]
 
+        # Log
+        if self.pre_log is not None:
+            modalities = [
+                m if not m_log else
+                np.log1p(m) if not m_sparse else
+                m.log1p()
+                for m, m_sparse, m_log in zip(modalities, self.is_sparse_transform[sm], self.pre_log[sm])]
+
         # Standardize
         # NOTE: Not mean-centered for sparse matrices
         # TODO: Maybe allow for only one dataset to be standardized?
@@ -301,7 +341,10 @@ class Preprocessing:
         # NOTE: Does not reverse top variant filtering
         # PCA
         if self.pca_dim is not None:
-            modalities = [p.inverse_transform(m) if p is not None else m for m, p in zip(modalities, self.pca_class[sm])]
+            modalities = [
+                p.inverse_transform(m.reshape((-1, m.shape[-1]))).reshape((*m.shape[:-1], -1))
+                if p is not None else m
+                for m, p in zip(modalities, self.pca_class[sm])]
 
         # Standardize
         if self.standardize:
@@ -310,6 +353,14 @@ class Preprocessing:
                 if not m_sparse else
                 (m_std * m)
                 for m, m_mean, m_std, m_sparse in zip(modalities, self.standardize_mean[sm], self.standardize_std[sm], self.is_sparse_transform[sm])]
+
+        # Log
+        if self.pre_log is not None:
+            modalities = [
+                m if not m_log else
+                np.expm1(m) if not m_sparse else
+                m.expm1()
+                for m, m_sparse, m_log in zip(modalities, self.is_sparse_transform[sm], self.pre_log[sm])]
 
         return modalities
 
@@ -432,7 +483,6 @@ class Preprocessing:
         if modalities is not None: ret += (modalities,)
         if adata_obs is not None: ret += (adata_obs,)
         if return_partition: ret += (selected_partition,)
-        print(selected_partition)
         # print(selected_partition)
         return _utility.general.clean_return(ret)
 
@@ -458,6 +508,9 @@ def chunk(full_data, *, chunk_size, index_func=None, func=None):
         if index_func is not None: data = index_func(data)
         if func is not None: data = func(data)
         proc.append(data)
+    if len(proc) == 1: return proc[0]
+    if scipy.sparse.issparse(proc[0]):
+        return scipy.sparse.vstack(proc)
     return np.concatenate(proc, axis=0)
     
 

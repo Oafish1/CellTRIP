@@ -1,3 +1,47 @@
+### 1.0.0+2025.9.23
+- Exploratory plotting for `PerturbMM`, `dyngen`, and `cortex` datasets
+- File organization and new `.gitignore` for plot exports
+
+### 1.0.0+2025.9.22
+- Add `s3_kwargs` argument to `open_s3_or_local`
+- Adjust `tutorial` notebook to reflect new updates and optimizations
+- Faster mask loading code
+- Fix `Preprocessing.pre_log` initialization bug caused by `bool` being an `int` subclass
+- Raw `cortex` data preprocessing and runs
+- Testing on recent `PerturbMM` model
+- Trim `PerturbMM` expression h5ad file meta for faster loading
+
+### 1.0.0+2025.9.21
+- Full `dyngen` perturbation runs
+
+### 1.0.0+2025.9.20
+- Corrections for `trajectory_length` calculation in `flysta_generate` and `dyngen_generate` notebooks
+
+### 1.0.0+2025.9.20
+- Add separate notebook for running through errors `run_notebook_force`
+- Better compatibility with batched transforms and inverse transforms
+- Generalize chunking procedure
+- More data transformation for `Cortex` validation
+- New `dyngen_generate` notebook
+
+### 1.0.0+2025.9.19
+- Add `compute_discrete_ot_matrix` utility function
+- Add `cortex` data generation notebook, `cortex_generate`
+- Add log transform `pre_log` to `Preprocessing` class and `train` script arguments as `log_modalities`
+- Slice annotation for `PerturbationMM` using neighbors and `DBSCAN`
+
+### 1.0.0+2025.9.18
+- Add linear interpolation comparison to validation state recovery
+- Testing on `Cortex` trained policy on validation data
+
+### 1.0.0+2025.9.17
+- Add heatmap significance visualization for `flysta`
+- Style changes to `flysta` performance visualization
+
+### 1.0.0+2025.9.16
+- Add `Cortex` single-slice data
+- Figure updates
+
 ### 1.0.0+2025.9.14
 - Add EMD evaluation for interpolation
 - Additional model runs
