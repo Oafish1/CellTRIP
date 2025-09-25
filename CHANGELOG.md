@@ -1,3 +1,6 @@
+### 1.0.0+2025.9.24
+- Flysta figure updates
+
 ### 1.0.0+2025.9.23
 - Exploratory plotting for `PerturbMM`, `dyngen`, and `cortex` datasets
 - File organization and new `.gitignore` for plot exports
