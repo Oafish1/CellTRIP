@@ -300,9 +300,12 @@ class Preprocessing:
             m_idx = list(range(*subset_modality.indices(len(self.is_sparse_transform))))
             assert len(m_idx) == 1, 'Currently, `subset_features` only compatible with one modality'
             if self.top_variant is not None and self.filter_mask[sm][0] is not None:
-                if np.intersect1d(subset_features, self.filter_mask[sm][0]).shape[0] != len(subset_features):
-                    warnings.warn('Some `subset_features` elements not included due to filtering', RuntimeWarning)
-                idx_loc = [np.argwhere(self.filter_mask[sm][0] == sf).flatten()[0] for sf in subset_features]
+                subset_features_intersection = np.intersect1d(subset_features, self.filter_mask[sm][0])
+                if subset_features_intersection.shape[0] != len(subset_features):
+                    warnings.warn(
+                        f'Some `subset_features` elements not included due to filtering, '
+                        f'{np.setxor1d(subset_features, subset_features_intersection)}.', RuntimeWarning)
+                idx_loc = [np.argwhere(self.filter_mask[sm][0] == sf).flatten()[0] for sf in subset_features_intersection]
             else: idx_loc = subset_features
             # Set all features but requested to zero/center
             all_but_needed = np.setxor1d(np.arange(modalities[0].shape[1]), np.array(idx_loc))

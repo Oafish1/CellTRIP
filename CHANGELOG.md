@@ -1,3 +1,19 @@
+### 1.0.0+2025.10.1
+- Many figure revisions
+
+### 1.0.0+2025.9.30
+- Main figure and `Flysta` figure revisions
+
+### 1.0.0+2025.9.29
+- Troubleshooting with `PerturbMM` knockdown
+
+### 1.0.0+2025.9.28
+- Add `DrugSeries` dataset
+
+### 1.0.0+2025.9.25
+- Allow for partially compatible (in-filter) transform subset features
+- Bugfix for `flysta_generate` and `dyngen_generate` knockdown chunking and environment reset
+
 ### 1.0.0+2025.9.24
 - Flysta figure updates
 
