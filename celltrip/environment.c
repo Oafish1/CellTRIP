@@ -15053,7 +15053,7 @@ static PyObject *__pyx_pf_8celltrip_11environment_15EnvironmentBase_24get_pinnin
  *             # Final computation
  *             mse = err.square().mean(dim=-1)             # <<<<<<<<<<<<<<
  *             # mse = (err.square() / m.var(keepdim=True, dim=0)).mean(dim=-1)  # Scaled MSE, mainly for slice samples which have varying positions - could also do this in prepro - kinda bad for PCA
- *             mse /= m.square().mean()  # Scale for fairness
+ *             mse /= m.square().mean()  # Scale for fairness (TODO: MAKE WORK WITH SPATIAL, maybe use std)
  */
     __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_err, __pyx_n_s_square); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 552, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
@@ -15095,7 +15095,7 @@ static PyObject *__pyx_pf_8celltrip_11environment_15EnvironmentBase_24get_pinnin
     /* "celltrip/environment.py":554
  *             mse = err.square().mean(dim=-1)
  *             # mse = (err.square() / m.var(keepdim=True, dim=0)).mean(dim=-1)  # Scaled MSE, mainly for slice samples which have varying positions - could also do this in prepro - kinda bad for PCA
- *             mse /= m.square().mean()  # Scale for fairness             # <<<<<<<<<<<<<<
+ *             mse /= m.square().mean()  # Scale for fairness (TODO: MAKE WORK WITH SPATIAL, maybe use std)             # <<<<<<<<<<<<<<
  *             loss = -1 / (1 + 10*mse)  # Transform
  *             # mae = err.abs().mean(dim=-1)
  */
@@ -15156,7 +15156,7 @@ static PyObject *__pyx_pf_8celltrip_11environment_15EnvironmentBase_24get_pinnin
 
     /* "celltrip/environment.py":555
  *             # mse = (err.square() / m.var(keepdim=True, dim=0)).mean(dim=-1)  # Scaled MSE, mainly for slice samples which have varying positions - could also do this in prepro - kinda bad for PCA
- *             mse /= m.square().mean()  # Scale for fairness
+ *             mse /= m.square().mean()  # Scale for fairness (TODO: MAKE WORK WITH SPATIAL, maybe use std)
  *             loss = -1 / (1 + 10*mse)  # Transform             # <<<<<<<<<<<<<<
  *             # mae = err.abs().mean(dim=-1)
  *             # loss = -1 / (1 + mae)  # Transform

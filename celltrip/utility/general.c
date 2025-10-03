@@ -2499,6 +2499,7 @@ static const char __pyx_k_init[] = "__init__";
 static const char __pyx_k_isna[] = "isna";
 static const char __pyx_k_main[] = "__main__";
 static const char __pyx_k_mean[] = "mean";
+static const char __pyx_k_mmap[] = "mmap";
 static const char __pyx_k_name[] = "__name__";
 static const char __pyx_k_ones[] = "ones";
 static const char __pyx_k_open[] = "open";
@@ -2588,7 +2589,6 @@ static const char __pyx_k_scheduler[] = "scheduler";
 static const char __pyx_k_traceback[] = "traceback";
 static const char __pyx_k_transform[] = "transform";
 static const char __pyx_k_ValueError[] = "ValueError";
-static const char __pyx_k_background[] = "background";
 static const char __pyx_k_dict_entry[] = "dict_entry";
 static const char __pyx_k_gen_tolist[] = "gen_tolist";
 static const char __pyx_k_keep_array[] = "keep_array";
@@ -2755,7 +2755,6 @@ typedef struct {
   PyObject *__pyx_n_s_asyncio_coroutines;
   PyObject *__pyx_n_s_axis;
   PyObject *__pyx_n_s_b;
-  PyObject *__pyx_n_u_background;
   PyObject *__pyx_n_s_base;
   PyObject *__pyx_n_s_batch_num;
   PyObject *__pyx_n_s_celltrip_utility_general;
@@ -2846,6 +2845,7 @@ typedef struct {
   PyObject *__pyx_n_s_memory_allocated;
   PyObject *__pyx_n_s_metaclass;
   PyObject *__pyx_n_s_method;
+  PyObject *__pyx_n_u_mmap;
   PyObject *__pyx_n_s_modification;
   PyObject *__pyx_n_s_module;
   PyObject *__pyx_n_s_name;
@@ -3100,7 +3100,6 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_n_s_asyncio_coroutines);
   Py_CLEAR(clear_module_state->__pyx_n_s_axis);
   Py_CLEAR(clear_module_state->__pyx_n_s_b);
-  Py_CLEAR(clear_module_state->__pyx_n_u_background);
   Py_CLEAR(clear_module_state->__pyx_n_s_base);
   Py_CLEAR(clear_module_state->__pyx_n_s_batch_num);
   Py_CLEAR(clear_module_state->__pyx_n_s_celltrip_utility_general);
@@ -3191,6 +3190,7 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_n_s_memory_allocated);
   Py_CLEAR(clear_module_state->__pyx_n_s_metaclass);
   Py_CLEAR(clear_module_state->__pyx_n_s_method);
+  Py_CLEAR(clear_module_state->__pyx_n_u_mmap);
   Py_CLEAR(clear_module_state->__pyx_n_s_modification);
   Py_CLEAR(clear_module_state->__pyx_n_s_module);
   Py_CLEAR(clear_module_state->__pyx_n_s_name);
@@ -3423,7 +3423,6 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_n_s_asyncio_coroutines);
   Py_VISIT(traverse_module_state->__pyx_n_s_axis);
   Py_VISIT(traverse_module_state->__pyx_n_s_b);
-  Py_VISIT(traverse_module_state->__pyx_n_u_background);
   Py_VISIT(traverse_module_state->__pyx_n_s_base);
   Py_VISIT(traverse_module_state->__pyx_n_s_batch_num);
   Py_VISIT(traverse_module_state->__pyx_n_s_celltrip_utility_general);
@@ -3514,6 +3513,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_n_s_memory_allocated);
   Py_VISIT(traverse_module_state->__pyx_n_s_metaclass);
   Py_VISIT(traverse_module_state->__pyx_n_s_method);
+  Py_VISIT(traverse_module_state->__pyx_n_u_mmap);
   Py_VISIT(traverse_module_state->__pyx_n_s_modification);
   Py_VISIT(traverse_module_state->__pyx_n_s_module);
   Py_VISIT(traverse_module_state->__pyx_n_s_name);
@@ -3756,7 +3756,6 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_n_s_asyncio_coroutines __pyx_mstate_global->__pyx_n_s_asyncio_coroutines
 #define __pyx_n_s_axis __pyx_mstate_global->__pyx_n_s_axis
 #define __pyx_n_s_b __pyx_mstate_global->__pyx_n_s_b
-#define __pyx_n_u_background __pyx_mstate_global->__pyx_n_u_background
 #define __pyx_n_s_base __pyx_mstate_global->__pyx_n_s_base
 #define __pyx_n_s_batch_num __pyx_mstate_global->__pyx_n_s_batch_num
 #define __pyx_n_s_celltrip_utility_general __pyx_mstate_global->__pyx_n_s_celltrip_utility_general
@@ -3847,6 +3846,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_n_s_memory_allocated __pyx_mstate_global->__pyx_n_s_memory_allocated
 #define __pyx_n_s_metaclass __pyx_mstate_global->__pyx_n_s_metaclass
 #define __pyx_n_s_method __pyx_mstate_global->__pyx_n_s_method
+#define __pyx_n_u_mmap __pyx_mstate_global->__pyx_n_u_mmap
 #define __pyx_n_s_modification __pyx_mstate_global->__pyx_n_s_modification
 #define __pyx_n_s_module __pyx_mstate_global->__pyx_n_s_module
 #define __pyx_n_s_name __pyx_mstate_global->__pyx_n_s_name
@@ -8965,7 +8965,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_24set_device_recursive(CYT
 /* "celltrip/utility/general.py":185
  * 
  * 
- * def get_s3_handler_with_access(fname, default_block_size=100*2**20, default_cache_type='background'):             # <<<<<<<<<<<<<<
+ * def get_s3_handler_with_access(fname, default_block_size=100*2**20, default_cache_type='mmap'):             # <<<<<<<<<<<<<<
  *     # Get s3 handler
  *     import s3fs
  */
@@ -9011,7 +9011,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject **__pyx_pyargnames[] = {&__pyx_n_s_fname,&__pyx_n_s_default_block_size,&__pyx_n_s_default_cache_type,0};
     values[1] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)__pyx_int_104857600)));
-    values[2] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_n_u_background)));
+    values[2] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject*)__pyx_n_u_mmap)));
     if (__pyx_kwds) {
       Py_ssize_t kw_args;
       switch (__pyx_nargs) {
@@ -9125,7 +9125,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_26get_s3_handler_with_acce
   __Pyx_RefNannySetupContext("get_s3_handler_with_access", 1);
 
   /* "celltrip/utility/general.py":187
- * def get_s3_handler_with_access(fname, default_block_size=100*2**20, default_cache_type='background'):
+ * def get_s3_handler_with_access(fname, default_block_size=100*2**20, default_cache_type='mmap'):
  *     # Get s3 handler
  *     import s3fs             # <<<<<<<<<<<<<<
  *     try:
@@ -9660,7 +9660,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_26get_s3_handler_with_acce
   /* "celltrip/utility/general.py":185
  * 
  * 
- * def get_s3_handler_with_access(fname, default_block_size=100*2**20, default_cache_type='background'):             # <<<<<<<<<<<<<<
+ * def get_s3_handler_with_access(fname, default_block_size=100*2**20, default_cache_type='mmap'):             # <<<<<<<<<<<<<<
  *     # Get s3 handler
  *     import s3fs
  */
@@ -13649,7 +13649,6 @@ static int __Pyx_CreateStringTabAndInitStrings(void) {
     {&__pyx_n_s_asyncio_coroutines, __pyx_k_asyncio_coroutines, sizeof(__pyx_k_asyncio_coroutines), 0, 0, 1, 1},
     {&__pyx_n_s_axis, __pyx_k_axis, sizeof(__pyx_k_axis), 0, 0, 1, 1},
     {&__pyx_n_s_b, __pyx_k_b, sizeof(__pyx_k_b), 0, 0, 1, 1},
-    {&__pyx_n_u_background, __pyx_k_background, sizeof(__pyx_k_background), 0, 1, 0, 1},
     {&__pyx_n_s_base, __pyx_k_base, sizeof(__pyx_k_base), 0, 0, 1, 1},
     {&__pyx_n_s_batch_num, __pyx_k_batch_num, sizeof(__pyx_k_batch_num), 0, 0, 1, 1},
     {&__pyx_n_s_celltrip_utility_general, __pyx_k_celltrip_utility_general, sizeof(__pyx_k_celltrip_utility_general), 0, 0, 1, 1},
@@ -13740,6 +13739,7 @@ static int __Pyx_CreateStringTabAndInitStrings(void) {
     {&__pyx_n_s_memory_allocated, __pyx_k_memory_allocated, sizeof(__pyx_k_memory_allocated), 0, 0, 1, 1},
     {&__pyx_n_s_metaclass, __pyx_k_metaclass, sizeof(__pyx_k_metaclass), 0, 0, 1, 1},
     {&__pyx_n_s_method, __pyx_k_method, sizeof(__pyx_k_method), 0, 0, 1, 1},
+    {&__pyx_n_u_mmap, __pyx_k_mmap, sizeof(__pyx_k_mmap), 0, 1, 0, 1},
     {&__pyx_n_s_modification, __pyx_k_modification, sizeof(__pyx_k_modification), 0, 0, 1, 1},
     {&__pyx_n_s_module, __pyx_k_module, sizeof(__pyx_k_module), 0, 0, 1, 1},
     {&__pyx_n_s_name, __pyx_k_name, sizeof(__pyx_k_name), 0, 0, 1, 1},
@@ -14109,7 +14109,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   /* "celltrip/utility/general.py":185
  * 
  * 
- * def get_s3_handler_with_access(fname, default_block_size=100*2**20, default_cache_type='background'):             # <<<<<<<<<<<<<<
+ * def get_s3_handler_with_access(fname, default_block_size=100*2**20, default_cache_type='mmap'):             # <<<<<<<<<<<<<<
  *     # Get s3 handler
  *     import s3fs
  */
@@ -14117,7 +14117,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __Pyx_GOTREF(__pyx_tuple__45);
   __Pyx_GIVEREF(__pyx_tuple__45);
   __pyx_codeobj__46 = (PyObject*)__Pyx_PyCode_New(3, 0, 0, 5, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__45, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_general_py, __pyx_n_s_get_s3_handler_with_access, 185, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__46)) __PYX_ERR(0, 185, __pyx_L1_error)
-  __pyx_tuple__47 = PyTuple_Pack(2, ((PyObject *)__pyx_int_104857600), ((PyObject*)__pyx_n_u_background)); if (unlikely(!__pyx_tuple__47)) __PYX_ERR(0, 185, __pyx_L1_error)
+  __pyx_tuple__47 = PyTuple_Pack(2, ((PyObject *)__pyx_int_104857600), ((PyObject*)__pyx_n_u_mmap)); if (unlikely(!__pyx_tuple__47)) __PYX_ERR(0, 185, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__47);
   __Pyx_GIVEREF(__pyx_tuple__47);
 
@@ -14894,7 +14894,7 @@ if (!__Pyx_RefNanny) {
   /* "celltrip/utility/general.py":185
  * 
  * 
- * def get_s3_handler_with_access(fname, default_block_size=100*2**20, default_cache_type='background'):             # <<<<<<<<<<<<<<
+ * def get_s3_handler_with_access(fname, default_block_size=100*2**20, default_cache_type='mmap'):             # <<<<<<<<<<<<<<
  *     # Get s3 handler
  *     import s3fs
  */

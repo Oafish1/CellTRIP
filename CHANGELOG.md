@@ -1,5 +1,13 @@
+### 1.0.0+2025.10.2
+- Add `sample_counts` argument to `Preprocessing` module and training script for normalizing cell counts in expression data
+- Chunking for `PreprocessFromAnnData`
+- Full `VirtualCell` data and appropriate dataloader tuning
+- Schematic figure changes
+- Switch `default_cache_type` for `s3fs` to `mmap` to cut down on large dataset loading times over the course of training
+
 ### 1.0.0+2025.10.1
 - Many figure revisions
+- Thumbnail panels from `Flysta`
 
 ### 1.0.0+2025.9.30
 - Main figure and `Flysta` figure revisions

@@ -28,12 +28,14 @@ class Preprocessing:
     "Apply modifications to input modalities based on given arguments. Takes np.array as input"
     def __init__(
         self,
+        # Sample norm
+        sample_count=None,  # Destructive
         # Log1p
         pre_log=False,
         # Standardize
         standardize=True,
         # Filtering
-        top_variant=int(1e6),  # Top 1M by default
+        top_variant=int(1e6),  # Destructive
         # PCA
         pca_dim=2**9,  # 512, TODO: Add auto-handling for less PCA than samples
         # Fitting
@@ -45,6 +47,7 @@ class Preprocessing:
         device=None,
         **kwargs,
     ):
+        self.sample_count = sample_count
         self.pre_log = pre_log
         self.standardize = standardize
         self.top_variant = top_variant
@@ -66,7 +69,7 @@ class Preprocessing:
         if isinstance(self.pca_dim, int): self.pca_dim = num_modalities * [self.pca_dim]
         if isinstance(self.pre_log, bool): self.pre_log = num_modalities * [self.pre_log]
         elif (
-            isinstance(self.pre_log, list)
+            _utility.general.is_list_like(self.pre_log)
             and (
                 len(self.pre_log)==0
                 or (
@@ -75,11 +78,14 @@ class Preprocessing:
         ))):
             true_idx = self.pre_log
             self.pre_log = [i in true_idx for i in range(num_modalities)]
+        if not _utility.general.is_list_like(self.sample_count):
+            self.sample_count = num_modalities * [self.sample_count]
 
     def get_state(self):
         # Settings
         # NOTE: Seeds and device omitted
         settings = {
+            'sample_count': self.sample_count,
             'pre_log': self.pre_log,
             'standardize': self.standardize,
             'top_variant': self.top_variant,
@@ -99,6 +105,7 @@ class Preprocessing:
     
     def set_state(self, state):
         # Absorb
+        if 'sample_count' in state: self.sample_count = state['sample_count']
         if 'pre_log' in state: self.pre_log = state['pre_log']
         self.standardize = state['standardize']
         self.top_variant = state['top_variant']
@@ -141,6 +148,13 @@ class Preprocessing:
         self.init_vars(len(modalities))
         num_samples = [m.shape[0] for m in modalities]
         modal_feature_nums = [m.shape[1] for m in modalities]
+
+        # Sample normalization
+        if self.sample_count is not None:
+            modalities = [
+                m if not m_sampcount else
+                m * m_sampcount / np.sum(m, keepdims=True, axis=1)
+                for m, _, m_sampcount in zip(modalities, self.is_sparse_transform, self.sample_count)]
 
         # Log
         if self.pre_log is not None:
@@ -276,6 +290,13 @@ class Preprocessing:
             if adata_vars is not None:
                 # NOTE: Creates a view of the object
                 adata_vars = [adata_var.iloc[mask] if mask is not None else adata_var for adata_var, mask in zip(adata_vars, self.filter_mask[sm])]
+
+        # Sample normalization
+        if self.sample_count is not None:
+            modalities = [
+                m if not m_sampcount else
+                m * m_sampcount / np.sum(m, keepdims=True, axis=1)
+                for m, _, m_sampcount in zip(modalities, self.is_sparse_transform, self.sample_count)]
 
         # Log
         if self.pre_log is not None:
@@ -650,12 +671,14 @@ class PreprocessFromAnnData:
         mask=None,  # List or float indicating fraction of keepable samples
         mask_partitions=False,  # Mask whole partitions if `mask` is provided as float
         fit_sample='auto',
+        chunk_size=2_000,
         seed=None,
         **kwargs
     ):
         self.adatas = adatas
         self.preprocessing = Preprocessing(**kwargs, seed=seed) if preprocessing is None or isinstance(preprocessing, str) else preprocessing
         if isinstance(preprocessing, str): self.preprocessing.load(preprocessing)
+        self.chunk_size = chunk_size
         self.seed = seed
 
         # RNG
@@ -762,9 +785,14 @@ class PreprocessFromAnnData:
         # Subsample for training
         if self.fit_sample:
             modalities = [
-                adata[self.rng.choice(adata.shape[0], self.fit_sample, replace=False)].X
-                if adata.shape[0] > self.fit_sample else
-                adata[:].X[:]
+                # adata[self.rng.choice(adata.shape[0], self.fit_sample, replace=False)].X
+                # if adata.shape[0] > self.fit_sample else
+                # adata[:].X[:]
+                chunk(
+                    adata[np.sort(self.rng.choice(adata.shape[0], self.fit_sample, replace=False))].X
+                    if adata.shape[0] > self.fit_sample else
+                    adata[:].X,
+                    chunk_size=self.chunk_size)
                 for adata in self.adatas]
         else: modalities = [adata[:].X[:] for adata in self.adatas]
 
@@ -785,7 +813,10 @@ class PreprocessFromAnnData:
             return_partition=return_partition,
             **kwargs)
         if return_partition: sampled_adata_obs, partition = sampled_adata_obs
-        sampled_modalities = [adata[adata_ob.index.to_numpy()].X for adata, adata_ob in zip(self.adatas, sampled_adata_obs)]
+        # sampled_modalities = [adata[adata_ob.index.to_numpy()].X for adata, adata_ob in zip(self.adatas, sampled_adata_obs)]
+        sampled_modalities = [
+            chunk(adata[adata_ob.index.to_numpy()].X, chunk_size=self.chunk_size)
+            for adata, adata_ob in zip(self.adatas, sampled_adata_obs)]
         processed_adata_obs = sampled_adata_obs
         processed_modalities, processed_adata_vars = self.preprocessing.transform(
             sampled_modalities, adata_vars=adata_vars, force_filter=True)

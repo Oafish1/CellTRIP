@@ -182,7 +182,7 @@ def set_device_recursive(state_dict, device):
     return state_dict
 
 
-def get_s3_handler_with_access(fname, default_block_size=100*2**20, default_cache_type='background'):
+def get_s3_handler_with_access(fname, default_block_size=100*2**20, default_cache_type='mmap'):
     # Get s3 handler
     import s3fs
     try:
