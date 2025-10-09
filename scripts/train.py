@@ -33,13 +33,14 @@ group.add_argument('--merge_files', type=str, action='append', nargs='+', help='
 group.add_argument('--partition_cols', type=str, nargs='+', help='Columns for data partitioning, found in `adata.obs` DataFrame')
 group.add_argument('--backed', action='store_true', help='Read data directly from disk or s3, saving memory at the cost of time')
 group.add_argument('--input_modalities', type=int, nargs='+', help='Input modalities to give to CellTRIP')
-group.add_argument('--sample_counts', type=int, nargs='+', help='Normalized sample counts per modality')
+group.add_argument('--sample_counts', type=int, nargs='+', help='Normalized sample counts per modality. 0 indicates no normalization')
 group.add_argument('--log_modalities', type=int, nargs='+', help='Modalities to which a log transform should be applied')
+group.add_argument('--pca_dim', type=int, nargs='+', default=[512], help='PCA preprocessing dimension, optionally per-modality. 0 indicates no PCA')
 group.add_argument('--target_modalities', type=int, nargs='+', help='Target modalities to emulate, dictates environment reward')
 group.add_argument('--spatial', type=int, nargs='+', help='Which modalities are spatial, dictates pinning strategy')
 # Algorithm
 group = parser.add_argument_group('Algorithm')
-group.add_argument('--dim', type=int, default=16, help='Dimensions in the output latent space')
+group.add_argument('--dim', type=int, default=8, help='Dimensions in the output latent space')
 group.add_argument('--discrete', action='store_true', help='Use the discrete model rather than continuous')
 group.add_argument('--train_mask', type=str, help='File or `obs` column containing boolean training mask')
 group.add_argument('--train_split', type=float, default=1., help='Fraction of input data to use as training. Overwritten by `train_mask`')
@@ -52,12 +53,12 @@ group.add_argument('--num_runners', type=int, default=1, help='Number of workers
 # Training
 group = parser.add_argument_group('Training')
 group.add_argument('--update_timesteps', type=int, default=int(1e6), help='Number of timesteps recorded before each update')
-group.add_argument('--max_timesteps', type=int, default=int(2e9), help='Maximum number of timesteps to compute before exiting')
+group.add_argument('--max_timesteps', type=int, default=int(8e8), help='Maximum number of timesteps to compute before exiting')
 group.add_argument('--dont_sync_across_nodes', action='store_true', help='Avoid memory sync across nodes, saving overhead time at the cost of stability')
 # File saves
 group = parser.add_argument_group('Logging')
 group.add_argument('--logfile', type=str, default='cli', help='Location for log file, can be `cli`, `<local_file>`, or `<s3 location>`')
-group.add_argument('--flush_iterations', default=25, type=int, help='Number of iterations to wait before flushing logs')
+group.add_argument('--flush_iterations', default=1, type=int, help='Number of iterations to wait before flushing logs')
 group.add_argument('--checkpoint', type=str, help='Checkpoint to use for initializing model')
 group.add_argument('--checkpoint_iterations', type=int, default=100, help='Number of updates to wait before recording checkpoints')
 group.add_argument('--checkpoint_dir', type=str, default='./checkpoints', help='Directory for checkpoints')
@@ -75,7 +76,7 @@ else:
     # experiment_name = 'CancerVel-250913'
     # experiment_name = 'PerturbMM-gex-250928'
     # experiment_name = 'DrugSeries-250928'
-    experiment_name = 'vcc-251001'
+    experiment_name = 'vcc-251008-celllog-64'
     bucket_name = 'nkalafut-celltrip'
     command = (
         # scGLUE
@@ -102,6 +103,7 @@ else:
         # f'--partition_cols slice_id '
         # Cortex
         # f's3://{bucket_name}/Cortex/brain_st_cortex_expression.h5ad s3://{bucket_name}/Cortex/brain_st_cortex_spatial.h5ad '
+        # f'--sample_counts 10_000 '
         # f'--log_modalities 0 '
         # f'--target_modalities 1 '
         # f'--spatial 1 '
@@ -120,7 +122,7 @@ else:
         # f'--partition_cols "Donor ID" '
 
         # Virtual Cell Challenge
-        f's3://{bucket_name}/VirtualCell/expression.h5ad '
+        f's3://{bucket_name}/VirtualCell/expression.h5ad --sample_counts 10_000 --log_modalities 0 '
         # f'--partition_cols target_gene '
         # CancerVel
         # NOTE: Make sure to check here that NAN sgAssign partitions are chosen
@@ -141,14 +143,16 @@ else:
 
         f'--backed '
         # f'--dim 2 '
-        f'--dim 8 '
+        f'--dim 64 '
+        f'--pca_dim 1024 '
         # f'--discrete '
 
         # Column split
         # f'--train_mask is_slice153 '  # MERFISH30k
         # f'--train_mask known_not_d6 '  # CancerVel
         # f'--train_mask slice_bc1_train '  # PerturbMM
-        # f'--train_mask train '  # DrugSeries, VCC
+        # f'--train_mask train '  # DrugSeries
+        f'--train_mask training '  # VCC
         # Sample split
         # f'--train_split .8 '
         # Partition split
@@ -209,6 +213,7 @@ def train(config):
     # Initialization
     dataloader_kwargs = {
         'num_nodes': [2**9, 2**11],
+        'pca_dim': config.pca_dim if len(config.pca_dim) > 1 else config.pca_dim[0],
         'sample_count': config.sample_counts,
         'pre_log': config.log_modalities,
         # 'num_nodes': None,
@@ -355,3 +360,6 @@ ray.get(train.remote(config))
 #     # NOTE: Training often only improves when PopArt and actual distribution match
 #     ret = policy.update(memory, verbose=False)
 #     print('UPDATE: ' + ', '.join([f'{k}: {v: 5.3f}' for ret_dict in ret[1:] for k, v in ret_dict.items()]))
+
+
+

@@ -551,7 +551,8 @@ class EnvironmentBase:
             # Final computation
             mse = err.square().mean(dim=-1)
             # mse = (err.square() / m.var(keepdim=True, dim=0)).mean(dim=-1)  # Scaled MSE, mainly for slice samples which have varying positions - could also do this in prepro - kinda bad for PCA
-            mse /= m.square().mean()  # Scale for fairness (TODO: MAKE WORK WITH SPATIAL, maybe use std)
+            # mse /= m.square().mean()  # Scale for fairness (TODO: MAKE WORK WITH SPATIAL, maybe use std)
+            mse /= m.var()  # Scale for fairness (spatial compatible)
             loss = -1 / (1 + 10*mse)  # Transform
             # mae = err.abs().mean(dim=-1)
             # loss = -1 / (1 + mae)  # Transform
@@ -687,8 +688,12 @@ class EnvironmentBase:
     def set_positions(self, pos):
         self.pos = pos
 
+        return self
+
     def set_velocities(self, vel):
         self.vel = vel
+        
+        return self
 
     def get_positions(self):
         return self.pos

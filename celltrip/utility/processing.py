@@ -153,8 +153,9 @@ class Preprocessing:
         if self.sample_count is not None:
             modalities = [
                 m if not m_sampcount else
-                m * m_sampcount / np.sum(m, keepdims=True, axis=1)
-                for m, _, m_sampcount in zip(modalities, self.is_sparse_transform, self.sample_count)]
+                m * m_sampcount / np.sum(m, keepdims=True, axis=1) if not m_sparse else
+                m * m_sampcount / np.sum(m, axis=1)
+                for m, m_sparse, m_sampcount in zip(modalities, self.is_sparse_transform, self.sample_count)]
 
         # Log
         if self.pre_log is not None:
@@ -220,7 +221,7 @@ class Preprocessing:
                         RuntimeWarning)
                     self.pca_dim[i] = num_samples[i]
             self.pca_class = [
-                None if dim is None else
+                None if (dim is None or dim < 1) else
                 sklearn.decomposition.PCA(
                     n_components=dim,
                     svd_solver='auto',
@@ -283,7 +284,7 @@ class Preprocessing:
         # Filtering
         # NOTE: Determines if filtering is already done by shape checking the main `modalities` input
         already_applied = not np.array([m.shape[1] != mask.shape[0] for m, mask in zip(modalities, self.filter_mask[sm]) if mask is not None]).any()
-        if force_filter is None and already_applied:
+        if not force_filter and already_applied:
             warnings.warn('`force_filter` not assigned, assuming data has already been filtered', RuntimeWarning)
         if self.top_variant is not None and (force_filter or not already_applied):
             modalities = [m[:, mask] if mask is not None else m for m, mask in zip(modalities, self.filter_mask[sm])]
@@ -295,16 +296,17 @@ class Preprocessing:
         if self.sample_count is not None:
             modalities = [
                 m if not m_sampcount else
-                m * m_sampcount / np.sum(m, keepdims=True, axis=1)
+                m * m_sampcount / np.sum(m, keepdims=True, axis=1) if not scipy.sparse.issparse(m) else
+                m * m_sampcount / np.sum(m, axis=1)
                 for m, _, m_sampcount in zip(modalities, self.is_sparse_transform, self.sample_count)]
 
         # Log
         if self.pre_log is not None:
             modalities = [
                 m if not m_log else
-                np.log1p(m) if not m_sparse else
+                np.log1p(m) if not scipy.sparse.issparse(m) else
                 m.log1p()
-                for m, m_sparse, m_log in zip(modalities, self.is_sparse_transform[sm], self.pre_log[sm])]
+                for m, _, m_log in zip(modalities, self.is_sparse_transform[sm], self.pre_log[sm])]
 
         # Standardize
         # NOTE: Not mean-centered for sparse matrices
@@ -382,7 +384,7 @@ class Preprocessing:
         if self.pre_log is not None:
             modalities = [
                 m if not m_log else
-                np.expm1(m) if not m_sparse else
+                np.expm1(m) if not scipy.sparse.issparse(m) else  # Additional check for dense output
                 m.expm1()
                 for m, m_sparse, m_log in zip(modalities, self.is_sparse_transform[sm], self.pre_log[sm])]
 
@@ -528,6 +530,7 @@ def chunk(full_data, *, chunk_size, index_func=None, func=None):
     # NOTE: Only works on dense arrays
     proc = []
     for i in range(np.ceil(full_data.shape[0] / chunk_size).astype(int)):
+        # If you encounter an error here, try sorting your index
         data = full_data[i*chunk_size:(i+1)*chunk_size]
         if index_func is not None: data = index_func(data)
         if func is not None: data = func(data)

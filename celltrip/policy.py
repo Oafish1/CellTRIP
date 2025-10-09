@@ -1225,7 +1225,7 @@ class PPO(nn.Module):
             lr=3e-4,
             standardization_beta=3e-3,
             weight_decay=1e-5,
-            betas=(.99, .99),  # (.9, .999)
+            betas=(.99, .99),
             lr_iters=None,
             lr_gamma=1.,
             # Backward

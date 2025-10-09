@@ -1,3 +1,28 @@
+### 1.0.0+2025.10.8
+- Better `VirtualCell` perturbation results
+- Figure updates
+- Fix sparse-trained `Preprocessing` sample normalization and log normalization for dense matrices
+- Higher dimensional `VirtualCell` models
+- New pearson delta correlation panels
+- PCA argument for `train` script
+
+### 1.0.0+2025.10.7
+- Changes to `VirtualCell` running procedures
+- Fix for sparse compatibility in `Preprocessing` sample normalization
+- Further `VirtualCell` visualizations
+- New `VirtualCell` perturbations
+- Schematic figure changes
+
+### 1.0.0+2025.10.6
+- Add experimental `vcc_generate` notebook
+- Add `VirtualCell` perturbation benchmark and heatmap for Pearson delta
+- Add self returns to several `EnvironmentBase` functions for QOL
+- Clean up `cortex_generate` notebook
+
+### 1.0.0+2025.10.2.1
+- Change environment pinning divisor to scale with modal variance rather than mean for better compatibility with off-center (typically spatial) modalities
+- Figure revisions
+
 ### 1.0.0+2025.10.2
 - Add `sample_counts` argument to `Preprocessing` module and training script for normalizing cell counts in expression data
 - Chunking for `PreprocessFromAnnData`
