@@ -52,6 +52,9 @@ class EnvironmentBase:
         terminate_velocity=False,
         vel_threshold=1e-3,
         latency=5,
+        # Incorporation
+        retention=1.,
+        binding=1.,
         # Device
         device='cpu',
         # Extras
@@ -78,6 +81,9 @@ class EnvironmentBase:
             'bound': terminate_bound}
         self.eval_time = eval_time
         self.vel_threshold = vel_threshold
+        self.incorporation_params = {
+            'retention': retention,
+            'binding': binding}
         self.epsilon = epsilon
         self.noise_std = noise_std
         self.input_noise = input_noise
@@ -167,6 +173,7 @@ class EnvironmentBase:
         self.vel = self.vel.to(self.device)
         self.modalities = [m.to(self.device) for m in self.modalities]
         self.noise = [m.to(self.device) if isinstance(m, torch.Tensor) else m for m in self.noise]
+        self.modality_offsets = [m.to(self.device) for m in self.modality_offsets]
         return self
     
     def train(self, clear=True):
@@ -387,8 +394,9 @@ class EnvironmentBase:
                 noise_id = np.random.randint(2**32)
                 self.keys = [(k, noise_id) for k in self.keys]
 
-        # Generate noise
+        # Generate noise and initialize offsets
         if renoise: self.noise = [self.noise_std*torch.randn_like(m, device=self.device) for m in self.modalities]
+        self.modality_offsets = [torch.zeros_like(m) for m in self.modalities]
 
         # Assign random positions and velocities
         shape = (self.num_nodes, self.dim)
@@ -605,6 +613,37 @@ class EnvironmentBase:
         if self.termination_conds['random'] and self.time >= self.end_time: return True, 'rand'
         # Default
         return False, 'def'
+    
+    ### Dynamic functions
+    def incorporate_predictions(self, pinning_func_list, retention=None, binding=None):
+        # Parameters
+        if retention is None: retention = self.incorporation_params['retention']
+        if binding is None: binding = self.incorporation_params['binding']
+        effective_retention = retention ** self.delta  # Offset appropriation per second
+        effective_expansion = (1 - binding) ** self.delta  # Regression to true per second
+
+        # Compute new offsets
+        # NOTE: .95(m+off)+.05(m+delta)=m+.95off+.05delta
+        for i, target in enumerate(self.target_modalities):
+            # Get data
+            m = self.modalities[target]
+            m_imputed = pinning_func_list[i](self.pos, m).detach()
+
+            # Iterate offset
+            m_delta = m_imputed - m
+            self.modality_offsets[target] = effective_retention * self.modality_offsets[target] + (1-effective_retention) * m_delta
+
+            # Drag offset to zero
+            self.modality_offsets[target] = effective_expansion * self.modality_offsets[target]
+
+        return self
+    
+
+    def solidify_offsets(self):
+        for i in range(len(self.modalities)):
+            self.modalities[i] = self.modalities[i] + self.modality_offsets[i]
+
+        return self
 
     ### Get-Set functions
     def calculate_dist(self, targets):
@@ -684,6 +723,17 @@ class EnvironmentBase:
         self.termination_conds.update(new_termination_conds)
 
         return self
+    
+    def set_incorporation_params(self, **new_kwargs):
+        # Check that all rewards are valid
+        for k in new_kwargs:
+            if k not in self.incorporation_params:
+                raise LookupError(f'`{k}` not found in rewards')
+
+        # Set new rewards
+        self.incorporation_params.update(new_kwargs)
+
+        return self
 
     def set_positions(self, pos):
         self.pos = pos
@@ -702,6 +752,7 @@ class EnvironmentBase:
         return self.vel
     
     def get_keys(self, noise=True, stringify=True):
+        # Incompatible with `incorporate_predictions`
         if not noise and (self.noise_std > 0 and (self.input_noise or self.target_noise)):
             return list(map(lambda x: x[0], self.keys))
         if stringify: return list(map(str, self.keys))
@@ -713,9 +764,13 @@ class EnvironmentBase:
     def get_input_modalities(self, **kwargs):
         return self.get_modalities(**kwargs, _indices=self.input_modalities)
 
-    def get_modalities(self, noise=True, _indices=None):
+    def get_modalities(self, noise=True, offset=True, _indices=None):
         if _indices is None: _indices = list(range(len(self.modalities)))
-        return [m+n if noise else m for i, (m, n) in enumerate(zip(self.modalities, self.noise)) if i in _indices]
+        running_modalities = self.modalities
+        if noise: running_modalities = [m+n for i, (m, n) in enumerate(zip(running_modalities, self.noise))]
+        if offset: running_modalities = [m+o for i, (m, o) in enumerate(zip(running_modalities, self.modality_offsets))]
+        running_modalities = [m for i, m in enumerate(running_modalities) if i in _indices]  # Filter, not too efficient
+        return running_modalities
 
     def get_state(self, include_modalities=False, include_time=False):
         cat = (self.pos, self.vel)  # (self.pos/self.pos_bound, self.vel/self.vel_bound)
@@ -727,3 +782,5 @@ class EnvironmentBase:
         # Non-compatible with `include_modalities` or `include_time`
         self.set_positions(state[..., :self.dim])
         self.set_velocities(state[..., self.dim:])
+
+        return self

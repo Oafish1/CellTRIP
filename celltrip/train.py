@@ -21,16 +21,23 @@ from . import utility as _utility
 def simulate_until_completion(
     env, policy, memory=None, keys=None,
     max_timesteps=np.inf, max_memories=np.inf, reset_on_finish=False,
+    incorporate_predictions=False, env_hooks=None, action_hooks=None,
     cache_feature_embeds=False, store_states=False, skip_states=1,
     flush=True, verbose=False, progress_bar=False):
     # NOTE: Does not flush buffer
     # Params
     assert not (keys is not None and reset_on_finish), 'Cannot manually set keys while `reset_on_finish` is `True`'
+    assert not (incorporate_predictions and cache_feature_embeds), 'Prediction incorporation and cached embeddings are incompatible'
     if keys is None: keys = env.get_keys()
     target_modalities = torch.concat(env.get_target_modalities(), dim=-1)
 
     # Pbar
     if progress_bar: pbar = tqdm.tqdm()
+
+    # Env hook
+    if env_hooks is not None:
+        for hook in env_hooks:
+            hook(env)
 
     # Store states
     if store_states:
@@ -43,7 +50,8 @@ def simulate_until_completion(
     # Simulation
     ep_timestep = 0; ep_memories = 0; ep_reward = 0; ep_itemized_reward = defaultdict(lambda: 0); finished = False
     feature_embeds = None
-    with torch.inference_mode():
+    # with torch.inference_mode():
+    with torch.no_grad():
         while True:
             # Get current state
             state = env.get_state(include_modalities=True)
@@ -54,8 +62,21 @@ def simulate_until_completion(
                 feature_embeds=feature_embeds, return_feature_embeds=cache_feature_embeds)
             if cache_feature_embeds: actions, feature_embeds = actions
 
+            # Action hook
+            if action_hooks is not None:
+                for hook in action_hooks:
+                    actions = hook(env, actions)
+
             # Step environment and get reward
             rewards, steady, finished, itemized_rewards = env.step(actions, return_itemized_rewards=True, pinning_func_list=policy.pinning)
+
+            # Incorporate predictions
+            if incorporate_predictions: env.incorporate_predictions(pinning_func_list=policy.pinning)
+
+            # Env hook
+            if env_hooks is not None:
+                for hook in env_hooks:
+                    hook(env)
 
             # Tracking
             ts_reward = rewards.cpu().mean()

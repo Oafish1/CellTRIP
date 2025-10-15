@@ -80,6 +80,9 @@ class Preprocessing:
             self.pre_log = [i in true_idx for i in range(num_modalities)]
         if not _utility.general.is_list_like(self.sample_count):
             self.sample_count = num_modalities * [self.sample_count]
+        assert len(self.sample_count) == num_modalities, (
+            f'Length of `sample_count` ({len(self.sample_count)}) must match number of '
+            f'modalities ({num_modalities})')
 
     def get_state(self):
         # Settings
@@ -240,7 +243,7 @@ class Preprocessing:
             
         return self
 
-    def transform(self, modalities, *, adata_vars=None, force_filter=True, subset_features=None, subset_modality=None, batch_size=None, **kwargs):
+    def transform(self, modalities, *, adata_vars=None, force_filter=True, subset_features=None, subset_modality=None, batch_size=None, use_sample_count=True, use_pca=True, **kwargs):
         # Recursion
         if batch_size is not None:
             usable_kwargs = dict(
@@ -255,7 +258,6 @@ class Preprocessing:
             processed_modalities = []
             processed_adata_vars = None
             for batch in range(np.ceil(num_nodes / batch_size).astype(int)):
-                print(batch)
                 ret = self.transform([m[batch*batch_size:(batch+1)*batch_size] for m in modalities], **usable_kwargs)
                 if adata_vars is not None:
                     processed_modalities.append(ret[0])
@@ -283,7 +285,9 @@ class Preprocessing:
         
         # Filtering
         # NOTE: Determines if filtering is already done by shape checking the main `modalities` input
-        already_applied = not np.array([m.shape[1] != mask.shape[0] for m, mask in zip(modalities, self.filter_mask[sm]) if mask is not None]).any()
+        already_applied = (
+            self.top_variant is not None
+            and not np.array([m.shape[1] != mask.shape[0] for m, mask in zip(modalities, self.filter_mask[sm]) if mask is not None]).any())
         if not force_filter and already_applied:
             warnings.warn('`force_filter` not assigned, assuming data has already been filtered', RuntimeWarning)
         if self.top_variant is not None and (force_filter or not already_applied):
@@ -293,12 +297,14 @@ class Preprocessing:
                 adata_vars = [adata_var.iloc[mask] if mask is not None else adata_var for adata_var, mask in zip(adata_vars, self.filter_mask[sm])]
 
         # Sample normalization
-        if self.sample_count is not None:
+        if use_sample_count and (self.sample_count is not None):
+            sample_counts = [
+                np.sum(m, keepdims=True, axis=1) if not scipy.sparse.issparse(m) else
+                np.sum(m, axis=1) for m in modalities]
             modalities = [
                 m if not m_sampcount else
-                m * m_sampcount / np.sum(m, keepdims=True, axis=1) if not scipy.sparse.issparse(m) else
-                m * m_sampcount / np.sum(m, axis=1)
-                for m, _, m_sampcount in zip(modalities, self.is_sparse_transform, self.sample_count)]
+                m * m_sampcount / np.where(m_actualcount == 0, 1, m_actualcount)
+                for m, _, m_sampcount, m_actualcount in zip(modalities, self.is_sparse_transform[sm], self.sample_count[sm], sample_counts)]
 
         # Log
         if self.pre_log is not None:
@@ -340,7 +346,7 @@ class Preprocessing:
             modalities[0][:, all_but_needed] = center
             
         # PCA
-        if self.pca_dim is not None:
+        if use_pca and (self.pca_dim is not None):
             modalities = [p.transform(m) if p is not None else m for m, p in zip(modalities, self.pca_class[sm])]
         # Scaling
         # m1 * m1.shape[1] / np.sqrt(preprocessing.pca_class[0].explained_variance_).sum()
@@ -352,9 +358,15 @@ class Preprocessing:
         ret = (modalities,)
         if adata_vars is not None: ret += (adata_vars,)
         return _utility.general.clean_return(ret)
+    
+    def transform_select_features(self, feature_idx, feature_values, modality_idx):
+        # Transform select features without PCA
+        feature_values_mat = np.ones_like(self.standardize_mean[modality_idx])
+        feature_values_mat[:, feature_idx] = feature_values
+        feature_values_mat, = self.transform(feature_values_mat, subset_modality=modality_idx, use_sample_count=False, use_pca=False)
+        return feature_values_mat[:, feature_idx]
 
-
-    def inverse_transform(self, modalities, subset_modality=None, *args, **kwargs):
+    def inverse_transform(self, modalities, subset_modality=None, use_sample_count=True, use_pca=True, *args, **kwargs):
         # Defaults
         if subset_modality is None: subset_modality = slice(len(self.is_sparse_transform))
         else:
@@ -366,7 +378,7 @@ class Preprocessing:
 
         # NOTE: Does not reverse top variant filtering
         # PCA
-        if self.pca_dim is not None:
+        if use_pca and (self.pca_dim is not None):
             modalities = [
                 p.inverse_transform(m.reshape((-1, m.shape[-1]))).reshape((*m.shape[:-1], -1))
                 if p is not None else m
@@ -387,6 +399,18 @@ class Preprocessing:
                 np.expm1(m) if not scipy.sparse.issparse(m) else  # Additional check for dense output
                 m.expm1()
                 for m, m_sparse, m_log in zip(modalities, self.is_sparse_transform[sm], self.pre_log[sm])]
+            
+        # Sample normalization
+        # NOTE: Same as forward
+        # TODO: Think about this
+        if use_sample_count and (self.sample_count is not None):
+            sample_counts = [
+                np.sum(m, keepdims=True, axis=1) if not scipy.sparse.issparse(m) else
+                np.sum(m, axis=1) for m in modalities]
+            modalities = [
+                m if not m_sampcount else
+                m * m_sampcount / np.where(m_actualcount == 0, 1, m_actualcount)
+                for m, _, m_sampcount, m_actualcount in zip(modalities, self.is_sparse_transform[sm], self.sample_count[sm], sample_counts)]
 
         return modalities
 

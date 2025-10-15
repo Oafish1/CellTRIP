@@ -1,3 +1,26 @@
+### 1.0.0+2025.10.14
+- Add `action_hook` to `simulate_until_completion` for action modification
+- Add `utility.hooks` module with `clamp_input_features_hook`, `clamp_inverted_features_hook`, and `move_toward_targets_hook` hook-generation functions
+- Add full knockdown for modules in `dyngen_generate`
+- Clean up incorporation binding and retention arguments
+- Sample count normalization bugfix and inclusion in `Preprocessing.inverse_transform`
+
+### 1.0.0+2025.10.13
+- Add `binding` variable to `incorporate_predictions` in `EnvironmentBase` to add a counteracting force to growing offset
+- Altered training approaches for `DrugSeries` modeling
+- Altered simulation approaches for `VirtualCell` perturbation
+- Filtering changes for `Cortex` layer-subclass association
+- More high-dimensional model training
+- Visualization refinements for `vcc_generate`, including perturbation magnitude clarity and heatmap sorting
+
+### 1.0.0+2025.10.11
+- Add `incorporate_predictions` and `hook` arguments to `simulate_until_completion`
+- Add `incorporate_predictions` function to `EnvironmentBase`
+- Implement model prediction incorporation (i.e. dynamic input features) and feature clamping
+
+### 1.0.0+2025.10.9
+- Figure changes
+
 ### 1.0.0+2025.10.8
 - Better `VirtualCell` perturbation results
 - Figure updates
