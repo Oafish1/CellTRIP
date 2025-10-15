@@ -1,3 +1,9 @@
+### 1.0.0+2025.10.15
+- Figure additions and reorganization
+- Flysta panel revisions
+- High-dimensional `Dyngen` runs
+- Large `VirtualCell` runs
+
 ### 1.0.0+2025.10.14
 - Add `action_hook` to `simulate_until_completion` for action modification
 - Add `utility.hooks` module with `clamp_input_features_hook`, `clamp_inverted_features_hook`, and `move_toward_targets_hook` hook-generation functions
