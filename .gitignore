@@ -55,3 +55,7 @@ example*.yaml
 # Saved data
 *.npy
 *.csv
+
+# Submission folders
+**/submit/*
+**/submit_module/*

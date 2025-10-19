@@ -194,15 +194,16 @@ if config.checkpoint_name is None:
 ray.shutdown()
 a = ray.init(
     # address='ray://100.85.187.118:10001',
-    address='ray://localhost:10001',
-    runtime_env={
-        'py_modules': [celltrip],
-        'pip': '../requirements.txt',
-        'env_vars': {
-            # **access_keys,
-            'RAY_DEDUP_LOGS': '0'}},
-        # 'NCCL_SOCKET_IFNAME': 'tailscale',  # lo,en,wls,docker,tailscale
-    _system_config={'enable_worker_prestart': True})  # Doesn't really work for scripts
+    # address='ray://localhost:10001',
+    address='auto',
+    # runtime_env={
+    #     'py_modules': [celltrip],
+    #     'pip': '../requirements.txt',
+    #     'env_vars': {
+    #         'RAY_DEDUP_LOGS': '0'}},
+    # '{"py_modules": ["celltrip"], "pip": "../requirements.txt", "env_vars": {"RAY_DEDUP_LOGS": "0"}}'
+    # _system_config={'enable_worker_prestart': True}
+)  # Doesn't really work for scripts
 
 
 # %%
@@ -225,7 +226,7 @@ def train(config):
         'dim': config.dim,
         'discrete': config.discrete}  # , 'spherical': config.discrete
     policy_kwargs = {
-        'forward_batch_size': int(1e3),
+        'forward_batch_size': int(2e2),  # 1e3
         'vision_size': int(1e3),
         'pinning_spatial': config.spatial}
     memory_kwargs = {'device': 'cuda:0'}  # Skips casting, cutting time significantly for relatively small batch sizes

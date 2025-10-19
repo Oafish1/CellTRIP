@@ -1232,10 +1232,10 @@ class PPO(nn.Module):
             update_iterations=5,
             sync_iterations=1,
             pool_size=torch.inf,
-            epoch_size=100_000,
-            batch_size=10_000,  # https://scholarworks.sjsu.edu/cgi/viewcontent.cgi?params=/context/etd_projects/article/1972/&path_info=park_inhee.pdf
+            epoch_size=10_000,
+            batch_size=1_000,  # https://scholarworks.sjsu.edu/cgi/viewcontent.cgi?params=/context/etd_projects/article/1972/&path_info=park_inhee.pdf
             minibatch_size=torch.inf,
-            minibatch_memories=1_000_000,
+            minibatch_memories=1_000_000,  # 1M
             # load_level='minibatch',  # TODO: Allow for loading at batch with compression
             # cast_level='minibatch',
             actor_critic_kwargs={},

@@ -152,9 +152,10 @@ ray up -y aws_config.yaml && ray attach aws_config.yaml -p 10001
 ray dashboard aws_config.yaml
 ray down -y aws_config.yaml
 
-Ray cluster status
-ray attach aws_config.yaml
-ray status
+Submit job
+cp ./train.py ./submit
+export RAY_ADDRESS=http://localhost:8265
+ray job submit --no-wait --working-dir ./submit/ --runtime-env-json '{"py_modules": ["../celltrip"], "pip": "../requirements.txt", "env_vars": {"RAY_DEDUP_LOGS": "0"}}' -- <script>
 
 Convert
 sh ../run_on_all_ext.sh ../convert_pdf_to_png.sh pdf

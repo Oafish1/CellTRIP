@@ -1,3 +1,14 @@
+### 1.0.0+2025.10.19
+- Fix dendogram sorting for `cortex_generate` visualization
+- Migrate to EC2 from local development and update corresponding submission commands
+
+### 1.0.0+2025.10.17
+- Dendogram sorting for `cortex_generate` and visualization
+
+### 1.0.0+2025.10.16
+- Add perturbation to `cortex_generate` notebook
+- More PCA features for training, appropriate tuning
+
 ### 1.0.0+2025.10.15
 - Figure additions and reorganization
 - Flysta panel revisions
