@@ -140,6 +140,9 @@ rsync -v ~/repos/inept/scripts/!(*.gzip) precision:~/repos/INEPT/scripts
 Profiling
 watch -d -n 0.5 nvidia-smi
 
+Add kernel
+python -m ipykernel install --user --name celltrip
+
 Environment
 conda activate ct
 

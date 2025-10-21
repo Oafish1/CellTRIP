@@ -1,3 +1,7 @@
+### 1.0.0+2025.10.20
+- Add layer score distribution plots in `cortex_generate`
+- More runs for `vcc_generate` and `cortex_generate`
+
 ### 1.0.0+2025.10.19
 - Fix dendogram sorting for `cortex_generate` visualization
 - Migrate to EC2 from local development and update corresponding submission commands
