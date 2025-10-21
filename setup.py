@@ -31,6 +31,7 @@ cython_extensions = [
     # Extension('celltrip.train', ['celltrip/train.py']),
     Extension('celltrip.utility.distance', ['celltrip/utility/distance.py']),
     Extension('celltrip.utility.general', ['celltrip/utility/general.py']),
+    Extension('celltrip.utility.hooks', ['celltrip/utility/hooks.py']),
     # Extension('celltrip.utility.notebook', ['celltrip/utility/notebook.py']),
     Extension('celltrip.utility.processing', ['celltrip/utility/processing.py']),
     Extension('celltrip.utility.state_manager', ['celltrip/utility/state_manager.py']),

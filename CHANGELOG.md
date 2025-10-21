@@ -1,3 +1,8 @@
+### 1.0.0+2025.10.21
+- Colorbar and formatting changes for `cortex_generate` perturbation plots
+- Compatibility updates for `vcc_generate`
+- Compile `hooks` module
+
 ### 1.0.0+2025.10.20
 - Add layer score distribution plots in `cortex_generate`
 - More runs for `vcc_generate` and `cortex_generate`
