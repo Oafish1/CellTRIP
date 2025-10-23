@@ -226,7 +226,7 @@ def train(config):
         'dim': config.dim,
         'discrete': config.discrete}  # , 'spherical': config.discrete
     policy_kwargs = {
-        'forward_batch_size': int(2e2),  # 1e3
+        'forward_batch_size': int(1e3),
         'vision_size': int(1e3),
         'pinning_spatial': config.spatial}
     memory_kwargs = {'device': 'cuda:0'}  # Skips casting, cutting time significantly for relatively small batch sizes

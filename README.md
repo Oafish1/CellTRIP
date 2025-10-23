@@ -144,7 +144,7 @@ Add kernel
 python -m ipykernel install --user --name celltrip
 
 Environment
-conda activate ct
+conda activate celltrip
 
 AWS Profile
 export AWS_PROFILE=waisman-admin

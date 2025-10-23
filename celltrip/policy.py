@@ -768,16 +768,18 @@ class ArtStandardization(nn.Module):
         self.square_mean.data = batch_square_mean
         self.std.data = batch_std
 
-    def apply(self, x, shape=None):
+    def apply(self, x, use_mean=True, shape=None):
         if shape is None: shape = tuple((len(x.shape)-1)*[1]+[-1])
-        if self.use_mean: x = x - self.mean.view(shape)
+        use_mean = self.use_mean * use_mean
+        if use_mean: x = x - self.mean.view(shape)
         if self.use_std: x = x / self.std.view(shape)
         return x
 
-    def remove(self, x, shape=None):
+    def remove(self, x, use_mean=True, shape=None):
         if shape is None: shape = tuple((len(x.shape)-1)*[1]+[-1])
+        use_mean = self.use_mean * use_mean
         if self.use_std: x = x * self.std.view(shape)
-        if self.use_mean: x = x + self.mean.view(shape)
+        if use_mean: x = x + self.mean.view(shape)
         return x
     
 
@@ -787,8 +789,8 @@ class PopArtStandardization(ArtStandardization):
         # Pre: Standardization for inputs, rather than outputs
         # Parameters
         self.layers = layers  # List of lists of layer groups
-        self.splits = splits  # List of slices for each layer group
-        self.segments = segments  # List of lists of segments for each layer in a layer group
+        self.splits = splits  # List of slices for each layer group, splits mean and std across layers
+        self.segments = segments  # List of lists of segments for each layer in a layer group, splits a layer
         self.pre = pre
 
         # Automatically detect dim
@@ -984,9 +986,14 @@ class PinningNN(nn.Module):
         # Create MLP
         self.mlp = nn.Sequential(
             # Basic
+            # nn.Linear(input_dim, hidden_dim),
+            # activation(), nn.Dropout(dropout),
+            # nn.Linear(hidden_dim, output_dim),
+
+            # Basic mu logvar
             nn.Linear(input_dim, hidden_dim),
             activation(), nn.Dropout(dropout),
-            nn.Linear(hidden_dim, output_dim),
+            nn.Linear(hidden_dim, 2*output_dim),
 
             # Complex
             # nn.Linear(input_dim, hidden_dim),
@@ -1023,23 +1030,30 @@ class PinningNN(nn.Module):
         #     beta=standardization_beta, pre=True)
         # self.input_standardization = PopArtStandardization(
         #     dim=input_dim, beta=standardization_beta, pre=True)
-        self.output_standardization = PopArtStandardization([self.last_layer], beta=standardization_beta)
+        self.output_standardization = PopArtStandardization(
+            [self.last_layer],
+            segments=[[slice(0, self.output_dim), slice(self.output_dim, -1)]],
+            beta=standardization_beta, dim=self.output_dim)
 
-    def forward_mlp(self, X, Y=None, input_standardization=True, output_standardization=False):
+    def forward_mlp(self, X, Y=None, input_standardization=True, output_standardization=False, return_logvar=False):
         # Input standardization
         if input_standardization: X = self.input_standardization.apply(X)
 
         # Calculation
         logit = self.mlp(X)
+        mu, logvar = logit[..., :self.output_dim], logit[..., self.output_dim:]
 
         # Output standardization
-        if not output_standardization: logit = self.output_standardization.remove(logit)
+        if not output_standardization:
+            mu = self.output_standardization.remove(mu)
+            logvar = self.output_standardization.remove(logvar.exp().std(), use_mean=False).square().log()  # Not the most efficient way, could just square log the std
 
         # Transform if needed
         if self.spatial and Y is not None:  # Might want to cache at some point
-            R, t = _utility.processing.solve_rot_trans(logit, Y)
-            logit = torch.matmul(logit, R) + t
+            R, t = _utility.processing.solve_rot_trans(mu, Y)
+            mu = torch.matmul(mu, R) + t
 
+        if return_logvar: return mu, logvar
         return logit
     
     # def forward_att(self, q, k, v, input_standardization=True, output_standardization=False):
@@ -1064,13 +1078,26 @@ class PinningNN(nn.Module):
     # def decode(self, X):
     #     return self.decoder(X)
 
-    def compute_loss(self, Y_pred, Y_true, mean=False):
+    def compute_loss(self, Y_pred, logvar, Y_true):  # Y_pred, Y_true
+        # Archived
         # KLD_loss = -.5 * (1 + torch.log(X_batch.var(dim=0)) - X_batch.mean(dim=0).square() - X_batch.var(dim=0)).mean(dim=-1)
         # STD_loss = (Y_pred.std(dim=0) - Y_batch.std(dim=0)).square().mean(dim=-1)
         # MMD_loss = self.mmd_loss(Y_true, Y_pred)
         # MAE_loss = (Y_true - Y_pred).abs().mean(dim=-1).mean(dim=0)
-        MSE_loss = (Y_true - Y_pred).square().mean(dim=-1).mean(dim=0)  # Reconstruction, also doesn't care about important features when standardized
-        loss = MSE_loss
+
+        # In-use
+        MSE_loss = (Y_true - Y_pred).square().mean(dim=-1)  # Reconstruction, also doesn't care about important features when standardized
+        PAIR_loss = (torch.cdist(Y_pred, Y_pred) - torch.cdist(Y_true, Y_true)).square().mean(dim=-1)
+        # NLL_loss = .5 * ((Y_true - Y_pred).square() / logvar.exp() + logvar).mean(dim=-1)  # NLL, doesn't account for covariance
+        if np.random.rand() < .001:
+            print(Y_pred.shape)
+            print(Y_true.shape)
+            print(MSE_loss.shape)
+            print(PAIR_loss.shape)
+            print(MSE_loss[:5])
+            print(PAIR_loss[:5])
+            print()
+        loss = .5*MSE_loss + .5*PAIR_loss
         return loss
     
     def update(self, states, target_modality, world_size=None):
@@ -1108,7 +1135,7 @@ class PinningNN(nn.Module):
                     # X_stand = self.input_standardization.apply(X_batch)  # Intentional double-application of std to simulate actual std
 
                     # Compute normal prediction
-                    Y_pred = self(X_batch)
+                    Y_pred, logvar = self(X_batch, return_logvar=True)
                     # Y_pred = self(X_stand)
 
                     # Transform if needed
@@ -1129,9 +1156,12 @@ class PinningNN(nn.Module):
                         Y_pred = Y_pred.unsqueeze(dim=-2)
                         Y_pred = torch.matmul(Y_pred, R) + t
                         Y_pred = Y_pred.squeeze(dim=-2)
+                        logvar = logvar.unsqueeze(dim=-2)
+                        logvar = torch.matmul(logvar, R)  # TODO: Confirm correct
+                        logvar = logvar.squeeze(dim=-2)
 
                     # Losses
-                    loss = self.compute_loss(Y_pred, Y_batch)
+                    loss = self.compute_loss(Y_pred, logvar, Y_batch).mean()
 
                     # Compute VAE prediction
                     # imputed, embedded, mu, logvar = self(X_batch, return_logits=True)

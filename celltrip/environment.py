@@ -550,18 +550,18 @@ class EnvironmentBase:
                 # Perform lstsq
                 X = torch.linalg.lstsq(A, B / B_norm).solution
                 err = torch.matmul(A, X) * A_norm - B
+                err = err.square().mean(dim=-1)
 
             # Pinning NN
             else:
-                err = m - pinning_func_list[i](self.pos, m).detach()
-                # err = pinning_func_list[i].compute_loss(pinning_func_list[i](self.pos, m).detach(), m)
+                # err = m - pinning_func_list[i](self.pos, m).detach()
+                with torch.no_grad():
+                    err = pinning_func_list[i].compute_loss(*pinning_func_list[i](self.pos, m, return_logvar=True), m)
 
             # Final computation
-            mse = err.square().mean(dim=-1)
-            # mse = (err.square() / m.var(keepdim=True, dim=0)).mean(dim=-1)  # Scaled MSE, mainly for slice samples which have varying positions - could also do this in prepro - kinda bad for PCA
-            # mse /= m.square().mean()  # Scale for fairness (TODO: MAKE WORK WITH SPATIAL, maybe use std)
-            mse /= m.var()  # Scale for fairness (spatial compatible)
-            loss = -1 / (1 + 10*mse)  # Transform
+            # mse = err.square().mean(dim=-1)
+            err /= m.var()  # Scale for fairness (spatial compatible)
+            loss = -1 / (1 + 10*err)  # Transform
             # mae = err.abs().mean(dim=-1)
             # loss = -1 / (1 + mae)  # Transform
             # mse = (err.square() + self.epsilon).log().mean(dim=-1)

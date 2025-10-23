@@ -1,3 +1,12 @@
+### 1.0.0+2025.10.22
+- Explore strategies for layer classification in `cortex_generate`
+- Fix local running in `train`
+- Pairwise distance pinning loss
+- Preliminary screen initialization script
+- Rely on `compute_loss` for pinning reward from `EnvironmentBase`
+- Std isolation for PopArt implementation
+- Variational pinning and negative log likelihood loss
+
 ### 1.0.0+2025.10.21
 - Colorbar and formatting changes for `cortex_generate` perturbation plots
 - Compatibility updates for `vcc_generate`
