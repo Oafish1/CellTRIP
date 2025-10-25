@@ -1,3 +1,13 @@
+### 1.0.0+2025.10.24
+- Adapt `flysta_generate` to new environment
+- Add QOL rsync scripts
+- More models for `cortex`
+- Revert variational policy architecture changes
+- Run HVGs instead of random genes for `flysta` and `cortex`
+
+### 1.0.0+2025.10.23
+- Revise layer classification for `cortex_generate`
+
 ### 1.0.0+2025.10.22
 - Explore strategies for layer classification in `cortex_generate`
 - Fix local running in `train`

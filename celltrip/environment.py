@@ -556,7 +556,8 @@ class EnvironmentBase:
             else:
                 # err = m - pinning_func_list[i](self.pos, m).detach()
                 with torch.no_grad():
-                    err = pinning_func_list[i].compute_loss(*pinning_func_list[i](self.pos, m, return_logvar=True), m)
+                    err = pinning_func_list[i].compute_loss(pinning_func_list[i](self.pos, m), m)
+                    # err = pinning_func_list[i].compute_loss(*pinning_func_list[i](self.pos, m, return_logvar=True), m)
 
             # Final computation
             # mse = err.square().mean(dim=-1)
