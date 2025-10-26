@@ -1,3 +1,14 @@
+### 1.0.0+2025.10.25
+- Adapt `dyngen_generate` to new environment
+- Add hidden layer to feature processing, lower default memory limit to comphensate
+- Add post-PCA perturbation hook to `flysta_generate`
+- Add p-values to `cortex` analyses
+- Change default initial steady state time scale from `1` to `5` for perturbation analyses
+- File organization for `dyngen` generation modules
+- Heatmap and enrichment updates for `flysta_analysis`
+- Optimize `flysta` heatmap generation and add additional sorting
+- SVC classification ROC curve analysis for `cortex` methods
+
 ### 1.0.0+2025.10.24
 - Adapt `flysta_generate` to new environment
 - Add QOL rsync scripts
