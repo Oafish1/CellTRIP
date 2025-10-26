@@ -515,6 +515,8 @@ class EntitySelfAttentionLite(nn.Module):
         # Input and output layers for standardization functions
         self.input_pos_layers = [self.self_pos_embed, self.node_pos_embed]
         if self.independent_critic: self.input_pos_layers += [self.critic_self_pos_embed, self.critic_node_pos_embed]
+        # self.input_feat_layers = [self.self_feat_embed, self.node_feat_embed]
+        # if self.independent_critic: self.input_feat_layers += [self.critic_self_feat_embed, self.critic_node_feat_embed]
         self.input_feat_layers = [self.self_feat_embed[0], self.node_feat_embed[0]]
         if self.independent_critic: self.input_feat_layers += [self.critic_self_feat_embed[0], self.critic_node_feat_embed[0]]
         self.output_critic_layers = [self.critic_decider[-1]]

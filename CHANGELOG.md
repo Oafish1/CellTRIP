@@ -1,3 +1,8 @@
+### 1.0.0+2025.10.26
+- Add `Tangum` method to `cortex_generate`
+- New knockdown results for `flysta` and `dyngen`
+- Steady state visualizations in `dyngen_generate`
+
 ### 1.0.0+2025.10.25
 - Adapt `dyngen_generate` to new environment
 - Add hidden layer to feature processing, lower default memory limit to comphensate
