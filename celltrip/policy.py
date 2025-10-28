@@ -455,15 +455,15 @@ class EntitySelfAttentionLite(nn.Module):
         # Actor layers
         num_feat_dims = np.array(modal_dims).sum()
         self.self_pos_embed = nn.Linear(positional_dim, hidden_dim)
-        # self.self_feat_embed = nn.Linear(num_feat_dims, hidden_dim)
-        self.self_feat_embed = nn.Sequential(
-            nn.Linear(num_feat_dims, 2*num_feat_dims),
-            activation(), nn.Dropout(dropout), nn.Linear(2*num_feat_dims, hidden_dim))
+        self.self_feat_embed = nn.Linear(num_feat_dims, hidden_dim)
+        # self.self_feat_embed = nn.Sequential(
+        #     nn.Linear(num_feat_dims, 2*num_feat_dims),
+        #     activation(), nn.Dropout(dropout), nn.Linear(2*num_feat_dims, hidden_dim))
         self.node_pos_embed = nn.Linear(positional_dim, hidden_dim)
-        # self.node_feat_embed = nn.Linear(num_feat_dims, hidden_dim)
-        self.node_feat_embed = nn.Sequential(
-            nn.Linear(num_feat_dims, 2*num_feat_dims),
-            activation(), nn.Dropout(dropout), nn.Linear(2*num_feat_dims, hidden_dim))
+        self.node_feat_embed = nn.Linear(num_feat_dims, hidden_dim)
+        # self.node_feat_embed = nn.Sequential(
+        #     nn.Linear(num_feat_dims, 2*num_feat_dims),
+        #     activation(), nn.Dropout(dropout), nn.Linear(2*num_feat_dims, hidden_dim))
         self.self_embed = nn.Sequential(
             activation(), nn.Dropout(dropout), nn.Linear(hidden_dim, hidden_dim))
         self.node_embed = nn.Sequential(
@@ -474,15 +474,15 @@ class EntitySelfAttentionLite(nn.Module):
         # Independent critic layers
         if independent_critic:
             self.critic_self_pos_embed = nn.Linear(positional_dim, hidden_dim)
-            # self.critic_self_feat_embed = nn.Linear(num_feat_dims, hidden_dim)
-            self.critic_self_feat_embed = nn.Sequential(
-                nn.Linear(num_feat_dims, 2*num_feat_dims),
-                activation(), nn.Dropout(dropout), nn.Linear(2*num_feat_dims, hidden_dim))
+            self.critic_self_feat_embed = nn.Linear(num_feat_dims, hidden_dim)
+            # self.critic_self_feat_embed = nn.Sequential(
+            #     nn.Linear(num_feat_dims, 2*num_feat_dims),
+            #     activation(), nn.Dropout(dropout), nn.Linear(2*num_feat_dims, hidden_dim))
             self.critic_node_pos_embed = nn.Linear(positional_dim, hidden_dim)
-            # self.critic_node_feat_embed = nn.Linear(num_feat_dims, hidden_dim)
-            self.critic_node_feat_embed = nn.Sequential(
-                nn.Linear(num_feat_dims, 2*num_feat_dims),
-                activation(), nn.Dropout(dropout), nn.Linear(2*num_feat_dims, hidden_dim))
+            self.critic_node_feat_embed = nn.Linear(num_feat_dims, hidden_dim)
+            # self.critic_node_feat_embed = nn.Sequential(
+            #     nn.Linear(num_feat_dims, 2*num_feat_dims),
+            #     activation(), nn.Dropout(dropout), nn.Linear(2*num_feat_dims, hidden_dim))
             self.critic_self_embed = nn.Sequential(
                 activation(), nn.Dropout(dropout), nn.Linear(hidden_dim, hidden_dim))
             self.critic_node_embed = nn.Sequential(
@@ -515,10 +515,10 @@ class EntitySelfAttentionLite(nn.Module):
         # Input and output layers for standardization functions
         self.input_pos_layers = [self.self_pos_embed, self.node_pos_embed]
         if self.independent_critic: self.input_pos_layers += [self.critic_self_pos_embed, self.critic_node_pos_embed]
-        # self.input_feat_layers = [self.self_feat_embed, self.node_feat_embed]
-        # if self.independent_critic: self.input_feat_layers += [self.critic_self_feat_embed, self.critic_node_feat_embed]
-        self.input_feat_layers = [self.self_feat_embed[0], self.node_feat_embed[0]]
-        if self.independent_critic: self.input_feat_layers += [self.critic_self_feat_embed[0], self.critic_node_feat_embed[0]]
+        self.input_feat_layers = [self.self_feat_embed, self.node_feat_embed]
+        if self.independent_critic: self.input_feat_layers += [self.critic_self_feat_embed, self.critic_node_feat_embed]
+        # self.input_feat_layers = [self.self_feat_embed[0], self.node_feat_embed[0]]
+        # if self.independent_critic: self.input_feat_layers += [self.critic_self_feat_embed[0], self.critic_node_feat_embed[0]]
         self.output_critic_layers = [self.critic_decider[-1]]
     
     def forward(

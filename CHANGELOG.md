@@ -1,3 +1,9 @@
+### 1.0.0+2025.10.27
+- Correct `Tangum` to `Tangram`
+- Figure updates and reorganization
+- Additional visualizations for `cortex_generate` perturbations
+- QOL additions and reorganization for `cortex_generate`
+
 ### 1.0.0+2025.10.26
 - Add `Tangum` method to `cortex_generate`
 - New knockdown results for `flysta` and `dyngen`
