@@ -1,3 +1,13 @@
+### 1.0.0+2025.10.29
+- Add memory efficient perturbation saving to `cortex_generate`
+- Figure panel updates
+- Filter ROC evaluation to excitatory cell types in `cortex_generate`
+- Full `cortex` perturbations
+
+### 1.0.0+2025.10.28
+- Additional `cortex` visualizations
+- Construct `cortex` figure
+
 ### 1.0.0+2025.10.27
 - Correct `Tangum` to `Tangram`
 - Figure updates and reorganization
