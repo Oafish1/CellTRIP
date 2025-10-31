@@ -1,3 +1,11 @@
+### 1.0.0+2025.10.30
+- Additional panel exports from `cortex_generate`
+- Figure updates
+- Full knockdown simulation for select genes
+- One-tailed annotations for `cortex_generate`
+- QOL updates to `cortex_generate`
+- Simultaneous ROC runs for all methods
+
 ### 1.0.0+2025.10.29
 - Add memory efficient perturbation saving to `cortex_generate`
 - Figure panel updates
