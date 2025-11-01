@@ -1,3 +1,11 @@
+### 1.0.0+2025.10.31
+- Alignment fixes for `cortex` effect size distributions
+- Correct effect size and trajectory length computations for `cortex_generate`, `dyngen_generate`, and `flysta_generate`
+- Figure updates
+- Fix cropping for `png` perturbation preview export in `cortex`
+- Full knockdown perturbations for top 1k effect size genes in `cortex`
+- More comprehensive performance plotting on `cortex` dataset
+
 ### 1.0.0+2025.10.30
 - Additional panel exports from `cortex_generate`
 - Figure updates
