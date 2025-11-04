@@ -1,3 +1,10 @@
+### 1.0.0+2025.11.3
+- Add and test `Dyngen` knockout data
+- Analysis of pearson delta over the course of multi-timepoint knockout with known ground-truth
+- Create `drugseries_generate` notebook
+- Generate interpolation analyses with fake data for `DrugSeries`
+- Scaffold `Dyngen` comparison with true knockout
+
 ### 1.0.0+2025.10.31
 - Alignment fixes for `cortex` effect size distributions
 - Correct effect size and trajectory length computations for `cortex_generate`, `dyngen_generate`, and `flysta_generate`
