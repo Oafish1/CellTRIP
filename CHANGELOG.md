@@ -1,3 +1,8 @@
+### 1.0.0+2025.11.4
+- Create `Dyngen` and `DrugSeries` figures
+- Revise `Cortex` and `Flysta` figures
+- Use editable fonts for `DrugSeries` and `Dyngen`
+
 ### 1.0.0+2025.11.3
 - Add and test `Dyngen` knockout data
 - Analysis of pearson delta over the course of multi-timepoint knockout with known ground-truth
