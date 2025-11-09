@@ -1,3 +1,14 @@
+### 1.0.0+2025.11.8
+- Change method colors for all figures
+- Bugfixes for complete `flysta_analysis` run
+- Fix looping cell type colors in `flysta`
+- Fixes for warnings in `flysta_analysis`
+- Formatting changes for `flysta` interpolation plot
+
+### 1.0.0+2025.11.6
+- Figure changes and legibility updates for `Cortex`
+- Minor figure changes for `Flysta`
+
 ### 1.0.0+2025.11.4
 - Create `Dyngen` and `DrugSeries` figures
 - Revise `Cortex` and `Flysta` figures
