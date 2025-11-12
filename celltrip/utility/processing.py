@@ -299,8 +299,8 @@ class Preprocessing:
         # Sample normalization
         if use_sample_count and (self.sample_count is not None):
             sample_counts = [
-                np.sum(m, keepdims=True, axis=1) if not scipy.sparse.issparse(m) else
-                np.sum(m, axis=1) for m in modalities]
+                np.sum(m, keepdims=True, axis=-1) if not scipy.sparse.issparse(m) else
+                np.sum(m, axis=-1) for m in modalities]
             modalities = [
                 m if not m_sampcount else
                 m * m_sampcount / np.where(m_actualcount == 0, 1, m_actualcount)
@@ -362,6 +362,7 @@ class Preprocessing:
     def transform_select_features(self, feature_idx, feature_values, modality_idx):
         # Transform select features without PCA
         feature_values_mat = np.ones_like(self.standardize_mean[modality_idx])
+        feature_values_mat = feature_values_mat.repeat(feature_values.shape[0], axis=0)
         feature_values_mat[:, feature_idx] = feature_values
         feature_values_mat, = self.transform(feature_values_mat, subset_modality=modality_idx, use_sample_count=False, use_pca=False)
         return feature_values_mat[:, feature_idx]
@@ -394,6 +395,11 @@ class Preprocessing:
 
         # Log
         if self.pre_log is not None:
+            # Clip below-zero values before expm1
+            modalities = [
+                m if not m_log else np.clip(m, 0, None)
+                for m, m_sparse, m_log in zip(modalities, self.is_sparse_transform[sm], self.pre_log[sm])]
+            # Perform
             modalities = [
                 m if not m_log else
                 np.expm1(m) if not scipy.sparse.issparse(m) else  # Additional check for dense output
@@ -405,8 +411,8 @@ class Preprocessing:
         # TODO: Think about this
         if use_sample_count and (self.sample_count is not None):
             sample_counts = [
-                np.sum(m, keepdims=True, axis=1) if not scipy.sparse.issparse(m) else
-                np.sum(m, axis=1) for m in modalities]
+                np.sum(m, keepdims=True, axis=-1) if not scipy.sparse.issparse(m) else
+                np.sum(m, axis=-1) for m in modalities]
             modalities = [
                 m if not m_sampcount else
                 m * m_sampcount / np.where(m_actualcount == 0, 1, m_actualcount)

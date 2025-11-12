@@ -1,6 +1,27 @@
+### 1.0.0+2025.11.11
+- Compatibility with 2-dimensional `feature_targets` inputs for `celltrip.utility.hooks.clamp_inverted_features_hook`
+- Evaluate new models
+- Figure updates for `DrugSeries` and `Dyngen`
+- New methods and DMSO-aware perturbation for `DrugSeries`
+- Panel changes for `DrugSeries` interpolation
+- Revise module gene determination code for `dyngen_generate`
+
+### 1.0.0+2025.11.10
+- Add `compute_emd` function to `utility.distance` module
+- Fix colors in interpolation plot
+- Fix `Preprocessing.transform` and `Preprocessing.inverse_transform` normalizing the wrong dimension for 3-dimensional inputs
+- Fix `EnvironmentBase` end evaluation to consider fp error, update rest of class accordingly - could change training results
+- Interpolation analysis for `drugseries_generate`
+- Retrain `DrugSeries` model with sample normalization
+
+### 1.0.0+2025.11.9
+- Add `Flysta` cell type GO enrichment files
+
 ### 1.0.0+2025.11.8
+- Add legend for `flysta` cell types
 - Change method colors for all figures
 - Bugfixes for complete `flysta_analysis` run
+- Figure revisions
 - Fix looping cell type colors in `flysta`
 - Fixes for warnings in `flysta_analysis`
 - Formatting changes for `flysta` interpolation plot

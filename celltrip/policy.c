@@ -4320,7 +4320,7 @@ typedef struct {
   PyObject *__pyx_int_1024;
   PyObject *__pyx_int_10000;
   PyObject *__pyx_int_100000;
-  PyObject *__pyx_int_250000;
+  PyObject *__pyx_int_1000000;
   PyObject *__pyx_int_neg_1;
   PyObject *__pyx_int_neg_2;
   PyObject *__pyx_slice_;
@@ -5237,7 +5237,7 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_int_1024);
   Py_CLEAR(clear_module_state->__pyx_int_10000);
   Py_CLEAR(clear_module_state->__pyx_int_100000);
-  Py_CLEAR(clear_module_state->__pyx_int_250000);
+  Py_CLEAR(clear_module_state->__pyx_int_1000000);
   Py_CLEAR(clear_module_state->__pyx_int_neg_1);
   Py_CLEAR(clear_module_state->__pyx_int_neg_2);
   Py_CLEAR(clear_module_state->__pyx_slice_);
@@ -6132,7 +6132,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_int_1024);
   Py_VISIT(traverse_module_state->__pyx_int_10000);
   Py_VISIT(traverse_module_state->__pyx_int_100000);
-  Py_VISIT(traverse_module_state->__pyx_int_250000);
+  Py_VISIT(traverse_module_state->__pyx_int_1000000);
   Py_VISIT(traverse_module_state->__pyx_int_neg_1);
   Py_VISIT(traverse_module_state->__pyx_int_neg_2);
   Py_VISIT(traverse_module_state->__pyx_slice_);
@@ -7037,7 +7037,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_int_1024 __pyx_mstate_global->__pyx_int_1024
 #define __pyx_int_10000 __pyx_mstate_global->__pyx_int_10000
 #define __pyx_int_100000 __pyx_mstate_global->__pyx_int_100000
-#define __pyx_int_250000 __pyx_mstate_global->__pyx_int_250000
+#define __pyx_int_1000000 __pyx_mstate_global->__pyx_int_1000000
 #define __pyx_int_neg_1 __pyx_mstate_global->__pyx_int_neg_1
 #define __pyx_int_neg_2 __pyx_mstate_global->__pyx_int_neg_2
 #define __pyx_slice_ __pyx_mstate_global->__pyx_slice_
@@ -36016,9 +36016,9 @@ static PyObject *__pyx_pf_8celltrip_6policy_36__defaults__(CYTHON_UNUSED PyObjec
   __Pyx_INCREF(__Pyx_CyFunction_Defaults(__pyx_defaults9, __pyx_self)->__pyx_arg_minibatch_size);
   __Pyx_GIVEREF(__Pyx_CyFunction_Defaults(__pyx_defaults9, __pyx_self)->__pyx_arg_minibatch_size);
   if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 30, __Pyx_CyFunction_Defaults(__pyx_defaults9, __pyx_self)->__pyx_arg_minibatch_size)) __PYX_ERR(0, 1239, __pyx_L1_error);
-  __Pyx_INCREF(((PyObject *)__pyx_int_250000));
-  __Pyx_GIVEREF(((PyObject *)__pyx_int_250000));
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 31, ((PyObject *)__pyx_int_250000))) __PYX_ERR(0, 1239, __pyx_L1_error);
+  __Pyx_INCREF(((PyObject *)__pyx_int_1000000));
+  __Pyx_GIVEREF(((PyObject *)__pyx_int_1000000));
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 31, ((PyObject *)__pyx_int_1000000))) __PYX_ERR(0, 1239, __pyx_L1_error);
   __Pyx_INCREF(__Pyx_CyFunction_Defaults(__pyx_defaults9, __pyx_self)->__pyx_arg_actor_critic_kwargs);
   __Pyx_GIVEREF(__Pyx_CyFunction_Defaults(__pyx_defaults9, __pyx_self)->__pyx_arg_actor_critic_kwargs);
   if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 32, __Pyx_CyFunction_Defaults(__pyx_defaults9, __pyx_self)->__pyx_arg_actor_critic_kwargs)) __PYX_ERR(0, 1239, __pyx_L1_error);
@@ -36207,7 +36207,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
     values[32] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)__pyx_int_100000)));
     values[33] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)__pyx_int_10000)));
     values[34] = __Pyx_Arg_NewRef_FASTCALL(__pyx_dynamic_args->__pyx_arg_minibatch_size);
-    values[35] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)__pyx_int_250000)));
+    values[35] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)__pyx_int_1000000)));
     values[36] = __Pyx_Arg_NewRef_FASTCALL(__pyx_dynamic_args->__pyx_arg_actor_critic_kwargs);
     values[37] = __Pyx_Arg_NewRef_FASTCALL(__pyx_dynamic_args->__pyx_arg_pinning_kwargs);
     if (__pyx_kwds) {
@@ -56103,7 +56103,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitConstants(void) {
   __pyx_int_1024 = PyInt_FromLong(1024); if (unlikely(!__pyx_int_1024)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_10000 = PyInt_FromLong(10000L); if (unlikely(!__pyx_int_10000)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_100000 = PyInt_FromLong(100000L); if (unlikely(!__pyx_int_100000)) __PYX_ERR(0, 1, __pyx_L1_error)
-  __pyx_int_250000 = PyInt_FromLong(250000L); if (unlikely(!__pyx_int_250000)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_int_1000000 = PyInt_FromLong(1000000L); if (unlikely(!__pyx_int_1000000)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_neg_1 = PyInt_FromLong(-1); if (unlikely(!__pyx_int_neg_1)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_neg_2 = PyInt_FromLong(-2); if (unlikely(!__pyx_int_neg_2)) __PYX_ERR(0, 1, __pyx_L1_error)
   return 0;
@@ -58046,7 +58046,7 @@ if (!__Pyx_RefNanny) {
  *             epoch_size=100_000,
  *             batch_size=10_000,  # https://scholarworks.sjsu.edu/cgi/viewcontent.cgi?params=/context/etd_projects/article/1972/&path_info=park_inhee.pdf
  *             minibatch_size=torch.inf,             # <<<<<<<<<<<<<<
- *             minibatch_memories=250_000,  # 1M
+ *             minibatch_memories=1_000_000,  # 1M, 250k for extra hidden layer
  *             # load_level='minibatch',  # TODO: Allow for loading at batch with compression
  */
   __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_torch); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 1285, __pyx_L1_error)
