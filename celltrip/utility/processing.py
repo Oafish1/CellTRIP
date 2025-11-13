@@ -360,9 +360,11 @@ class Preprocessing:
         return _utility.general.clean_return(ret)
     
     def transform_select_features(self, feature_idx, feature_values, modality_idx):
+        # Parameters
+        feature_values = np.array(feature_values)
         # Transform select features without PCA
         feature_values_mat = np.ones_like(self.standardize_mean[modality_idx])
-        feature_values_mat = feature_values_mat.repeat(feature_values.shape[0], axis=0)
+        if feature_values.ndim == 2: feature_values_mat = feature_values_mat.repeat(feature_values.shape[0], axis=0)
         feature_values_mat[:, feature_idx] = feature_values
         feature_values_mat, = self.transform(feature_values_mat, subset_modality=modality_idx, use_sample_count=False, use_pca=False)
         return feature_values_mat[:, feature_idx]

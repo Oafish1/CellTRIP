@@ -1,3 +1,7 @@
+### 1.0.0+2025.11.12
+- Bugfix for 0- and 1-dimensional `feature_values` input to `transform_select_features`
+- Figure fixes and rearrangements for `Dyngen` and `DrugSeries`, manual adjustments to `Flysta`
+
 ### 1.0.0+2025.11.11
 - Compatibility with 2-dimensional `feature_targets` inputs for `celltrip.utility.hooks.clamp_inverted_features_hook`
 - Evaluate new models
