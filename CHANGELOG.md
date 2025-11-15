@@ -1,3 +1,7 @@
+### 1.0.0+2025.11.13
+- Fix `pip_layer` implementation to use `sigma_prime` in denominator of bias update
+- More experimental runs for `DrugSeries`
+
 ### 1.0.0+2025.11.12
 - Bugfix for 0- and 1-dimensional `feature_values` input to `transform_select_features`
 - Figure fixes and rearrangements for `Dyngen` and `DrugSeries`, manual adjustments to `Flysta`

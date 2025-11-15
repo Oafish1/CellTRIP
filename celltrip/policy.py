@@ -894,8 +894,9 @@ def pip_layer(layer, mu_sigma, mu_sigma_prime, segment=None):
     # Execute
     mu, sigma = mu_sigma
     mu_prime, sigma_prime = mu_sigma_prime
+    # layer.bias.data = layer.bias + torch.matmul((mu_prime-mu)/sigma, layer.weight[:, segment].T)
     layer.weight.data[:, segment] = layer.weight[:, segment] * sigma_prime.unsqueeze(0) / sigma.unsqueeze(0)
-    layer.bias.data = layer.bias + torch.matmul((mu_prime-mu)/sigma, layer.weight[:, segment].T)
+    layer.bias.data = layer.bias + torch.matmul((mu_prime-mu)/sigma_prime, layer.weight[:, segment].T)
 
 
 class BufferStandardization(nn.Module):
