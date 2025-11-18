@@ -13,6 +13,10 @@ build/
 **/models/*
 **/wandb
 
+# Comparison models
+**/cpa/
+**/tram_gears/
+
 # Training logs
 **/*_log*.txt
 
@@ -22,6 +26,7 @@ build/
 
 # Docker images and archives
 *.tar
+*.tar.gz
 
 # Data
 *.pickle
@@ -36,6 +41,7 @@ build/
 
 # Temp
 **/temp/
+*.tmp
 
 # Extracted images
 frame_*.png

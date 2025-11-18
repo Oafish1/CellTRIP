@@ -1,3 +1,16 @@
+### 1.0.0+2025.11.17
+- Action hook compatibility for `continuous_feature_targets`
+- Figure updates and supplementary figures for all analyses
+- Finalize `DrugSeries` analyses
+
+### 1.0.0+2025.11.16
+- Add `continuous_feature_targets` hook for modifying feature targets over the course of simulation
+- Add tree reconstruction framework to `dyngen_generate`
+- Benchmarking and method comparison figure for `DrugSeries` performance
+- Benchmarking and method comparison figure for `Dyngen` performance
+- Create `drugseries_comparisons` notebook
+- Create `dyngen_comparisons` notebook
+
 ### 1.0.0+2025.11.13
 - Fix `pip_layer` implementation to use `sigma_prime` in denominator of bias update
 - More experimental runs for `DrugSeries`
