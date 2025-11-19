@@ -1,3 +1,6 @@
+### 1.0.0+2025.11.18
+- Figure revisions for `Dyngen`
+
 ### 1.0.0+2025.11.17
 - Action hook compatibility for `continuous_feature_targets`
 - Figure updates and supplementary figures for all analyses
