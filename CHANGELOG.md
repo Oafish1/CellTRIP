@@ -1,3 +1,10 @@
+### 1.0.0+2025.11.21
+- Add knockdown and visualizations to `expval_generate` notebook
+
+### 1.0.0+2025.11.20
+- Additional `ExpVal` data
+- Figure revisions for main schematic and `Dyngen`
+
 ### 1.0.0+2025.11.18
 - Figure revisions for `Dyngen`
 
