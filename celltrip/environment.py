@@ -40,7 +40,7 @@ class EnvironmentBase:
         penalty_bound=None,
         penalty_velocity=None,
         penalty_action=None,
-        epsilon=1e-3,
+        epsilon=1e-7,
         # Early stopping
         min_time=2**6,
         max_time=2**7,
@@ -132,6 +132,14 @@ class EnvironmentBase:
             else:
                 # If some modalities aren't targets, they are inputs (imputation)
                 self.input_modalities = list(set(all_modalities) - set(self.target_modalities))
+
+        # Input/target assertions, for consistency
+        assert (
+            np.array(self.target_modalities)
+            == np.arange(
+                len(all_modalities)-len(self.target_modalities),
+                len(all_modalities))).all(), (
+            'Target modalities must be the at the end of the modality list, indexed in order')
 
         # Weights
         # NOTE: Rewards can and should go positive, penalties can't
@@ -439,7 +447,7 @@ class EnvironmentBase:
         self.best = 0
 
         # Reset end cond
-        self.end_time = np.random.randint(self.min_time, self.max_time) if self.min_time < self.max_time else self.max_time
+        self.end_time = np.random.randint(self.min_time, self.max_time) if self.min_time < self.max_time - self.epsilon else self.max_time
 
         # Reset cache
         self.dist.clear()
@@ -550,18 +558,20 @@ class EnvironmentBase:
                 # Perform lstsq
                 X = torch.linalg.lstsq(A, B / B_norm).solution
                 err = torch.matmul(A, X) * A_norm - B
+                err = err.square().mean(dim=-1)
 
             # Pinning NN
             else:
-                err = m - pinning_func_list[i](self.pos, m).detach()
-                # err = pinning_func_list[i].compute_loss(pinning_func_list[i](self.pos, m).detach(), m)
+                # err = m - pinning_func_list[i](self.pos, m).detach()
+                with torch.no_grad():
+                    # err = pinning_func_list[i].compute_loss(pinning_func_list[i](self.pos, m, input_standardization=False), m)  # DRAGGING
+                    err = pinning_func_list[i].compute_loss(pinning_func_list[i](self.pos, m), m)  # DRAGGING
+                    # err = pinning_func_list[i].compute_loss(*pinning_func_list[i](self.pos, m, return_logvar=True), m)
 
             # Final computation
-            mse = err.square().mean(dim=-1)
-            # mse = (err.square() / m.var(keepdim=True, dim=0)).mean(dim=-1)  # Scaled MSE, mainly for slice samples which have varying positions - could also do this in prepro - kinda bad for PCA
-            # mse /= m.square().mean()  # Scale for fairness (TODO: MAKE WORK WITH SPATIAL, maybe use std)
-            mse /= m.var()  # Scale for fairness (spatial compatible)
-            loss = -1 / (1 + 10*mse)  # Transform
+            # mse = err.square().mean(dim=-1)
+            err /= m.var()  # Scale for fairness (spatial compatible)
+            loss = -1 / (1 + 10*err)  # Transform
             # mae = err.abs().mean(dim=-1)
             # loss = -1 / (1 + mae)  # Transform
             # mse = (err.square() + self.epsilon).log().mean(dim=-1)
@@ -606,11 +616,11 @@ class EnvironmentBase:
         # velocity_cond = self.get_velocities().norm(dim=-1) if self.spherical else self.get_velocities().square().mean(dim=-1)
         # if self.termination_conds['velocity'] and (velocity_cond <= self.vel_threshold).all(): return True, 'vel'
         velocity_cond = self.get_velocities().norm(dim=-1).mean() if self.spherical else self.get_velocities().square().mean(dim=-1).mean()
-        if self.termination_conds['velocity'] and velocity_cond <= self.vel_threshold: return True, 'vel'
+        if self.termination_conds['velocity'] and velocity_cond + self.epsilon <= self.vel_threshold: return True, 'vel'
         # Time stop
-        if self.termination_conds['max_time'] and self.time >= self.max_time: return True, 'max_time'
+        if self.termination_conds['max_time'] and self.time + self.epsilon >= self.max_time: return True, 'max_time'
         # Random stop
-        if self.termination_conds['random'] and self.time >= self.end_time: return True, 'rand'
+        if self.termination_conds['random'] and self.time + self.epsilon >= self.end_time: return True, 'rand'
         # Default
         return False, 'def'
     
@@ -669,6 +679,10 @@ class EnvironmentBase:
 
     def set_delta(self, delta):
         self.delta = delta
+        return self
+    
+    def set_time(self, time):
+        self.time = time
         return self
     
     def set_max_time(self, max_time):

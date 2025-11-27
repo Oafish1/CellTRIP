@@ -2,6 +2,8 @@ import numpy as np
 import scipy.sparse
 import torch
 
+from . import general as _general
+
 
 def cosine_similarity(a):
     # Calculate cosine similarity
@@ -19,6 +21,11 @@ def euclidean_distance(a, scaled=False, norm=False):
     if scaled: dist /= np.sqrt(a.shape[1])
     if norm: dist /= torch.norm(dist)
     return dist
+
+
+def compute_emd(X_pred, X_true):
+    _, _, M_raw, OT_mat = _general.compute_discrete_ot_matrix(X_pred, X_true)
+    return np.sum(M_raw * OT_mat)
 
 
 def partition_distance(data, partitions=None, func=euclidean_distance):

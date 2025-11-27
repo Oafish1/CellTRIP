@@ -1,3 +1,168 @@
+### 1.0.0+2025.11.26
+- Add `apply_rot_trans` utility function
+- Add `create_agent_from_file` and `create_agent_from_state` macro functions
+- Add `generate_pseudocells` macro function
+- Add optional progress bar total for `simulate_until_completion`
+- Add `README` for datasets
+- Finish implementing high-level API
+- Reorganize figures
+- Revise and update `README`
+- Revise low-level API
+- Revise tutorial notebook and split into `tutorial_high_level` and `tutorial_low_level`
+- Upload `Dyngen` data
+
+### 1.0.0+2025.11.25
+- Revise high-level API
+
+### 1.0.0+2025.11.24
+- Parameter tweaking for `ExpVal`
+
+### 1.0.0+2025.11.21
+- Add `manager` module
+- Optimization and additional runs for `ExpVal`
+
+### 1.0.0+2025.11.21
+- Add knockdown and visualizations to `expval_generate` notebook
+
+### 1.0.0+2025.11.20
+- Additional `ExpVal` data
+- Figure revisions for main schematic and `Dyngen`
+
+### 1.0.0+2025.11.18
+- Figure revisions for `Dyngen`
+
+### 1.0.0+2025.11.17
+- Action hook compatibility for `continuous_feature_targets`
+- Figure updates and supplementary figures for all analyses
+- Finalize `DrugSeries` analyses
+
+### 1.0.0+2025.11.16
+- Add `continuous_feature_targets` hook for modifying feature targets over the course of simulation
+- Add tree reconstruction framework to `dyngen_generate`
+- Benchmarking and method comparison figure for `DrugSeries` performance
+- Benchmarking and method comparison figure for `Dyngen` performance
+- Create `drugseries_comparisons` notebook
+- Create `dyngen_comparisons` notebook
+
+### 1.0.0+2025.11.13
+- Fix `pip_layer` implementation to use `sigma_prime` in denominator of bias update
+- More experimental runs for `DrugSeries`
+
+### 1.0.0+2025.11.12
+- Bugfix for 0- and 1-dimensional `feature_values` input to `transform_select_features`
+- Figure fixes and rearrangements for `Dyngen` and `DrugSeries`, manual adjustments to `Flysta`
+
+### 1.0.0+2025.11.11
+- Compatibility with 2-dimensional `feature_targets` inputs for `celltrip.utility.hooks.clamp_inverted_features_hook`
+- Evaluate new models
+- Figure updates for `DrugSeries` and `Dyngen`
+- New methods and DMSO-aware perturbation for `DrugSeries`
+- Panel changes for `DrugSeries` interpolation
+- Revise module gene determination code for `dyngen_generate`
+
+### 1.0.0+2025.11.10
+- Add `compute_emd` function to `utility.distance` module
+- Fix colors in interpolation plot
+- Fix `Preprocessing.transform` and `Preprocessing.inverse_transform` normalizing the wrong dimension for 3-dimensional inputs
+- Fix `EnvironmentBase` end evaluation to consider fp error, update rest of class accordingly - could change training results
+- Interpolation analysis for `drugseries_generate`
+- Retrain `DrugSeries` model with sample normalization
+
+### 1.0.0+2025.11.9
+- Add `Flysta` cell type GO enrichment files
+
+### 1.0.0+2025.11.8
+- Add legend for `flysta` cell types
+- Change method colors for all figures
+- Bugfixes for complete `flysta_analysis` run
+- Figure revisions
+- Fix looping cell type colors in `flysta`
+- Fixes for warnings in `flysta_analysis`
+- Formatting changes for `flysta` interpolation plot
+
+### 1.0.0+2025.11.6
+- Figure changes and legibility updates for `Cortex`
+- Minor figure changes for `Flysta`
+
+### 1.0.0+2025.11.4
+- Create `Dyngen` and `DrugSeries` figures
+- Revise `Cortex` and `Flysta` figures
+- Use editable fonts for `DrugSeries` and `Dyngen`
+
+### 1.0.0+2025.11.3
+- Add and test `Dyngen` knockout data
+- Analysis of pearson delta over the course of multi-timepoint knockout with known ground-truth
+- Create `drugseries_generate` notebook
+- Generate interpolation analyses with fake data for `DrugSeries`
+- Scaffold `Dyngen` comparison with true knockout
+
+### 1.0.0+2025.10.31
+- Alignment fixes for `cortex` effect size distributions
+- Correct effect size and trajectory length computations for `cortex_generate`, `dyngen_generate`, and `flysta_generate`
+- Figure updates
+- Fix cropping for `png` perturbation preview export in `cortex`
+- Full knockdown perturbations for top 1k effect size genes in `cortex`
+- More comprehensive performance plotting on `cortex` dataset
+
+### 1.0.0+2025.10.30
+- Additional panel exports from `cortex_generate`
+- Figure updates
+- Full knockdown simulation for select genes
+- One-tailed annotations for `cortex_generate`
+- QOL updates to `cortex_generate`
+- Simultaneous ROC runs for all methods
+
+### 1.0.0+2025.10.29
+- Add memory efficient perturbation saving to `cortex_generate`
+- Figure panel updates
+- Filter ROC evaluation to excitatory cell types in `cortex_generate`
+- Full `cortex` perturbations
+
+### 1.0.0+2025.10.28
+- Additional `cortex` visualizations
+- Construct `cortex` figure
+
+### 1.0.0+2025.10.27
+- Correct `Tangum` to `Tangram`
+- Figure updates and reorganization
+- Additional visualizations for `cortex_generate` perturbations
+- QOL additions and reorganization for `cortex_generate`
+
+### 1.0.0+2025.10.26
+- Add `Tangum` method to `cortex_generate`
+- New knockdown results for `flysta` and `dyngen`
+- Steady state visualizations in `dyngen_generate`
+
+### 1.0.0+2025.10.25
+- Adapt `dyngen_generate` to new environment
+- Add hidden layer to feature processing, lower default memory limit to comphensate
+- Add post-PCA perturbation hook to `flysta_generate`
+- Add p-values to `cortex` analyses
+- Change default initial steady state time scale from `1` to `5` for perturbation analyses
+- File organization for `dyngen` generation modules
+- Heatmap and enrichment updates for `flysta_analysis`
+- Optimize `flysta` heatmap generation and add additional sorting
+- SVC classification ROC curve analysis for `cortex` methods
+
+### 1.0.0+2025.10.24
+- Adapt `flysta_generate` to new environment
+- Add QOL rsync scripts
+- More models for `cortex`
+- Revert variational policy architecture changes
+- Run HVGs instead of random genes for `flysta` and `cortex`
+
+### 1.0.0+2025.10.23
+- Revise layer classification for `cortex_generate`
+
+### 1.0.0+2025.10.22
+- Explore strategies for layer classification in `cortex_generate`
+- Fix local running in `train`
+- Pairwise distance pinning loss
+- Preliminary screen initialization script
+- Rely on `compute_loss` for pinning reward from `EnvironmentBase`
+- Std isolation for PopArt implementation
+- Variational pinning and negative log likelihood loss
+
 ### 1.0.0+2025.10.21
 - Colorbar and formatting changes for `cortex_generate` perturbation plots
 - Compatibility updates for `vcc_generate`

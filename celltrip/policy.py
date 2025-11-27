@@ -1,6 +1,7 @@
 from collections import defaultdict
 import io
 import os
+import re
 import warnings
 
 import numpy as np
@@ -456,8 +457,14 @@ class EntitySelfAttentionLite(nn.Module):
         num_feat_dims = np.array(modal_dims).sum()
         self.self_pos_embed = nn.Linear(positional_dim, hidden_dim)
         self.self_feat_embed = nn.Linear(num_feat_dims, hidden_dim)
+        # self.self_feat_embed = nn.Sequential(
+        #     nn.Linear(num_feat_dims, 2*num_feat_dims),
+        #     activation(), nn.Dropout(dropout), nn.Linear(2*num_feat_dims, hidden_dim))
         self.node_pos_embed = nn.Linear(positional_dim, hidden_dim)
         self.node_feat_embed = nn.Linear(num_feat_dims, hidden_dim)
+        # self.node_feat_embed = nn.Sequential(
+        #     nn.Linear(num_feat_dims, 2*num_feat_dims),
+        #     activation(), nn.Dropout(dropout), nn.Linear(2*num_feat_dims, hidden_dim))
         self.self_embed = nn.Sequential(
             activation(), nn.Dropout(dropout), nn.Linear(hidden_dim, hidden_dim))
         self.node_embed = nn.Sequential(
@@ -469,8 +476,14 @@ class EntitySelfAttentionLite(nn.Module):
         if independent_critic:
             self.critic_self_pos_embed = nn.Linear(positional_dim, hidden_dim)
             self.critic_self_feat_embed = nn.Linear(num_feat_dims, hidden_dim)
+            # self.critic_self_feat_embed = nn.Sequential(
+            #     nn.Linear(num_feat_dims, 2*num_feat_dims),
+            #     activation(), nn.Dropout(dropout), nn.Linear(2*num_feat_dims, hidden_dim))
             self.critic_node_pos_embed = nn.Linear(positional_dim, hidden_dim)
             self.critic_node_feat_embed = nn.Linear(num_feat_dims, hidden_dim)
+            # self.critic_node_feat_embed = nn.Sequential(
+            #     nn.Linear(num_feat_dims, 2*num_feat_dims),
+            #     activation(), nn.Dropout(dropout), nn.Linear(2*num_feat_dims, hidden_dim))
             self.critic_self_embed = nn.Sequential(
                 activation(), nn.Dropout(dropout), nn.Linear(hidden_dim, hidden_dim))
             self.critic_node_embed = nn.Sequential(
@@ -505,6 +518,8 @@ class EntitySelfAttentionLite(nn.Module):
         if self.independent_critic: self.input_pos_layers += [self.critic_self_pos_embed, self.critic_node_pos_embed]
         self.input_feat_layers = [self.self_feat_embed, self.node_feat_embed]
         if self.independent_critic: self.input_feat_layers += [self.critic_self_feat_embed, self.critic_node_feat_embed]
+        # self.input_feat_layers = [self.self_feat_embed[0], self.node_feat_embed[0]]
+        # if self.independent_critic: self.input_feat_layers += [self.critic_self_feat_embed[0], self.critic_node_feat_embed[0]]
         self.output_critic_layers = [self.critic_decider[-1]]
     
     def forward(
@@ -768,16 +783,18 @@ class ArtStandardization(nn.Module):
         self.square_mean.data = batch_square_mean
         self.std.data = batch_std
 
-    def apply(self, x, shape=None):
+    def apply(self, x, use_mean=True, shape=None):
         if shape is None: shape = tuple((len(x.shape)-1)*[1]+[-1])
-        if self.use_mean: x = x - self.mean.view(shape)
+        use_mean = self.use_mean * use_mean
+        if use_mean: x = x - self.mean.view(shape)
         if self.use_std: x = x / self.std.view(shape)
         return x
 
-    def remove(self, x, shape=None):
+    def remove(self, x, use_mean=True, shape=None):
         if shape is None: shape = tuple((len(x.shape)-1)*[1]+[-1])
+        use_mean = self.use_mean * use_mean
         if self.use_std: x = x * self.std.view(shape)
-        if self.use_mean: x = x + self.mean.view(shape)
+        if use_mean: x = x + self.mean.view(shape)
         return x
     
 
@@ -787,8 +804,8 @@ class PopArtStandardization(ArtStandardization):
         # Pre: Standardization for inputs, rather than outputs
         # Parameters
         self.layers = layers  # List of lists of layer groups
-        self.splits = splits  # List of slices for each layer group
-        self.segments = segments  # List of lists of segments for each layer in a layer group
+        self.splits = splits  # List of slices for each layer group, splits mean and std across layers
+        self.segments = segments  # List of lists of segments for each layer in a layer group, splits a layer
         self.pre = pre
 
         # Automatically detect dim
@@ -878,8 +895,9 @@ def pip_layer(layer, mu_sigma, mu_sigma_prime, segment=None):
     # Execute
     mu, sigma = mu_sigma
     mu_prime, sigma_prime = mu_sigma_prime
+    # layer.bias.data = layer.bias + torch.matmul((mu_prime-mu)/sigma, layer.weight[:, segment].T)
     layer.weight.data[:, segment] = layer.weight[:, segment] * sigma_prime.unsqueeze(0) / sigma.unsqueeze(0)
-    layer.bias.data = layer.bias + torch.matmul((mu_prime-mu)/sigma, layer.weight[:, segment].T)
+    layer.bias.data = layer.bias + torch.matmul((mu_prime-mu)/sigma_prime, layer.weight[:, segment].T)
 
 
 class BufferStandardization(nn.Module):
@@ -988,6 +1006,11 @@ class PinningNN(nn.Module):
             activation(), nn.Dropout(dropout),
             nn.Linear(hidden_dim, output_dim),
 
+            # Basic mu logvar
+            # nn.Linear(input_dim, hidden_dim),
+            # activation(), nn.Dropout(dropout),
+            # nn.Linear(hidden_dim, 2*output_dim),
+
             # Complex
             # nn.Linear(input_dim, hidden_dim),
             # activation(), nn.Dropout(dropout),
@@ -1023,24 +1046,32 @@ class PinningNN(nn.Module):
         #     beta=standardization_beta, pre=True)
         # self.input_standardization = PopArtStandardization(
         #     dim=input_dim, beta=standardization_beta, pre=True)
-        self.output_standardization = PopArtStandardization([self.last_layer], beta=standardization_beta)
+        self.output_standardization = PopArtStandardization(
+            [self.last_layer],
+            segments=[[slice(0, self.output_dim), slice(self.output_dim, -1)]],
+            beta=standardization_beta, dim=self.output_dim)
 
-    def forward_mlp(self, X, Y=None, input_standardization=True, output_standardization=False):
+    def forward_mlp(self, X, Y=None, input_standardization=True, output_standardization=False, return_logvar=False):
         # Input standardization
         if input_standardization: X = self.input_standardization.apply(X)
 
         # Calculation
         logit = self.mlp(X)
+        mu = logit
+        # mu, logvar = logit[..., :self.output_dim], logit[..., self.output_dim:]
 
         # Output standardization
-        if not output_standardization: logit = self.output_standardization.remove(logit)
+        if not output_standardization:
+            mu = self.output_standardization.remove(mu)
+            # logvar = self.output_standardization.remove(logvar.exp().std(), use_mean=False).square().log()  # Not the most efficient way, could just square log the std
 
         # Transform if needed
         if self.spatial and Y is not None:  # Might want to cache at some point
-            R, t = _utility.processing.solve_rot_trans(logit, Y)
-            logit = torch.matmul(logit, R) + t
+            R, t = _utility.processing.solve_rot_trans(mu, Y)
+            mu = torch.matmul(mu, R) + t
 
-        return logit
+        # if return_logvar: return mu, logvar
+        return mu
     
     # def forward_att(self, q, k, v, input_standardization=True, output_standardization=False):
     #     pass
@@ -1064,12 +1095,26 @@ class PinningNN(nn.Module):
     # def decode(self, X):
     #     return self.decoder(X)
 
-    def compute_loss(self, Y_pred, Y_true, mean=False):
+    def compute_loss(self, Y_pred, Y_true):  # , logvar
+        # Archived
         # KLD_loss = -.5 * (1 + torch.log(X_batch.var(dim=0)) - X_batch.mean(dim=0).square() - X_batch.var(dim=0)).mean(dim=-1)
         # STD_loss = (Y_pred.std(dim=0) - Y_batch.std(dim=0)).square().mean(dim=-1)
         # MMD_loss = self.mmd_loss(Y_true, Y_pred)
         # MAE_loss = (Y_true - Y_pred).abs().mean(dim=-1).mean(dim=0)
-        MSE_loss = (Y_true - Y_pred).square().mean(dim=-1).mean(dim=0)  # Reconstruction, also doesn't care about important features when standardized
+
+        # In-use
+        MSE_loss = (Y_true - Y_pred).square().mean(dim=-1)  # Reconstruction, also doesn't care about important features when standardized
+        # PAIR_loss = (torch.cdist(Y_pred, Y_pred) - torch.cdist(Y_true, Y_true)).square().mean(dim=-1)
+        # NLL_loss = .5 * ((Y_true - Y_pred).square() / logvar.exp() + logvar).mean(dim=-1)  # NLL, doesn't account for covariance
+        # if np.random.rand() < .001:
+        #     print(Y_pred.shape)
+        #     print(Y_true.shape)
+        #     print(MSE_loss.shape)
+        #     print(PAIR_loss.shape)
+        #     print(MSE_loss[:5])
+        #     print(PAIR_loss[:5])
+        #     print()
+        # loss = .5*MSE_loss + .5*PAIR_loss
         loss = MSE_loss
         return loss
     
@@ -1109,6 +1154,7 @@ class PinningNN(nn.Module):
 
                     # Compute normal prediction
                     Y_pred = self(X_batch)
+                    # Y_pred, logvar = self(X_batch, return_logvar=True)
                     # Y_pred = self(X_stand)
 
                     # Transform if needed
@@ -1129,9 +1175,13 @@ class PinningNN(nn.Module):
                         Y_pred = Y_pred.unsqueeze(dim=-2)
                         Y_pred = torch.matmul(Y_pred, R) + t
                         Y_pred = Y_pred.squeeze(dim=-2)
+                        # logvar = logvar.unsqueeze(dim=-2)
+                        # logvar = torch.matmul(logvar, R)  # TODO: Confirm correct
+                        # logvar = logvar.squeeze(dim=-2)
 
                     # Losses
-                    loss = self.compute_loss(Y_pred, Y_batch)
+                    loss = self.compute_loss(Y_pred, Y_batch).mean()
+                    # loss = self.compute_loss(Y_pred, logvar, Y_batch).mean()
 
                     # Compute VAE prediction
                     # imputed, embedded, mu, logvar = self(X_batch, return_logits=True)
@@ -1187,6 +1237,34 @@ def create_agent_from_env(env, pinning_modal_dims='auto', pinning_spatial=None, 
         **kwargs)
 
 
+def create_agent_from_file(fname, device='cpu', **kwargs):
+    with _utility.general.open_s3_or_local(fname, 'rb') as f:
+        policy_state = torch.load(f, map_location=device)
+    return create_agent_from_state(policy_state, device=device, **kwargs)
+
+
+def create_agent_from_state(state, pinning_spatial=False, **kwargs):
+    env_dim = int( state['policy']['actor_critic.self_pos_embed.weight'].shape[1] / 2 )
+    modal_dims = [state['policy']['actor_critic.self_feat_embed.weight'].shape[1]]  # Just keeps sum the same
+    pinning_output_layers = {}
+    for k in state['policy'].keys():
+        match = re.match('^pinning\.(\d+)\.mlp\.(\d+)\.weight$', k)
+        if match is not None:
+            pinning_output_layers[match.group(1)] = k
+    pinning_modal_dims = [state['policy'][k].shape[0] for k in pinning_output_layers.values()]
+    if isinstance(pinning_spatial, bool):
+        pinning_spatial = [pinning_spatial for _ in range(len(pinning_modal_dims))]
+
+    # Create agent
+    policy = PPO(
+        2*env_dim, modal_dims, env_dim, pinning_dim=env_dim,
+        pinning_modal_dims=pinning_modal_dims, pinning_spatial=pinning_spatial,
+        **kwargs)
+    
+    # Load weights
+    return policy.load_checkpoint(state)
+
+
 class PPO(nn.Module):
     def __init__(
             self,
@@ -1235,7 +1313,7 @@ class PPO(nn.Module):
             epoch_size=100_000,
             batch_size=10_000,  # https://scholarworks.sjsu.edu/cgi/viewcontent.cgi?params=/context/etd_projects/article/1972/&path_info=park_inhee.pdf
             minibatch_size=torch.inf,
-            minibatch_memories=1_000_000,  # 1M
+            minibatch_memories=1_000_000,  # 1M, 250k for extra hidden layer
             # load_level='minibatch',  # TODO: Allow for loading at batch with compression
             # cast_level='minibatch',
             actor_critic_kwargs={},
@@ -1370,10 +1448,13 @@ class PPO(nn.Module):
         # NOTE: Will no longer do `os.makedirs(directory, exist_ok=True)` for local
         return fname
 
-    def load_checkpoint(self, fname, **kwargs):  # Can pass `strict=False` to ignore missing entries
-        # Get from fname
-        with _utility.general.open_s3_or_local(fname, 'rb') as f:
-            policy_state = torch.load(f, map_location=self.policy_iteration.device)
+    def load_checkpoint(self, fname_or_policy_state, **kwargs):  # Can pass `strict=False` to ignore missing entries
+        # Get from fname if needed
+        if isinstance(fname_or_policy_state, str):
+            with _utility.general.open_s3_or_local(fname_or_policy_state, 'rb') as f:
+                policy_state = torch.load(f, map_location=self.policy_iteration.device)
+        else:
+            policy_state = fname_or_policy_state
 
         # Load policy
         _utility.general.set_policy_state(self, policy_state, **kwargs)
@@ -1564,6 +1645,14 @@ class PPO(nn.Module):
                     ministeps = np.ceil(minibatch_data['states'][1].shape[0] / ministep_size).astype(int)
                     cumsum_indices = (minibatch_indices > -1).flatten().cumsum(0).reshape(minibatch_indices.shape)
                     proc_mems = 0
+
+                    # Debug
+                    # print(minibatch_memories)
+                    # print(minibatch_data['states'][1].shape[1])
+                    # print(ministep_size)
+                    # print(minibatch_data['states'][1].shape[0])
+                    # print()
+                    
                     for ministep_num in range(ministeps):
                         # Subsample
                         double_idx = slice(ministep_num*ministep_size, (ministep_num+1)*ministep_size)

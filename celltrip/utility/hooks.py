@@ -155,3 +155,10 @@ def _filter_extract_preprocess(feature_idx, preprocessing=None, feature_targets=
             kwargs['feature_targets'] = preprocessing.transform_select_features(feature_idx, feature_targets, modality_idx)
 
     return kwargs
+
+
+def continuous_feature_targets(hook_func, target_func, *args, **kwargs):
+    # `target_func` takes time and outputs targets
+    def hook(env, *hook_args, **hook_kwargs):
+        hook_func(*args, feature_targets=target_func(env.time), **kwargs)(env, *hook_args, **hook_kwargs)
+    return hook

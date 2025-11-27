@@ -8,8 +8,9 @@ import h5py
 import numpy as np
 import pandas as pd
 import scanpy as sc
-import scipy.sparse
+import sklearn.cluster
 import sklearn.decomposition
+import scipy.sparse
 import torch
 
 from .. import decorator as _decorator
@@ -299,8 +300,8 @@ class Preprocessing:
         # Sample normalization
         if use_sample_count and (self.sample_count is not None):
             sample_counts = [
-                np.sum(m, keepdims=True, axis=1) if not scipy.sparse.issparse(m) else
-                np.sum(m, axis=1) for m in modalities]
+                np.sum(m, keepdims=True, axis=-1) if not scipy.sparse.issparse(m) else
+                np.sum(m, axis=-1) for m in modalities]
             modalities = [
                 m if not m_sampcount else
                 m * m_sampcount / np.where(m_actualcount == 0, 1, m_actualcount)
@@ -360,8 +361,11 @@ class Preprocessing:
         return _utility.general.clean_return(ret)
     
     def transform_select_features(self, feature_idx, feature_values, modality_idx):
+        # Parameters
+        feature_values = np.array(feature_values)
         # Transform select features without PCA
         feature_values_mat = np.ones_like(self.standardize_mean[modality_idx])
+        if feature_values.ndim == 2: feature_values_mat = feature_values_mat.repeat(feature_values.shape[0], axis=0)
         feature_values_mat[:, feature_idx] = feature_values
         feature_values_mat, = self.transform(feature_values_mat, subset_modality=modality_idx, use_sample_count=False, use_pca=False)
         return feature_values_mat[:, feature_idx]
@@ -394,6 +398,11 @@ class Preprocessing:
 
         # Log
         if self.pre_log is not None:
+            # Clip below-zero values before expm1
+            modalities = [
+                m if not m_log else np.clip(m, 0, None)
+                for m, m_sparse, m_log in zip(modalities, self.is_sparse_transform[sm], self.pre_log[sm])]
+            # Perform
             modalities = [
                 m if not m_log else
                 np.expm1(m) if not scipy.sparse.issparse(m) else  # Additional check for dense output
@@ -405,8 +414,8 @@ class Preprocessing:
         # TODO: Think about this
         if use_sample_count and (self.sample_count is not None):
             sample_counts = [
-                np.sum(m, keepdims=True, axis=1) if not scipy.sparse.issparse(m) else
-                np.sum(m, axis=1) for m in modalities]
+                np.sum(m, keepdims=True, axis=-1) if not scipy.sparse.issparse(m) else
+                np.sum(m, axis=-1) for m in modalities]
             modalities = [
                 m if not m_sampcount else
                 m * m_sampcount / np.where(m_actualcount == 0, 1, m_actualcount)
@@ -1076,3 +1085,48 @@ def solve_rot_trans(A, B):
     # Special reflection case not handled
     t = B_centroid - torch.matmul(A_centroid, R)
     return R, t  # torch.matmul(A, R) + t
+
+
+def apply_rot_trans(A, R, t):
+    return torch.matmul(A, R) + t
+
+
+def generate_pseudocells(
+    origin_modalities,
+    terminal_modalities,
+    kmeans_modality=0,
+    ot_modality=0,
+    n_pcells=None,
+    seed=42):
+    # Determine number of pcells
+    if n_pcells is None:
+        n_pcells = min([pmod.shape[0] for pmod in (origin_modalities[kmeans_modality], terminal_modalities[kmeans_modality])])
+    origin_n_pcells = terminal_n_pcells = n_pcells
+
+    # Use K-Means to create origin and terminal pseudocells
+    origin_pcell_ids = sklearn.cluster.KMeans(n_clusters=origin_n_pcells, random_state=seed).fit_predict(origin_modalities[kmeans_modality])
+    terminal_pcell_ids = sklearn.cluster.KMeans(n_clusters=terminal_n_pcells, random_state=seed).fit_predict(terminal_modalities[kmeans_modality])
+
+    # Get expression and spatial for pseudocells
+    origin_processed = [
+        np.stack([m[np.argwhere(origin_pcell_ids==i).flatten()].mean(axis=0) for i in range(origin_n_pcells)], axis=0)
+        for m in origin_modalities]
+    terminal_processed = [
+        np.stack([m[np.argwhere(terminal_pcell_ids==i).flatten()].mean(axis=0) for i in range(terminal_n_pcells)], axis=0)
+        for m in terminal_modalities]
+
+    # Calculate OT matrix
+    a, b, _, OT_mat = _utility.general.compute_discrete_ot_matrix(origin_processed[ot_modality], terminal_processed[ot_modality])
+
+    # Calculate pseudocells
+    pcells = [([i], np.argwhere(OT_mat[i] > 0).flatten()) for i in range(OT_mat.shape[0]) if OT_mat[i].sum() > 0]
+    origin_pcells, terminal_pcells = [], []
+    for modality in range(len(origin_modalities)):
+        origin_pcells_mod, terminal_pcells_mod = [], []
+        for pcell_origin, pcell_terminal in pcells:
+            origin_pcells_mod.append(origin_processed[modality][pcell_origin].mean(axis=0))
+            terminal_pcells_mod.append(terminal_processed[modality][pcell_terminal].mean(axis=0))
+        origin_pcells.append(np.stack(origin_pcells_mod, axis=0))
+        terminal_pcells.append(np.stack(terminal_pcells_mod, axis=0))
+
+    return origin_pcells, terminal_pcells
