@@ -1,3 +1,26 @@
+### 1.0.0+2025.11.26
+- Add `apply_rot_trans` utility function
+- Add `create_agent_from_file` and `create_agent_from_state` macro functions
+- Add `generate_pseudocells` macro function
+- Add optional progress bar total for `simulate_until_completion`
+- Add `README` for datasets
+- Finish implementing high-level API
+- Reorganize figures
+- Revise and update `README`
+- Revise low-level API
+- Revise tutorial notebook and split into `tutorial_high_level` and `tutorial_low_level`
+- Upload `Dyngen` data
+
+### 1.0.0+2025.11.25
+- Revise high-level API
+
+### 1.0.0+2025.11.24
+- Parameter tweaking for `ExpVal`
+
+### 1.0.0+2025.11.21
+- Add `manager` module
+- Optimization and additional runs for `ExpVal`
+
 ### 1.0.0+2025.11.21
 - Add knockdown and visualizations to `expval_generate` notebook
 

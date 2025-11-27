@@ -23,7 +23,7 @@ def simulate_until_completion(
     max_timesteps=np.inf, max_memories=np.inf, reset_on_finish=False,
     incorporate_predictions=False, env_hooks=None, action_hooks=None,
     cache_feature_embeds=False, store_states=False, skip_states=1,
-    flush=True, verbose=False, progress_bar=False):
+    flush=True, verbose=False, progress_bar=False, pbar_total=None):
     # NOTE: Does not flush buffer
     # Params
     assert not (keys is not None and reset_on_finish), 'Cannot manually set keys while `reset_on_finish` is `True`'
@@ -32,7 +32,7 @@ def simulate_until_completion(
     target_modalities = torch.concat(env.get_target_modalities(), dim=-1)
 
     # Pbar
-    if progress_bar: pbar = tqdm.tqdm()
+    if progress_bar: pbar = tqdm.tqdm(total=pbar_total)
 
     # Env hook
     if env_hooks is not None:

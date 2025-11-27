@@ -8,8 +8,9 @@ import h5py
 import numpy as np
 import pandas as pd
 import scanpy as sc
-import scipy.sparse
+import sklearn.cluster
 import sklearn.decomposition
+import scipy.sparse
 import torch
 
 from .. import decorator as _decorator
@@ -1084,3 +1085,48 @@ def solve_rot_trans(A, B):
     # Special reflection case not handled
     t = B_centroid - torch.matmul(A_centroid, R)
     return R, t  # torch.matmul(A, R) + t
+
+
+def apply_rot_trans(A, R, t):
+    return torch.matmul(A, R) + t
+
+
+def generate_pseudocells(
+    origin_modalities,
+    terminal_modalities,
+    kmeans_modality=0,
+    ot_modality=0,
+    n_pcells=None,
+    seed=42):
+    # Determine number of pcells
+    if n_pcells is None:
+        n_pcells = min([pmod.shape[0] for pmod in (origin_modalities[kmeans_modality], terminal_modalities[kmeans_modality])])
+    origin_n_pcells = terminal_n_pcells = n_pcells
+
+    # Use K-Means to create origin and terminal pseudocells
+    origin_pcell_ids = sklearn.cluster.KMeans(n_clusters=origin_n_pcells, random_state=seed).fit_predict(origin_modalities[kmeans_modality])
+    terminal_pcell_ids = sklearn.cluster.KMeans(n_clusters=terminal_n_pcells, random_state=seed).fit_predict(terminal_modalities[kmeans_modality])
+
+    # Get expression and spatial for pseudocells
+    origin_processed = [
+        np.stack([m[np.argwhere(origin_pcell_ids==i).flatten()].mean(axis=0) for i in range(origin_n_pcells)], axis=0)
+        for m in origin_modalities]
+    terminal_processed = [
+        np.stack([m[np.argwhere(terminal_pcell_ids==i).flatten()].mean(axis=0) for i in range(terminal_n_pcells)], axis=0)
+        for m in terminal_modalities]
+
+    # Calculate OT matrix
+    a, b, _, OT_mat = _utility.general.compute_discrete_ot_matrix(origin_processed[ot_modality], terminal_processed[ot_modality])
+
+    # Calculate pseudocells
+    pcells = [([i], np.argwhere(OT_mat[i] > 0).flatten()) for i in range(OT_mat.shape[0]) if OT_mat[i].sum() > 0]
+    origin_pcells, terminal_pcells = [], []
+    for modality in range(len(origin_modalities)):
+        origin_pcells_mod, terminal_pcells_mod = [], []
+        for pcell_origin, pcell_terminal in pcells:
+            origin_pcells_mod.append(origin_processed[modality][pcell_origin].mean(axis=0))
+            terminal_pcells_mod.append(terminal_processed[modality][pcell_terminal].mean(axis=0))
+        origin_pcells.append(np.stack(origin_pcells_mod, axis=0))
+        terminal_pcells.append(np.stack(terminal_pcells_mod, axis=0))
+
+    return origin_pcells, terminal_pcells

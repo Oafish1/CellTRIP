@@ -133,6 +133,14 @@ class EnvironmentBase:
                 # If some modalities aren't targets, they are inputs (imputation)
                 self.input_modalities = list(set(all_modalities) - set(self.target_modalities))
 
+        # Input/target assertions, for consistency
+        assert (
+            np.array(self.target_modalities)
+            == np.arange(
+                len(all_modalities)-len(self.target_modalities),
+                len(all_modalities))).all(), (
+            'Target modalities must be the at the end of the modality list, indexed in order')
+
         # Weights
         # NOTE: Rewards can and should go positive, penalties can't
         self.lin_deg = lin_deg
@@ -671,6 +679,10 @@ class EnvironmentBase:
 
     def set_delta(self, delta):
         self.delta = delta
+        return self
+    
+    def set_time(self, time):
+        self.time = time
         return self
     
     def set_max_time(self, max_time):

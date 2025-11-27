@@ -1,6 +1,7 @@
 from collections import defaultdict
 import io
 import os
+import re
 import warnings
 
 import numpy as np
@@ -1236,6 +1237,34 @@ def create_agent_from_env(env, pinning_modal_dims='auto', pinning_spatial=None, 
         **kwargs)
 
 
+def create_agent_from_file(fname, device='cpu', **kwargs):
+    with _utility.general.open_s3_or_local(fname, 'rb') as f:
+        policy_state = torch.load(f, map_location=device)
+    return create_agent_from_state(policy_state, device=device, **kwargs)
+
+
+def create_agent_from_state(state, pinning_spatial=False, **kwargs):
+    env_dim = int( state['policy']['actor_critic.self_pos_embed.weight'].shape[1] / 2 )
+    modal_dims = [state['policy']['actor_critic.self_feat_embed.weight'].shape[1]]  # Just keeps sum the same
+    pinning_output_layers = {}
+    for k in state['policy'].keys():
+        match = re.match('^pinning\.(\d+)\.mlp\.(\d+)\.weight$', k)
+        if match is not None:
+            pinning_output_layers[match.group(1)] = k
+    pinning_modal_dims = [state['policy'][k].shape[0] for k in pinning_output_layers.values()]
+    if isinstance(pinning_spatial, bool):
+        pinning_spatial = [pinning_spatial for _ in range(len(pinning_modal_dims))]
+
+    # Create agent
+    policy = PPO(
+        2*env_dim, modal_dims, env_dim, pinning_dim=env_dim,
+        pinning_modal_dims=pinning_modal_dims, pinning_spatial=pinning_spatial,
+        **kwargs)
+    
+    # Load weights
+    return policy.load_checkpoint(state)
+
+
 class PPO(nn.Module):
     def __init__(
             self,
@@ -1419,10 +1448,13 @@ class PPO(nn.Module):
         # NOTE: Will no longer do `os.makedirs(directory, exist_ok=True)` for local
         return fname
 
-    def load_checkpoint(self, fname, **kwargs):  # Can pass `strict=False` to ignore missing entries
-        # Get from fname
-        with _utility.general.open_s3_or_local(fname, 'rb') as f:
-            policy_state = torch.load(f, map_location=self.policy_iteration.device)
+    def load_checkpoint(self, fname_or_policy_state, **kwargs):  # Can pass `strict=False` to ignore missing entries
+        # Get from fname if needed
+        if isinstance(fname_or_policy_state, str):
+            with _utility.general.open_s3_or_local(fname_or_policy_state, 'rb') as f:
+                policy_state = torch.load(f, map_location=self.policy_iteration.device)
+        else:
+            policy_state = fname_or_policy_state
 
         # Load policy
         _utility.general.set_policy_state(self, policy_state, **kwargs)

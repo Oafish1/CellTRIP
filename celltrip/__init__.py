@@ -1,5 +1,6 @@
 from . import decorator
 from . import environment
+from . import manager
 from . import memory
 from . import policy
 from . import train

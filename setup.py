@@ -26,6 +26,7 @@ ext_modules = []
 cython_extensions = [
     # Extension('celltrip.decorators', ['celltrip/decorator.py']),
     Extension('celltrip.environment', ['celltrip/environment.py']),
+    Extension('celltrip.manager', ['celltrip/manager.py']),
     Extension('celltrip.memory', ['celltrip/memory.py']),
     Extension('celltrip.policy', ['celltrip/policy.py']),
     # Extension('celltrip.train', ['celltrip/train.py']),
@@ -68,9 +69,9 @@ setup(
     name='celltrip',
     author='Noah Cohen Kalafut',
     description=
-        'CellTRIP, a Multi-Agent Reinforcement Learning Approach '
-        'for Cell Trajectory Recovery, Cross-Modal Imputation, '
-        'and Perturbation in Time and Space',
+        'CellTRIP, Inferring virtual cell environments using '
+        'multi-agent reinforcement learning for spatiotemporal '
+        'trajectory interpolation, imputation, and perturbation',
     long_description=readme,
     long_description_content_type="text/markdown",
     version=__version__,

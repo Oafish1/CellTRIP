@@ -40,7 +40,7 @@ group.add_argument('--target_modalities', type=int, nargs='+', help='Target moda
 group.add_argument('--spatial', type=int, nargs='+', help='Which modalities are spatial, dictates pinning strategy')
 # Algorithm
 group = parser.add_argument_group('Algorithm')
-group.add_argument('--dim', type=int, default=8, help='Dimensions in the output latent space')
+group.add_argument('--dim', type=int, default=32, help='Dimensions in the output latent space')
 group.add_argument('--discrete', action='store_true', help='Use the discrete model rather than continuous')
 group.add_argument('--train_mask', type=str, help='File or `obs` column containing boolean training mask')
 group.add_argument('--train_split', type=float, default=1., help='Fraction of input data to use as training. Overwritten by `train_mask`')
@@ -60,7 +60,7 @@ group = parser.add_argument_group('Logging')
 group.add_argument('--logfile', type=str, default='cli', help='Location for log file, can be `cli`, `<local_file>`, or `<s3 location>`')
 group.add_argument('--flush_iterations', default=1, type=int, help='Number of iterations to wait before flushing logs')
 group.add_argument('--checkpoint', type=str, help='Checkpoint to use for initializing model')
-group.add_argument('--checkpoint_iterations', type=int, default=100, help='Number of updates to wait before recording checkpoints')
+group.add_argument('--checkpoint_iterations', type=int, default=50, help='Number of updates to wait before recording checkpoints')
 group.add_argument('--checkpoint_dir', type=str, default='./checkpoints', help='Directory for checkpoints')
 group.add_argument('--checkpoint_name', type=str, help='Run name, for checkpointing')
 
@@ -69,14 +69,15 @@ if not celltrip.utility.notebook.is_notebook():
     # ray job submit -- python train.py...
     config = parser.parse_args()
 else:
-    # experiment_name = 'flysta-250909-5'
+    # experiment_name = 'Flysta-251026'
     # experiment_name = 'MERFISH30k-153-250914'
-    # experiment_name = 'Dyngen-250920'
-    # experiment_name = 'Cortex-250922'
+    # experiment_name = 'Dyngen-251025'
+    # experiment_name = 'Cortex-251024-2'
     # experiment_name = 'CancerVel-250913'
     # experiment_name = 'PerturbMM-gex-250928'
-    # experiment_name = 'DrugSeries-250928'
-    experiment_name = 'vcc-251008-celllog-64'
+    # experiment_name = 'DrugSeries-251117-pip-nosampnorm'
+    experiment_name = 'ExpVal-251121-nosampnorm'
+    # experiment_name = 'vcc-251019'
     bucket_name = 'nkalafut-celltrip'
     command = (
         # scGLUE
@@ -103,10 +104,10 @@ else:
         # f'--partition_cols slice_id '
         # Cortex
         # f's3://{bucket_name}/Cortex/brain_st_cortex_expression.h5ad s3://{bucket_name}/Cortex/brain_st_cortex_spatial.h5ad '
-        # f'--sample_counts 10_000 '
+        # f'--sample_counts 10_000 0 '
         # f'--log_modalities 0 '
         # f'--target_modalities 1 '
-        # f'--spatial 1 '
+        # # f'--spatial 1 '
 
         # Flysta3D
         # f' '.join([f'--merge_files ' + ' ' .join([f's3://{bucket_name}/Flysta3D/{p}_{m}.h5ad' for p in ('E14-16h_a', 'E16-18h_a', 'L1_a', 'L2_a', 'L3_b')]) for m in ('expression', 'spatial')]) + ' '
@@ -122,15 +123,23 @@ else:
         # f'--partition_cols "Donor ID" '
 
         # Virtual Cell Challenge
-        f's3://{bucket_name}/VirtualCell/expression.h5ad --sample_counts 10_000 --log_modalities 0 '
-        # f'--partition_cols target_gene '
+        # f's3://{bucket_name}/VirtualCell/expression.h5ad --sample_counts 10_000 --log_modalities 0 '
+        # # f'--partition_cols target_gene '
         # CancerVel
         # NOTE: Make sure to check here that NAN sgAssign partitions are chosen
         # f's3://{bucket_name}/CancerVel/expression.h5ad '
         # f'--partition_cols days '  # sgAssignNew
         # DrugSeries
         # f's3://{bucket_name}/DrugSeries/expression.h5ad '
-        # f'--partition_cols treatment '
+        # # f'--sample_counts 10_000 '
+        # f'--log_modalities 0 '
+        # # f'--partition_cols treatment '
+
+        # ExpVal
+        f's3://{bucket_name}/ExpVal/expression.h5ad '
+        # f'--sample_counts 10_000 '
+        f'--log_modalities 0 '
+        f'--partition_cols sample '
 
         # PerturbMM
         # f's3://{bucket_name}/PerturbMM/expression.h5ad s3://{bucket_name}/PerturbMM/spatial.h5ad '
@@ -143,8 +152,12 @@ else:
 
         f'--backed '
         # f'--dim 2 '
-        f'--dim 64 '
-        f'--pca_dim 1024 '
+        # f'--dim 8 '
+        f'--dim 32 '
+        # f'--dim 64 '
+        # f'--pca_dim 512 '
+        # f'--pca_dim 1024 0 '
+        # f'--pca_dim 2048 0 '
         # f'--discrete '
 
         # Column split
@@ -152,7 +165,8 @@ else:
         # f'--train_mask known_not_d6 '  # CancerVel
         # f'--train_mask slice_bc1_train '  # PerturbMM
         # f'--train_mask train '  # DrugSeries
-        f'--train_mask training '  # VCC
+        f'--train_mask Train '  # ExpVal
+        # f'--train_mask training '  # VCC
         # Sample split
         # f'--train_split .8 '
         # Partition split
@@ -172,7 +186,7 @@ else:
         f'--dont_sync_across_nodes '
         f'--logfile s3://{bucket_name}/logs/{experiment_name}.log '
         f'--flush_iterations 1 '
-        # f'--checkpoint s3://nkalafut-celltrip/checkpoints/Cortex-250919-0800.weights '
+        # f'--checkpoint s3://nkalafut-celltrip/checkpoints/DrugSeries-251110-0800.weights '
         f'--checkpoint_iterations 50 '
         f'--checkpoint_dir s3://{bucket_name}/checkpoints '
         f'--checkpoint_name {experiment_name}')
@@ -202,8 +216,8 @@ a = ray.init(
     #     'env_vars': {
     #         'RAY_DEDUP_LOGS': '0'}},
     # '{"py_modules": ["celltrip"], "pip": "../requirements.txt", "env_vars": {"RAY_DEDUP_LOGS": "0"}}'
-    # _system_config={'enable_worker_prestart': True}
-)  # Doesn't really work for scripts
+    # _system_config={'enable_worker_prestart': True}  # Doesn't really work for scripts
+)
 
 
 # %%
@@ -264,32 +278,39 @@ ray.get(train.remote(config))
 # # Run Locally
 
 # %%
-# import numpy as np
-# import torch
-# torch.random.manual_seed(42)
-# np.random.seed(42)
+# # import numpy as np
+# # import torch
+# # torch.random.manual_seed(42)
+# # np.random.seed(42)
 
 # # Initialize locally
-# os.environ['AWS_PROFILE'] = 'waisman-admin'
-# config.update_timesteps = 100_000
-# config.max_timesteps = 20_000_000
-
 # dataloader_kwargs = {
-#     'num_nodes': [2**9, 2**11], 'mask': config.train_split,
+#     'num_nodes': [2**9, 2**11],
+#     'pca_dim': config.pca_dim if len(config.pca_dim) > 1 else config.pca_dim[0],
+#     'sample_count': config.sample_counts,
+#     'pre_log': config.log_modalities,
+#     # 'num_nodes': None,
+#     'mask': config.train_split if config.train_mask is None else config.train_mask,
 #     'mask_partitions': config.train_partitions}  # {'num_nodes': 20, 'pca_dim': 128}
 # environment_kwargs = {
 #     'input_modalities': config.input_modalities,
-#     'target_modalities': config.target_modalities, 'dim': config.dim,
+#     'target_modalities': config.target_modalities,
+#     'dim': config.dim,
 #     'discrete': config.discrete}  # , 'spherical': config.discrete
-# policy_kwargs = {'pinning_spatial': config.spatial, 'minibatch_size': 10_000}
-# memory_kwargs = {'device': 'cuda:0'}
+# policy_kwargs = {
+#     'forward_batch_size': int(1e3),
+#     'vision_size': int(1e3),
+#     'pinning_spatial': config.spatial}
+# # config.update_timesteps = 100_000
+# # config.max_timesteps = 20_000_000
+# memory_kwargs = {'device': 'cuda:0'}  # Skips casting, cutting time significantly for relatively small batch sizes
 # env_init, policy_init, memory_init = celltrip.train.get_initializers(
 #     input_files=config.input_files, merge_files=config.merge_files,
-#     partition_cols=config.partition_cols,
-#     backed=config.backed, dataloader_kwargs=dataloader_kwargs,
+#     backed=config.backed, partition_cols=config.partition_cols,
+#     dataloader_kwargs=dataloader_kwargs,
+#     environment_kwargs=environment_kwargs,
 #     policy_kwargs=policy_kwargs,
-#     # memory_kwargs={'device': 'cuda:0'},  # Skips casting, cutting time significantly for relatively small batch sizes
-#     environment_kwargs=environment_kwargs)
+#     memory_kwargs=memory_kwargs)
 
 # # Environment
 # # os.environ['CUDA_LAUNCH_BLOCKING']='1'
