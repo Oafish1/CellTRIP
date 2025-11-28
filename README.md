@@ -103,7 +103,12 @@ Additional commands and details can be found using `python train.py -h`.
 
 # Using the environment
 
-After training the model, analysis can be performed using the high-level API. For a functional example of the following, please see `tutorial_high_level.ipynb`. For more customized applications, please see `tutorial_low_level.ipynb`.
+After training the model, analysis can be performed using the high-level API. For a functional example of the following, please see [`tutorial_high_level.ipynb`](scripts/tutorial_high_level.ipynb). For more customized applications, please see [`tutorial_low_level.ipynb`](scripts/tutorial_low_level.ipynb), as well as application notebooks for
+Dyngen ([1](scripts/dyngen_generate.ipynb), [2](scripts/dyngen_generate.ipynb)),
+Cortex ([1](scripts/cortex_generate.ipynb)),
+DrugSeries ([1](scripts/drugseries_generate.ipynb), [2](scripts/drugseries_comparisons.ipynb)),
+Flysta ([1](scripts/flysta_generate.ipynb), [2](scripts/flysta_analysis.ipynb)),
+and ExpVal ([1](scripts/expval_generate.ipynb)) datasets.
 
 We start by loading the data to simulate,
 
@@ -116,7 +121,7 @@ adatas = celltrip.utility.processing.read_adatas(
     backed=True)  # Load from disk directly, saving memory
 
 # Filter as desired (EXAMPLE)
-samples = adatas[0].obs.index[adatas[0].obs['Development'] == 'Stage 1']  # EXAMPLE
+samples = adatas[0].obs.index[adatas[0].obs['Development'] == 'Stage 1']
 adatas = [ad[samples] for ad in adatas]
 ```
 
@@ -130,12 +135,15 @@ manager = celltrip.manager.BasicManager(
     mask_fname='<.mask_FILE>',  # OPTIONAL
     adatas=adatas,
     device='cuda')  # Typically 'cpu' or 'cuda'
+
+# Get training mask
+# mask = manager.get_mask()
 ```
 
 
 ## Steady state simulation / imputation
 
-To begin our simulation, we first allow CellTRIP to reach a "steady state", or a stable position for all cells in the environment space,
+To begin our simulation, we first allow CellTRIP to reach a *steady state*, or a stable position for all cells in the environment space,
 
 ```python
 # Simulate to steady state

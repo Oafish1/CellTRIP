@@ -91,8 +91,13 @@ class BasicManager:
             if strict: raise RuntimeError(
                 'Unmatched modalities found, cannot replace modalities without initializing new environment')
             if not suppress_warning: warnings.warn('Creating new environment due to mismatched modalities')
+            # Preserve old state
+            state = self.env.get_state() if self.env is not None else None
+            # Initialize new env
             self.env = _environment.EnvironmentBase(
                 *modalities, compute_rewards=False, dim=self.dim, **self.env_kwargs).eval().to(self.device)
+            # Set old state if applicable
+            if state is not None: self.env.set_state(state)
         # Set modalities
         else: self.env.set_modalities(modalities)
 

@@ -1,9 +1,19 @@
-### 1.0.0+2025.11.26
+### 1.0.0+2025.11.27
+- Add models folder and zips, and note in `tutorial_high_level`
+- Add provisional source for dataset `README`
+- Environment state preservation for unmatched modalities in `BasicManager`
+- Link to notebooks in `README`
+- Reorganize data zip architecture
+- Revise `.gitignore` to allow for models folder
+- Seeding and UMAP corrections for `tutorial_high_level`
+
+### 1.0.0+2025.11.26 (1-2)
 - Add `apply_rot_trans` utility function
 - Add `create_agent_from_file` and `create_agent_from_state` macro functions
 - Add `generate_pseudocells` macro function
 - Add optional progress bar total for `simulate_until_completion`
 - Add `README` for datasets
+- Change defaults for `train` script
 - Finish implementing high-level API
 - Reorganize figures
 - Revise and update `README`
