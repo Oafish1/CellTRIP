@@ -15884,58 +15884,53 @@ static PyObject *__pyx_pf_8celltrip_11environment_15EnvironmentBase_24get_pinnin
     /* "celltrip/environment.py":573
  *             # Final computation
  *             # mse = err.square().mean(dim=-1)
- *             err /= m.var()  # Scale for fairness (spatial compatible)             # <<<<<<<<<<<<<<
+ *             err /= m.var(dim=-1).mean(dim=-1)  # Scale for fairness (spatial compatible)             # <<<<<<<<<<<<<<
  *             loss = -1 / (1 + 10*err)  # Transform
  *             # mae = err.abs().mean(dim=-1)
  */
     if (unlikely(!__pyx_v_err)) { __Pyx_RaiseUnboundLocalError("err"); __PYX_ERR(0, 573, __pyx_L1_error) }
-    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_v_m, __pyx_n_s_var); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 573, __pyx_L1_error)
+    __pyx_t_14 = __Pyx_PyObject_GetAttrStr(__pyx_v_m, __pyx_n_s_var); if (unlikely(!__pyx_t_14)) __PYX_ERR(0, 573, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_14);
+    __pyx_t_8 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 573, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __pyx_t_13 = NULL;
-    __pyx_t_16 = 0;
-    #if CYTHON_UNPACK_METHODS
-    if (likely(PyMethod_Check(__pyx_t_8))) {
-      __pyx_t_13 = PyMethod_GET_SELF(__pyx_t_8);
-      if (likely(__pyx_t_13)) {
-        PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_8);
-        __Pyx_INCREF(__pyx_t_13);
-        __Pyx_INCREF(function);
-        __Pyx_DECREF_SET(__pyx_t_8, function);
-        __pyx_t_16 = 1;
-      }
-    }
-    #endif
-    {
-      PyObject *__pyx_callargs[2] = {__pyx_t_13, NULL};
-      __pyx_t_14 = __Pyx_PyObject_FastCall(__pyx_t_8, __pyx_callargs+1-__pyx_t_16, 0+__pyx_t_16);
-      __Pyx_XDECREF(__pyx_t_13); __pyx_t_13 = 0;
-      if (unlikely(!__pyx_t_14)) __PYX_ERR(0, 573, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_14);
-      __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    }
-    __pyx_t_8 = __Pyx_PyNumber_InPlaceDivide(__pyx_v_err, __pyx_t_14); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 573, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_8);
+    if (PyDict_SetItem(__pyx_t_8, __pyx_n_s_dim, __pyx_int_neg_1) < 0) __PYX_ERR(0, 573, __pyx_L1_error)
+    __pyx_t_13 = __Pyx_PyObject_Call(__pyx_t_14, __pyx_empty_tuple, __pyx_t_8); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 573, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_13);
     __Pyx_DECREF(__pyx_t_14); __pyx_t_14 = 0;
-    __Pyx_XDECREF_SET(__pyx_v_err, __pyx_t_8);
-    __pyx_t_8 = 0;
+    __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
+    __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_t_13, __pyx_n_s_mean); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 573, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_8);
+    __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
+    __pyx_t_13 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 573, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_13);
+    if (PyDict_SetItem(__pyx_t_13, __pyx_n_s_dim, __pyx_int_neg_1) < 0) __PYX_ERR(0, 573, __pyx_L1_error)
+    __pyx_t_14 = __Pyx_PyObject_Call(__pyx_t_8, __pyx_empty_tuple, __pyx_t_13); if (unlikely(!__pyx_t_14)) __PYX_ERR(0, 573, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_14);
+    __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
+    __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
+    __pyx_t_13 = __Pyx_PyNumber_InPlaceDivide(__pyx_v_err, __pyx_t_14); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 573, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_13);
+    __Pyx_DECREF(__pyx_t_14); __pyx_t_14 = 0;
+    __Pyx_XDECREF_SET(__pyx_v_err, __pyx_t_13);
+    __pyx_t_13 = 0;
 
     /* "celltrip/environment.py":574
  *             # mse = err.square().mean(dim=-1)
- *             err /= m.var()  # Scale for fairness (spatial compatible)
+ *             err /= m.var(dim=-1).mean(dim=-1)  # Scale for fairness (spatial compatible)
  *             loss = -1 / (1 + 10*err)  # Transform             # <<<<<<<<<<<<<<
  *             # mae = err.abs().mean(dim=-1)
  *             # loss = -1 / (1 + mae)  # Transform
  */
-    __pyx_t_8 = __Pyx_PyInt_MultiplyCObj(__pyx_int_10, __pyx_v_err, 10, 0, 0); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 574, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_8);
-    __pyx_t_14 = __Pyx_PyInt_AddCObj(__pyx_int_1, __pyx_t_8, 1, 0, 0); if (unlikely(!__pyx_t_14)) __PYX_ERR(0, 574, __pyx_L1_error)
+    __pyx_t_13 = __Pyx_PyInt_MultiplyCObj(__pyx_int_10, __pyx_v_err, 10, 0, 0); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 574, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_13);
+    __pyx_t_14 = __Pyx_PyInt_AddCObj(__pyx_int_1, __pyx_t_13, 1, 0, 0); if (unlikely(!__pyx_t_14)) __PYX_ERR(0, 574, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_14);
-    __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_8 = __Pyx_PyNumber_Divide(__pyx_int_neg_1, __pyx_t_14); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 574, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_8);
+    __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
+    __pyx_t_13 = __Pyx_PyNumber_Divide(__pyx_int_neg_1, __pyx_t_14); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 574, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_13);
     __Pyx_DECREF(__pyx_t_14); __pyx_t_14 = 0;
-    __Pyx_XDECREF_SET(__pyx_v_loss, __pyx_t_8);
-    __pyx_t_8 = 0;
+    __Pyx_XDECREF_SET(__pyx_v_loss, __pyx_t_13);
+    __pyx_t_13 = 0;
 
     /* "celltrip/environment.py":580
  *             # mse = (err.square() + self.epsilon).mean(dim=-1).log()
@@ -15945,16 +15940,16 @@ static PyObject *__pyx_pf_8celltrip_11environment_15EnvironmentBase_24get_pinnin
  *             # CLI
  */
     __pyx_t_11 = PyObject_Length(__pyx_v_targets); if (unlikely(__pyx_t_11 == ((Py_ssize_t)-1))) __PYX_ERR(0, 580, __pyx_L1_error)
-    __pyx_t_8 = PyInt_FromSsize_t(__pyx_t_11); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 580, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_8);
-    __pyx_t_14 = __Pyx_PyNumber_Divide(__pyx_v_loss, __pyx_t_8); if (unlikely(!__pyx_t_14)) __PYX_ERR(0, 580, __pyx_L1_error)
+    __pyx_t_13 = PyInt_FromSsize_t(__pyx_t_11); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 580, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_13);
+    __pyx_t_14 = __Pyx_PyNumber_Divide(__pyx_v_loss, __pyx_t_13); if (unlikely(!__pyx_t_14)) __PYX_ERR(0, 580, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_14);
-    __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_8 = PyNumber_InPlaceAdd(__pyx_v_running_loss, __pyx_t_14); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 580, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_8);
+    __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
+    __pyx_t_13 = PyNumber_InPlaceAdd(__pyx_v_running_loss, __pyx_t_14); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 580, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_13);
     __Pyx_DECREF(__pyx_t_14); __pyx_t_14 = 0;
-    __Pyx_DECREF_SET(__pyx_v_running_loss, __pyx_t_8);
-    __pyx_t_8 = 0;
+    __Pyx_DECREF_SET(__pyx_v_running_loss, __pyx_t_13);
+    __pyx_t_13 = 0;
 
     /* "celltrip/environment.py":543
  *         # Calculate least squares classification error

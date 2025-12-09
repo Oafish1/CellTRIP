@@ -570,7 +570,7 @@ class EnvironmentBase:
 
             # Final computation
             # mse = err.square().mean(dim=-1)
-            err /= m.var()  # Scale for fairness (spatial compatible)
+            err /= m.var(dim=-1).mean(dim=-1)  # Scale for fairness (spatial compatible)
             loss = -1 / (1 + 10*err)  # Transform
             # mae = err.abs().mean(dim=-1)
             # loss = -1 / (1 + mae)  # Transform

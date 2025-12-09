@@ -144,14 +144,25 @@ class BasicManager:
                     pos, modality=i, target_state=target_state,
                     inverse_preprocess=inverse_preprocess, chunk_size=chunk_size)
                 for i in range(num_pinning_modules)]
+        
+        # Flatten if needed
+        # NOTE: Would not be needed without chunking
+        orig_shape = pos.shape
+        if pos.ndim > 2:
+            pos = pos.reshape((-1, pos.shape[-1]))
 
         # Imputes
         with torch.no_grad():
             imputed_pos = self.policy.pinning[modality](pos.to(self.device), Y=target_state).detach().cpu().numpy()
         if inverse_preprocess:
-            imputed_pos, = _utility.processing.chunk(
+            imputed_pos = _utility.processing.chunk(
                 imputed_pos, chunk_size=chunk_size,
-                func=lambda x: self.preprocessing.inverse_transform(x, subset_modality=num_modalities-num_pinning_modules+modality))
+                func=lambda x: self.preprocessing.inverse_transform(x, subset_modality=num_modalities-num_pinning_modules+modality)[0])
+
+        # Reshape if needed
+        if len(orig_shape) > 2:
+            imputed_pos = imputed_pos.reshape((*orig_shape[:-1], imputed_pos.shape[-1]))    
+        
         return imputed_pos
 
     # Simulation

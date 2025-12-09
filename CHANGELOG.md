@@ -1,8 +1,15 @@
-### 1.0.0+2025.11.27
+### 1.0.0+2025.12.8
+- Add heatmap of prioritized subclasses and ages for experimental validation
+- Convert experimental validation to high-level API
+- Fix `BasicManager` imputation bug, and add compatibility for 3-dimensional conversion
+- Generality fix for environment pinning scaling on non mean-centered datasets
+
+### 1.0.0+2025.11.27 (1-2)
 - Add models folder and zips, and note in `tutorial_high_level`
 - Add provisional source for dataset `README`
 - Environment state preservation for unmatched modalities in `BasicManager`
 - Link to notebooks in `README`
+- `README` corrections
 - Reorganize data zip architecture
 - Revise `.gitignore` to allow for models folder
 - Seeding and UMAP corrections for `tutorial_high_level`

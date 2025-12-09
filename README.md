@@ -104,7 +104,7 @@ Additional commands and details can be found using `python train.py -h`.
 # Using the environment
 
 After training the model, analysis can be performed using the high-level API. For a functional example of the following, please see [`tutorial_high_level.ipynb`](scripts/tutorial_high_level.ipynb). For more customized applications, please see [`tutorial_low_level.ipynb`](scripts/tutorial_low_level.ipynb), as well as application notebooks for
-Dyngen ([1](scripts/dyngen_generate.ipynb), [2](scripts/dyngen_generate.ipynb)),
+Dyngen ([1](scripts/dyngen_generate.ipynb), [2](scripts/dyngen_comparisons.ipynb)),
 Cortex ([1](scripts/cortex_generate.ipynb)),
 DrugSeries ([1](scripts/drugseries_generate.ipynb), [2](scripts/drugseries_comparisons.ipynb)),
 Flysta ([1](scripts/flysta_generate.ipynb), [2](scripts/flysta_analysis.ipynb)),
