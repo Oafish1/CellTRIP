@@ -1,3 +1,8 @@
+### 1.0.0+2025.12.15
+- New visualizations for `ExpVal`
+- Ridgeplot visualization for `ExpVal`
+- Sample perturbation analyses for `ExpVal`
+
 ### 1.0.0+2025.12.8
 - Add heatmap of prioritized subclasses and ages for experimental validation
 - Convert experimental validation to high-level API
