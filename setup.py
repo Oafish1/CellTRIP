@@ -121,7 +121,7 @@ setup(
             'scipy',
             'seaborn',
             'tqdm',
-            'umap-learn',
+            'umap-learn',  # [parametric_umap]
             'wandb[importers]'],
     },
 )

@@ -1,3 +1,8 @@
+### 1.0.0+2025.12.16
+- Adjust visualization formatting for `ExpVal`
+- Improvements to `ExpVal` testing methodology
+- Trajectory visualizations on `ExpVal` data for select genes and samples
+
 ### 1.0.0+2025.12.15
 - New visualizations for `ExpVal`
 - Ridgeplot visualization for `ExpVal`
