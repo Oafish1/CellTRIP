@@ -1,3 +1,9 @@
+### 1.0.0+2025.12.29
+- Additional `ExpVal` validation
+- Expand deep perturbation analysis scope
+- `ExpVal` figure draft
+- Figure panels and figure for `ExpVal`
+
 ### 1.0.0+2025.12.16
 - Adjust visualization formatting for `ExpVal`
 - Improvements to `ExpVal` testing methodology
