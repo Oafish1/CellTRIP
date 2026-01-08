@@ -1,3 +1,14 @@
+### 1.0.0+2025.1.7
+- Properly extract SMART-seq data for `ExpVal`
+- Segmented computation of gene effect sizes
+
+### 1.0.0+2025.1.6
+- `ExpVal` permutation knockdown computation
+- Gene effect size extraction from permutation testing
+
+### 1.0.0+2025.1.4
+- `ExpVal` knockdown estimation using gene permutation
+
 ### 1.0.0+2025.12.29
 - Additional `ExpVal` validation
 - Expand deep perturbation analysis scope
