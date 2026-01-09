@@ -1,12 +1,16 @@
-### 1.0.0+2025.1.7
+### 1.0.0+2026.1.9
+- Add cultured SMART-seq dataset for `ExpVal`
+- Version year correction
+
+### 1.0.0+2026.1.7
 - Properly extract SMART-seq data for `ExpVal`
 - Segmented computation of gene effect sizes
 
-### 1.0.0+2025.1.6
+### 1.0.0+2026.1.6
 - `ExpVal` permutation knockdown computation
 - Gene effect size extraction from permutation testing
 
-### 1.0.0+2025.1.4
+### 1.0.0+2026.1.4
 - `ExpVal` knockdown estimation using gene permutation
 
 ### 1.0.0+2025.12.29
