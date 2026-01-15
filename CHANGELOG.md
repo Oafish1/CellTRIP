@@ -1,3 +1,8 @@
+### 1.0.0+2026.1.14
+- `CHD8` validation and figure panel
+- Cultured SMART-seq loading fixes for metadata variables of type `factor`
+- Novel gene visualization
+
 ### 1.0.0+2026.1.9
 - Add cultured SMART-seq dataset for `ExpVal`
 - Version year correction
