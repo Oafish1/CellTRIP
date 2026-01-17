@@ -1,3 +1,8 @@
+### 1.0.0+2026.1.16
+- `CHD8` perturbation export for `ExpVal`
+- Correct factor conversion for `ExpVal` data
+- On-disk AnnData layer writing
+
 ### 1.0.0+2026.1.14
 - `CHD8` validation and figure panel
 - Cultured SMART-seq loading fixes for metadata variables of type `factor`
