@@ -1,3 +1,8 @@
+### 1.0.0+2026.1.18
+- Annotate proper models in `drugseries_generate` notebook
+- Cut unnecessary randomization in `EnvironmentBase.reset` (Will negate exact reproducibility of some previous analyses)
+- Revise velocity clamping behavior and interaction with `EnvironmentBase.apply_friction`
+
 ### 1.0.0+2026.1.16
 - `CHD8` perturbation export for `ExpVal`
 - Correct factor conversion for `ExpVal` data

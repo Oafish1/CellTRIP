@@ -301,6 +301,7 @@ class EnvironmentBase:
         # Add velocity and apply friction
         self.add_velocities(delta * force)
         self.apply_friction(realized_force=delta*self.friction_force)
+        self.clamp_velocities()
         # Iterate positions
         self.pos = self.pos + delta * self.vel  # .square()  # TODO: Experimental square
         # Clip by bounds
@@ -406,22 +407,23 @@ class EnvironmentBase:
         if renoise: self.noise = [self.noise_std*torch.randn_like(m, device=self.device) for m in self.modalities]
         self.modality_offsets = [torch.zeros_like(m) for m in self.modalities]
 
-        # Assign random positions and velocities
-        shape = (self.num_nodes, self.dim)
-        if self.uniform_bounds:
-            direction = 2*torch.rand(shape, device=self.device)-1
-            if self.spherical: direction /= direction.norm(keepdim=True, dim=-1)
-            magnitude = self.pos_rand_bound * torch.rand((self.num_nodes, 1), device=self.device)
-            self.pos = magnitude * direction
-            direction = 2*torch.rand(shape, device=self.device)-1
-            if self.spherical: direction /= direction.norm(keepdim=True, dim=-1)
-            magnitude = self.vel_rand_bound * torch.rand((self.num_nodes, 1), device=self.device)
-            self.vel = magnitude * direction
-        else:
-            self.pos = self.pos_rand_bound*torch.randn(shape, device=self.device)
-            self.vel = self.vel_rand_bound*torch.randn(shape, device=self.device)
+        # # Assign random positions and velocities
+        # shape = (self.num_nodes, self.dim)
+        # if self.uniform_bounds:
+        #     direction = 2*torch.rand(shape, device=self.device)-1
+        #     if self.spherical: direction /= direction.norm(keepdim=True, dim=-1)
+        #     magnitude = self.pos_rand_bound * torch.rand((self.num_nodes, 1), device=self.device)
+        #     self.pos = magnitude * direction
+        #     direction = 2*torch.rand(shape, device=self.device)-1
+        #     if self.spherical: direction /= direction.norm(keepdim=True, dim=-1)
+        #     magnitude = self.vel_rand_bound * torch.rand((self.num_nodes, 1), device=self.device)
+        #     self.vel = magnitude * direction
+        # else:
+        #     self.pos = self.pos_rand_bound*torch.randn(shape, device=self.device)
+        #     self.vel = self.vel_rand_bound*torch.randn(shape, device=self.device)
 
         # Determine randomizer
+        shape = (self.num_nodes, self.dim)
         randomizer = (lambda *args, **kwargs: 2*torch.rand(*args, **kwargs)-1) if self.uniform_bounds else torch.randn
 
         # Perform randomization
@@ -438,8 +440,8 @@ class EnvironmentBase:
             magnitude = self.vel_rand_bound * randomizer((self.num_nodes, 1), device=self.device)
             self.vel = magnitude * direction
 
-        # self.pos = self.pos_rand_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
-        # self.vel = self.vel_rand_bound * 2*(torch.rand((self.num_nodes, self.dim), device=self.device)-.5)
+        # Clamp
+        self.clamp_velocities()
 
         # Reset time
         self.time = 0
@@ -467,7 +469,8 @@ class EnvironmentBase:
         else:
             self.vel[node_ids] = self.vel[node_ids] + velocities
 
-        # Clamp
+    def clamp_velocities(self):
+        # Clamp velocities
         if self.spherical:
             vel_norm = self.vel.norm(dim=-1)
             fast_mask = vel_norm > self.vel_bound
