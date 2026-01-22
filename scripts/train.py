@@ -45,6 +45,13 @@ group.add_argument('--discrete', action='store_true', help='Use the discrete mod
 group.add_argument('--train_mask', type=str, help='File or `obs` column containing boolean training mask')
 group.add_argument('--train_split', type=float, default=1., help='Fraction of input data to use as training. Overwritten by `train_mask`')
 group.add_argument('--train_partitions', action='store_true', help='Split training/validation data across partitions rather than samples')
+# Weights
+# group.add_argument('--reward_distance', type=float, default=0., help='Distance reward weight')
+group.add_argument('--reward_pinning', type=float, default=1., help='Pinning reward weight')
+# group.add_argument('--reward_origin', type=float, default=0., help='Origin reward weight')
+# group.add_argument('--penalty_bound', type=float, default=0., help='Bound penalty weight')
+group.add_argument('--penalty_velocity', type=float, default=1., help='Velocity penalty weight')
+group.add_argument('--penalty_action', type=float, default=1., help='Action penalty weight')
 # Computation
 group = parser.add_argument_group('Computation')
 group.add_argument('--num_gpus', type=int, default=1, help='Number of GPUs to use during computation')
@@ -71,12 +78,12 @@ if not celltrip.utility.notebook.is_notebook():
 else:
     # experiment_name = 'Flysta-251026'
     # experiment_name = 'MERFISH30k-153-250914'
-    # experiment_name = 'Dyngen-251025'
+    experiment_name = 'Dyngen-260121-NoPinning'
     # experiment_name = 'Cortex-251024-2'
     # experiment_name = 'CancerVel-250913'
     # experiment_name = 'PerturbMM-gex-250928'
     # experiment_name = 'DrugSeries-251117-pip-nosampnorm'
-    experiment_name = 'ExpVal-251121-nosampnorm'
+    # experiment_name = 'ExpVal-251121-nosampnorm'
     # experiment_name = 'vcc-251019'
     bucket_name = 'nkalafut-celltrip'
     command = (
@@ -90,8 +97,8 @@ else:
 
         # scMultiSim
         # f's3://{bucket_name}/scMultiSim/expression.h5ad s3://{bucket_name}/scMultiSim/peaks.h5ad '
-        # dyngen
-        # f's3://{bucket_name}/dyngen/logcounts.h5ad s3://{bucket_name}/dyngen/counts_protein.h5ad '
+        # Dyngen
+        f's3://{bucket_name}/dyngen/logcounts.h5ad s3://{bucket_name}/dyngen/counts_protein.h5ad '
 
         # MERFISH
         # f's3://{bucket_name}/MERFISH/expression.h5ad s3://{bucket_name}/MERFISH/spatial.h5ad --target_modalities 1 --spatial 1 '
@@ -136,10 +143,10 @@ else:
         # # f'--partition_cols treatment '
 
         # ExpVal
-        f's3://{bucket_name}/ExpVal/expression.h5ad '
-        # f'--sample_counts 10_000 '
-        f'--log_modalities 0 '
-        f'--partition_cols sample '
+        # f's3://{bucket_name}/ExpVal/expression.h5ad '
+        # # f'--sample_counts 10_000 '
+        # f'--log_modalities 0 '
+        # f'--partition_cols sample '
 
         # PerturbMM
         # f's3://{bucket_name}/PerturbMM/expression.h5ad s3://{bucket_name}/PerturbMM/spatial.h5ad '
@@ -160,15 +167,20 @@ else:
         # f'--pca_dim 2048 0 '
         # f'--discrete '
 
+        # Weight modifications
+        f'--reward_pinning 0 '
+        # f'--penalty_velocity 0 '
+        # f'--penalty_action 0 '
+
         # Column split
         # f'--train_mask is_slice153 '  # MERFISH30k
         # f'--train_mask known_not_d6 '  # CancerVel
         # f'--train_mask slice_bc1_train '  # PerturbMM
         # f'--train_mask train '  # DrugSeries
-        f'--train_mask Train '  # ExpVal
+        # f'--train_mask Train '  # ExpVal
         # f'--train_mask training '  # VCC
         # Sample split
-        # f'--train_split .8 '
+        f'--train_split .8 '
         # Partition split
         # f'--train_split .8 '
         # f'--train_partitions '
@@ -238,7 +250,10 @@ def train(config):
         'input_modalities': config.input_modalities,
         'target_modalities': config.target_modalities,
         'dim': config.dim,
-        'discrete': config.discrete}  # , 'spherical': config.discrete
+        'discrete': config.discrete,
+        'reward_pinning': config.reward_pinning,
+        'penalty_velocity': config.penalty_velocity,
+        'penalty_action': config.penalty_action}  # , 'spherical': config.discrete
     policy_kwargs = {
         'forward_batch_size': int(1e3),
         'vision_size': int(1e3),

@@ -13,7 +13,7 @@ class EnvironmentBase:
         # Data
         *modalities_or_dataloader,
         # Creation
-        dim=8,
+        dim=32,
         pos_bound=torch.inf,
         pos_rand_bound=1,
         vel_bound=1,
@@ -146,7 +146,7 @@ class EnvironmentBase:
         self.lin_deg = lin_deg
         self.reward_scales = {
             'reward_distance': reward_distance,     # Emulate distances of each modality
-            'reward_pinning': reward_pinning,     # Explained variance
+            'reward_pinning': reward_pinning,       # Explained variance
             'reward_origin': reward_origin,         # Make sure the mean of positions is close to the origin
             'penalty_bound': penalty_bound,         # Don't touch the bounds
             'penalty_velocity': penalty_velocity,   # Don't move fast

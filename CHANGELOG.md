@@ -1,3 +1,9 @@
+### 1.0.0+2026.1.21
+- Add weight arguments to main training script
+- Change `EnvironmentBase` initialization defaults to match current testing
+- Revise `ExpVal` analyses and use direct perturbation from `shNC` to `shCHD8`
+- Run ablation testing on simulation data
+
 ### 1.0.0+2026.1.18
 - Annotate proper models in `drugseries_generate` notebook
 - Cut unnecessary randomization in `EnvironmentBase.reset` (Will negate exact reproducibility of some previous analyses)

@@ -334,6 +334,7 @@ ray dashboard aws_config.yaml
 ray down -y aws_config.yaml
 
 Submit job
+cd scripts/
 cp ./train.py ./submit
 export RAY_ADDRESS=http://localhost:8265
 ray job submit --no-wait --working-dir ./submit/ --runtime-env-json '{"py_modules": ["../celltrip"], "pip": "../requirements.txt", "env_vars": {"RAY_DEDUP_LOGS": "0"}}' -- <script>
