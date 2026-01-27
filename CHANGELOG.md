@@ -1,3 +1,6 @@
+### 1.0.0+2026.1.27
+- Run more direct perturbations
+
 ### 1.0.0+2026.1.21
 - Add weight arguments to main training script
 - Change `EnvironmentBase` initialization defaults to match current testing
