@@ -1,3 +1,7 @@
+### 1.0.0+2026.2.2
+- Add ablation testing plots and notebook, `ablation_testing`
+- Add human SMART-seq data and perturbation results
+
 ### 1.0.0+2026.1.27
 - Run more direct perturbations
 
