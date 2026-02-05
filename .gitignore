@@ -63,6 +63,7 @@ example*.yaml
 
 # Saved data
 *.npy
+*.npz
 *.csv
 
 # Submission folders

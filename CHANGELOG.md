@@ -1,3 +1,8 @@
+### 1.0.0+2026.2.5
+- Add `DeST-OT` interpolation to `Flysta3D` notebooks
+- New ablation figure
+- Update `.gitignore`
+
 ### 1.0.0+2026.2.2
 - Add ablation testing plots and notebook, `ablation_testing`
 - Add human SMART-seq data and perturbation results
