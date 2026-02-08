@@ -1,3 +1,8 @@
+### 1.0.0+2026.2.8
+- Bugfix for `DeST-OT` alignment matrix normalization
+- Pseudocell calculation for `DeST-OT`
+- Update `Flysta3D` figure
+
 ### 1.0.0+2026.2.5
 - Add `DeST-OT` interpolation to `Flysta3D` notebooks
 - New ablation figure
