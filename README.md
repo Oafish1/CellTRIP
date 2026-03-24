@@ -342,6 +342,10 @@ ray job submit --no-wait --working-dir ./submit/ --runtime-env-json '{"py_module
 Convert
 sh ../run_on_all_ext.sh ../convert_pdf_to_png.sh pdf
 
+RStudio
+`sudo rstudio-server start`, forward port 8787, usr/pwd: ubuntu
+sudo rstudio-server stop
+
 TODO
 Find https://raw.githubusercontent.com/Oafish1/CellTRIP/refs/heads/main/plots, Replace ./plots to test images
 -->

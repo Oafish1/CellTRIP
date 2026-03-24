@@ -1,3 +1,8 @@
+### 1.0.0+2026.3.24
+- Add `NHP` dataset with accompanying `nhp_generate` notebook
+- Change CLI output formatting in `runtime` notebook
+- Move `R` data reading script, `convert_data.R` to `scripts` folder
+
 ### 1.0.0+2026.2.8
 - Bugfix for `DeST-OT` alignment matrix normalization
 - Pseudocell calculation for `DeST-OT`
