@@ -1,3 +1,7 @@
+### 1.0.0+2026.3.25
+- Exploratory recovery analysis for `NHP` dataset
+- Trained `NHP` model
+
 ### 1.0.0+2026.3.24
 - Add `NHP` dataset with accompanying `nhp_generate` notebook
 - Change CLI output formatting in `runtime` notebook
