@@ -1,3 +1,6 @@
+### 1.0.0+2026.3.26.1
+- Evaluation of `NHP` imputation performance
+
 ### 1.0.0+2026.3.26
 - New `NHP` model with proper sample and log normalization
 - Intersection datasets for `NHP` and `ExpVal` and corresponding model
