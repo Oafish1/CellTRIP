@@ -296,6 +296,7 @@ python -m pip freeze -r requirements.in | sed -e '/@/d' \
     -e '/pycairo*/d' \
     -e '/ManimPango*/d' \
     -e '/mayavi*/d' \
+    -e '/inmoose*/d' \
     > requirements.txt
 # python -m pip freeze | grep -f requirements.in > requirements.txt
 # python -m pip freeze -q -r requirements.in | sed '/freeze/,$ d' > requirements.txt

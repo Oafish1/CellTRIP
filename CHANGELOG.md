@@ -1,3 +1,8 @@
+### 1.0.0+2026.3.26
+- New `NHP` model with proper sample and log normalization
+- Intersection datasets for `NHP` and `ExpVal` and corresponding model
+- Remove `inmoose` from requirements, which was causing errors on Ray job initialization
+
 ### 1.0.0+2026.3.25
 - Exploratory recovery analysis for `NHP` dataset
 - Trained `NHP` model

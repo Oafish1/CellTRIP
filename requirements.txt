@@ -124,7 +124,6 @@ httpx==0.28.1
 idna==3.10
 importlib_metadata==8.5.0
 importlib_resources==6.5.2
-inmoose==0.8.1
 ipydatawidgets==4.3.5
 ipykernel==6.29.5
 ipython==8.12.3
