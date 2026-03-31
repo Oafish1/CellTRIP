@@ -19,9 +19,9 @@ CellTRIP confers several unique advantages over comparable methods:
 | Perturbation analysis | <img src="https://raw.githubusercontent.com/Oafish1/CellTRIP/refs/heads/main/plots/c8zsunc9_ISS_perturbation.gif" width="300"> | Estimated effect size calculation of randomly selected genes from a CellTRIP imputation model on spatial data | <img src="https://raw.githubusercontent.com/Oafish1/CellTRIP/refs/heads/main/plots/c8zsunc9_ISS_comparison_imputation.png" width="200"> | -->
 
 
-# Installation Instructions (~7 minutes)
+# Installation instructions (~5-10 minutes)
 
-To install CellTRIP, first clone and navigate to the repository,
+We have tested training and analysis on Ubuntu 24.04, Ubuntu 16.04 LTS, and `rayproject/ray:2.43.0-py310-gpu`. To install CellTRIP, first clone and navigate to the repository,
 
 ```bash
 git clone https://github.com/Oafish1/CellTRIP
@@ -51,9 +51,9 @@ pip install -e .
 ```
 
 
-# Training
+# Training the model
 
-It is recommended to start a Ray cluster to train the CellTRIP model. For our applications, we set up a scalable AWS cluster using the [Ray Cluster Launcher](https://docs.ray.io/en/latest/cluster/vms/user-guides/launching-clusters/aws.html). CellTRIP can be trained from the command line using the included training script,
+It is required to start a Ray cluster to train the CellTRIP model. For our applications, we set up a scalable AWS cluster using the [Ray Cluster Launcher](https://docs.ray.io/en/latest/cluster/vms/user-guides/launching-clusters/aws.html). CellTRIP can also be trained locally using the included training script,
 
 ```bash
 python scripts/train.py \
@@ -85,9 +85,17 @@ python scripts/train.py \
     --num_runners 2  # Number of runner nodes during training
 
     # Training options
+    --num_cells_min 512  # Minimum number of cells in a training episode
+    --num_cells_max 2_048  # Maximum number of cells in a training episode
+    --forward_batch_size 1_000  # Maximum number of cells to process at a time during forward computation
+    --vision_size 1_000  # Number of cells each cell can "see". Lower values save memory at the cost of performance
+    --update_iterations 5  # Number of epochs to train on each update
+    --epoch_size 100_000  # Size of each epoch, in memories
+    --batch_size 10_000  # Size of batch for each optimization step, in memories
+    --minibatch_memories 1_000_000  # Maximum number of memories to compute at once, lower values save memory at the cost of computation time
     --update_timesteps 1_000_000  # Number of timesteps between updates
     --max_timesteps 800_000_000  # Total number of timesteps during training
-    --dont_sync_across_nodes  # Don't synchronize memories across nodes, saving time
+    --dont_sync_across_nodes  # Don't synchronize memories across nodes, saving time at the cost of theoretical sampling distribution
 
     # Output files
     --logfile <S3_OR_LOCAL_LOGFILE>  # Location to save logfile
@@ -103,7 +111,7 @@ Additional commands and details can be found using `python train.py -h`.
 
 # Using the environment
 
-After training the model, analysis can be performed using the high-level API. For a functional example of the following, please see [`tutorial_high_level.ipynb`](scripts/tutorial_high_level.ipynb). For more customized applications, please see [`tutorial_low_level.ipynb`](scripts/tutorial_low_level.ipynb), as well as application notebooks for
+After training the model, analysis can be performed using the high-level API. For a functional example of the following, please see [`tutorial_high_level.ipynb`](scripts/tutorial_high_level.ipynb) or the analysis demo below. For more customized applications, please see [`tutorial_low_level.ipynb`](scripts/tutorial_low_level.ipynb), as well as application notebooks for
 Dyngen ([1](scripts/dyngen_generate.ipynb), [2](scripts/dyngen_comparisons.ipynb)),
 Cortex ([1](scripts/cortex_generate.ipynb)),
 DrugSeries ([1](scripts/drugseries_generate.ipynb), [2](scripts/drugseries_comparisons.ipynb)),
@@ -133,7 +141,7 @@ manager = celltrip.manager.BasicManager(
     policy_fname='<.weights_FILE>',
     preprocessing_fname='<.pre_FILE>',
     mask_fname='<.mask_FILE>',  # OPTIONAL
-    adatas=adatas,
+    adatas=adatas,  # OPTIONAL, adatas can be passed here or later in set_modalities
     device='cuda')  # Typically 'cpu' or 'cuda'
 
 # Get training mask
@@ -149,7 +157,7 @@ To begin our simulation, we first allow CellTRIP to reach a *steady state*, or a
 # Simulate to steady state
 manager.reset_env()
 manager.simulate()
-manager.save_state('steady')
+manager.save_state('steady')  # Save this representation, so we can load it later
 
 # Get steady state positions and modalities
 modalities = manager.get_state()  # List of imputed/recovered modalities
@@ -254,6 +262,179 @@ time, states = manager.simulate(
 # Manually select intermediate timepoint as recovered stage
 intermediate_pcells = [s[5] for s in states]  # Modalities at 5s
 ```
+
+# Training demo (~4-10 hours)
+
+Begin by unzipping the folder in `data/Dyngen.zip` and running the training script using the command below (~4 hours on a dual-A10G Ray cluster),
+
+```bash
+# Start the Ray cluster locally using one GPU
+export CUDA_VISIBLE_DEVICES=0
+ray start --head --num-gpus=1
+
+# Run the script
+python scripts/train.py ./data/Dyngen/logcounts.h5ad ./data/Dyngen/counts_protein.h5ad --backed --train_split .8 --num_gpus 1 --dont_sync_across_nodes --logfile ./models/Dyngen_Demo.log --flush_iterations 1 --checkpoint_iterations 50 --checkpoint_dir models --checkpoint_name Dyngen_Demo
+```
+
+Alternatively, start an autoscaling Ray cluster on AWS using `aws_config.yaml` and submit the script as a job,
+
+```bash
+# Start the Ray cluster and attach locally (Terminal 1)
+ray up -y aws_config.yaml && ray attach aws_config.yaml -p 10001
+
+# Launch a dashboard for the cluster (Terminal 2)
+ray dashboard aws_config.yaml
+
+# Submit a job to the cluster, using the local CellTRIP installation (Terminal 3)
+export RAY_ADDRESS=http://localhost:8265
+cd scripts/ && cp ./train.py ./submit
+ray job submit --no-wait --working-dir ./submit/ --runtime-env-json '{"py_modules": ["../celltrip"], "pip": "../requirements.txt", "env_vars": {"RAY_DEDUP_LOGS": "0"}}' -- python scripts/train.py ./data/Dyngen/logcounts.h5ad ./data/Dyngen/counts_protein.h5ad --backed --train_split .8 --num_gpus 2 --dont_sync_across_nodes --logfile ./models/Dyngen_Demo.log --flush_iterations 1 --checkpoint_iterations 50 --checkpoint_dir models --checkpoint_name Dyngen_Demo
+```
+
+> [!WARNING]
+> Running this on a non-gpu, single-instance computer will take *VERY* long. GPU usage is strongly encouraged.
+
+Once training is completed, you will be left with several files for loading the trained model,
+
+```
+./models/
+├─ Dyngen_Demo.log             # Logfile
+├─ Dyngen_Demo.mask            # Training mask file
+├─ Dyngen_Demo.pre             # Preprocessing class file
+├─ Dyngen_Demo-0050.weights    # Checkpoint weight files
+├─ Dyngen_Demo-0100.weights
+├─ ...
+└─ Dyngen_Demo-0800.weights    # Final weight file
+```
+
+During training, you may also use the notebook `scripts/runtime.ipynb` and input your logfile under `log_list` to visualize training progress and estimate running cost.
+
+<p align="center">
+<img src="./images/example_runtime_training.png" alt="Example runtime notebook training plot" style="width: auto; height: 400px"/>
+</p>
+<p align="center">
+<img src="./images/example_runtime_summary.png" alt="Example runtime notebook summary plot" style="width: auto; height: 150px"/>
+</p>
+
+
+# Analysis demo (~2-4 minutes)
+
+Begin by unzipping the folders `data/Dyngen.zip` and `models/Dyngen-251015-0800.zip`. Using the contained files, we can first load our data,
+
+## Loading the data and model
+
+```python
+adatas = celltrip.utility.processing.read_adatas(
+    './Dyngen/logcounts.h5ad',
+    './Dyngen/counts_protein.h5ad',
+    backed=True)
+```
+
+Then, we can load our trained model using a local GPU,
+```python
+prefix, training_step = 's3://nkalafut-celltrip/checkpoints/Dyngen-251015', 800
+manager = celltrip.manager.BasicManager(
+    policy_fname='./models/Dyngen-251015-0800.weights',
+    preprocessing_fname='./models/Dyngen-251015.pre',
+    mask_fname='./models/Dyngen-251015.mask',
+    adatas=adatas,
+    device='cuda')
+```
+
+## Get imputed/recovered modalities
+
+Now, we can perform an initial simulation on the data to reach a 'Steady State', or the control representation of the data.
+
+```python
+# Simulate to steady state
+manager.reset_env()
+manager.simulate()
+manager.save_state('steady')
+gex, protein = manager.get_state()
+```
+
+Comparing the expression reconstruction from steady state with the original data, we get,
+
+<p align="center">
+<img src="./images/example_dyngen_reconstruction.png" alt="Example dyngen reconstruction plot" style="width: auto; height: 300px"/>
+</p>
+
+where the plotting code for this and subsequent figures can be found in [`tutorial_high_level.ipynb`](scripts/tutorial_high_level.ipynb).
+
+## Gene knockdown
+
+We can then simulate knockdown of the `C8` TF module
+
+```python
+# Simulate perturbation
+manager.add_perturbation(
+    ['C8_TF1', 'C8_TF2', 'C8_TF3', 'C8_TF4', 'C8_TF5'],
+    modality=0, feature_targets=0)
+time, states = manager.simulate_perturbation()
+
+# Revert to previous state for next perturbation
+manager.load_state('steady')
+manager.clear_perturbations()
+```
+
+<p align="center">
+<img src="./images/example_dyngen_perturbation.png" alt="Example dyngen perturbation effect plot" style="width: auto; height: 300px"/>
+</p>
+
+## Developmental stage recovery
+
+Finally, we can use CellTRIP to recover intermediate cell developmental stages from cell groups `C` to `E`. We first generate pseudocells,
+
+```python
+# Get origin and terminal data
+origin_samples = adatas[0].obs.index[adatas[0].obs['traj_sim'] == 'sC_sCmid']
+terminal_samples = adatas[0].obs.index[adatas[0].obs['traj_sim'] == 'sE_sEndE']
+origin_modalities = [np.array(ad[origin_samples].X[:].todense()) for ad in adatas]
+terminal_modalities = [np.array(ad[terminal_samples].X[:].todense()) for ad in adatas]
+
+# Generate pseudocells
+origin_pcells, terminal_pcells = celltrip.utility.processing.generate_pseudocells(
+    origin_modalities,
+    terminal_modalities,
+    kmeans_modality=0,  # Which modality to use when determining clusters
+    ot_modality=0,  # Which modality to use when determining pseudocell correspondence
+    n_pcells=None)  # OPTIONAL. Manually set number of pseudocells
+
+# Format into adatas
+origin_pcells = [ad.AnnData(m, var=adatas[0].var) for m in origin_pcells]
+terminal_pcells = [ad.AnnData(m, var=adatas[0].var) for m in terminal_pcells]
+```
+
+and simulate to steady state using the pseudocells of group `C`,
+
+```python
+# Change environment modalities and reset
+manager.set_modalities(origin_pcells)
+manager.reset_env()
+
+# Simulate to steady state
+manager.simulate();
+```
+
+Lastly, we replace the existing data with those of cell group `E` and simulate for 32 seconds,
+
+```python
+# Replace cell/pseudocell modalities with terminal modalities
+manager.set_modalities(terminal_pcells)
+
+# Simulate
+time, states = manager.simulate(
+    time=32.,  # Simulate for 32 seconds (Default 512s)
+    skip_time=1.)  # Record state every second (Default 10s)
+
+# Manually select intermediate timepoint as recovered stage
+intermediate_pcells = [s[5] for s in states]  # Modalities at 5s
+```
+
+<p align="center">
+<img src="./images/example_dyngen_interpolation.png" alt="Example dyngen interpolation plot" style="width: auto; height: 300px"/>
+</p>
+
 
 
 <!--

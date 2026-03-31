@@ -55,10 +55,18 @@ group.add_argument('--penalty_action', type=float, default=1., help='Action pena
 # Computation
 group = parser.add_argument_group('Computation')
 group.add_argument('--num_gpus', type=int, default=1, help='Number of GPUs to use during computation')
-group.add_argument('--num_learners', type=int, default=1, help='Number of learners used in backward computation, cannot exceed GPUs')
-group.add_argument('--num_runners', type=int, default=1, help='Number of workers for environment simulation')
+group.add_argument('--num_learners', type=int, help='Number of learners used in backward computation, cannot exceed GPUs. Defaults to all GPUs')
+group.add_argument('--num_runners', type=int, help='Number of workers for environment simulation. Defaults to all GPUs')
 # Training
 group = parser.add_argument_group('Training')
+group.add_argument('--num_cells_min', type=int, default=2**9, help='Minimum number of cells to simulate per episode')
+group.add_argument('--num_cells_max', type=int, default=2**11, help='Maximum number of cells to simulate per episode')
+group.add_argument('--forward_batch_size', type=int, default=int(1e3), help='Maximum number of cells to process at once during forward pass. Lower values save memory but may increase computation time')
+group.add_argument('--vision_size', type=int, default=int(1e3), help='Number of cells the policy can "see" at once. Lower values save memory but may reduce performance')
+group.add_argument('--update_iterations', type=int, default=5, help='Number of epochs to train on each update')
+group.add_argument('--epoch_size', type=int, default=100_000, help='Size of each epoch, in memories')
+group.add_argument('--batch_size', type=int, default=10_000, help='Size of batch for each optimization step, in memories')
+group.add_argument('--minibatch_memories', type=int, default=1_000_000, help='Maximum number of memories to compute at once, lower values save memory at the cost of computation time')
 group.add_argument('--update_timesteps', type=int, default=int(1e6), help='Number of timesteps recorded before each update')
 group.add_argument('--max_timesteps', type=int, default=int(8e8), help='Maximum number of timesteps to compute before exiting')
 group.add_argument('--dont_sync_across_nodes', action='store_true', help='Avoid memory sync across nodes, saving overhead time at the cost of stability')
@@ -78,12 +86,14 @@ if not celltrip.utility.notebook.is_notebook():
 else:
     # experiment_name = 'Flysta-251026'
     # experiment_name = 'MERFISH30k-153-250914'
-    experiment_name = 'Dyngen-260121-NoPinning'
+    experiment_name = 'Dyngen'  # Dyngen-260121-OnlyPinning
     # experiment_name = 'Cortex-251024-2'
     # experiment_name = 'CancerVel-250913'
     # experiment_name = 'PerturbMM-gex-250928'
     # experiment_name = 'DrugSeries-251117-pip-nosampnorm'
     # experiment_name = 'ExpVal-251121-nosampnorm'
+    # experiment_name = 'NHP-260326-nosampnorm'
+    # experiment_name = 'ExpVal-NHP-260330-Integration'
     # experiment_name = 'vcc-251019'
     bucket_name = 'nkalafut-celltrip'
     command = (
@@ -148,6 +158,17 @@ else:
         # f'--log_modalities 0 '
         # f'--partition_cols sample '
 
+        # NHP
+        # f's3://{bucket_name}/NHP/top5k_peaks.h5ad '
+        # f'--sample_counts 10_000 '
+
+        # ExpVal/NHP Intersection
+        # f's3://{bucket_name}/NHP/top5k_peaks_intersection.h5ad s3://{bucket_name}/ExpVal/expression_intersection.h5ad '
+        # # f'--target_modalities 1 '  # Target expression from peaks
+        # f'--sample_counts 0 10_000 '
+        # f'--log_modalities 1 '
+        # f'--partition_cols sample '
+
         # PerturbMM
         # f's3://{bucket_name}/PerturbMM/expression.h5ad s3://{bucket_name}/PerturbMM/spatial.h5ad '
         # f'--target_modalities 1 '
@@ -168,7 +189,7 @@ else:
         # f'--discrete '
 
         # Weight modifications
-        f'--reward_pinning 0 '
+        # f'--reward_pinning 0 '
         # f'--penalty_velocity 0 '
         # f'--penalty_action 0 '
 
@@ -177,7 +198,7 @@ else:
         # f'--train_mask known_not_d6 '  # CancerVel
         # f'--train_mask slice_bc1_train '  # PerturbMM
         # f'--train_mask train '  # DrugSeries
-        # f'--train_mask Train '  # ExpVal
+        # f'--train_mask Train '  # ExpVal/NHP
         # f'--train_mask training '  # VCC
         # Sample split
         f'--train_split .8 '
@@ -239,7 +260,7 @@ def train(config):
 
     # Initialization
     dataloader_kwargs = {
-        'num_nodes': [2**9, 2**11],
+        'num_nodes': [config.num_cells_min, config.num_cells_max],
         'pca_dim': config.pca_dim if len(config.pca_dim) > 1 else config.pca_dim[0],
         'sample_count': config.sample_counts,
         'pre_log': config.log_modalities,
@@ -255,9 +276,13 @@ def train(config):
         'penalty_velocity': config.penalty_velocity,
         'penalty_action': config.penalty_action}  # , 'spherical': config.discrete
     policy_kwargs = {
-        'forward_batch_size': int(1e3),
-        'vision_size': int(1e3),
-        'pinning_spatial': config.spatial}
+        'forward_batch_size': config.forward_batch_size,
+        'vision_size': config.vision_size,
+        'pinning_spatial': config.spatial,
+        'update_iterations': config.update_iterations,
+        'epoch_size': config.epoch_size,
+        'batch_size': config.batch_size,
+        'minibatch_memories': config.minibatch_memories}
     memory_kwargs = {'device': 'cuda:0'}  # Skips casting, cutting time significantly for relatively small batch sizes
     initializers = celltrip.train.get_initializers(
         input_files=config.input_files, merge_files=config.merge_files,
@@ -278,8 +303,10 @@ def train(config):
     # Run function
     celltrip.train.train_celltrip(
         initializers=initializers,
-        num_gpus=config.num_gpus, num_learners=config.num_learners,
-        num_runners=config.num_runners, max_timesteps=config.max_timesteps,
+        num_gpus=config.num_gpus,
+        num_learners=config.num_learners if config.num_learners is not None else config.num_gpus,
+        num_runners=config.num_runners if config.num_runners is not None else config.num_gpus,
+        max_timesteps=config.max_timesteps,
         update_timesteps=config.update_timesteps, sync_across_nodes=not config.dont_sync_across_nodes,
         flush_iterations=config.flush_iterations,
         checkpoint_iterations=config.checkpoint_iterations, checkpoint_dir=config.checkpoint_dir,
