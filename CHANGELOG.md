@@ -1,3 +1,11 @@
+### 1.0.0+2026.3.30
+- Add gene region conversion for `NHP` perturbation
+- Add more perturbations to the `nhp_generate` notebook
+- Change autoscaler config to terminate idle nodes, rather than caching
+- Normalized perturbation residual visualization
+- Refresh `setup.py` with new requirements and add `pyensembl`
+- Run integration model for `NHP`
+
 ### 1.0.0+2026.3.26.1
 - Evaluation of `NHP` imputation performance
 

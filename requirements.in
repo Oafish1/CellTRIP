@@ -14,6 +14,7 @@ numpy
 pandas
 pip-tools
 POT
+pyensembl
 ray[client,default]
 rds2py
 s3fs

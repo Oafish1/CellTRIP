@@ -114,12 +114,14 @@ setup(
             'nbconvert',
             'pandas',
             'POT',
+            'pyensembl',
             'rds2py',
             's3fs',
             'scanpy',
             'scikit-learn>=1.4.2',  # Needs ~1.4.2
             'scipy',
             'seaborn',
+            'statsmodels',
             'tqdm',
             'umap-learn',  # [parametric_umap]
             'wandb[importers]'],
