@@ -1,3 +1,11 @@
+### 1.0.0+2026.3.31
+- Add GNU General Public License
+- Add images resource folder for `README`
+- Add new default values for `num_learners` and `num_runners`
+- Add `num_cells_min`, `num_cells_max`, `forward_batch_size`, `vision_size`, `update_iterations`, `epoch_size`, `batch_size`, `minibatch_memories` parameters to `train.py` script
+- Fix `pyarrow` dependency conflict caused by `pyensembl`
+- More detailed explanations and argument documentation in tutorial notebooks and `README`
+
 ### 1.0.0+2026.3.30
 - Add gene region conversion for `NHP` perturbation
 - Add more perturbations to the `nhp_generate` notebook
