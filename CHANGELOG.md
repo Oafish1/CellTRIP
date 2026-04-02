@@ -1,3 +1,6 @@
+### 1.0.0+2026.4.1
+- Add `.gitattributes` file to reclassify the repository to Python
+
 ### 1.0.0+2026.3.31
 - Add GNU General Public License
 - Add images resource folder for `README`

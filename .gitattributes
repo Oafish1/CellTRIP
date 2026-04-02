@@ -1,0 +1,2 @@
+# Change all notebooks to Python, otherwise the library is categorized wrong due to the large file size of the notebooks
+*.ipynb linguist-language=Python
