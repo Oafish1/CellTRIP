@@ -16,7 +16,7 @@ provider:
     type: aws
     region: us-east-2
     availability_zone: us-east-2a,us-east-2b,us-east-2c
-    cache_stopped_nodes: False
+    cache_stopped_nodes: True  # False is too slow, but True requires occasional manual cleanup
 auth:
     ssh_user: ubuntu
 

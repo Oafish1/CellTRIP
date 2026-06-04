@@ -1,3 +1,16 @@
+### 1.0.0+2026.6.4
+- Add `utility.general.get_env_dim_from_state` helper function
+- Additional Dyngen benchmarking points
+- More hyperparameter runs
+- Reintroduce cluster node caching
+
+### 1.0.0+2026.6.1
+- More hyperparameter runs
+
+### 1.0.0+2026.5.29
+- Fix `requirements.txt` for `pyarrow` version compatibility
+- More runs for hyperparameter tuning on simulation data
+
 ### 1.0.0+2026.4.1
 - Add `.gitattributes` file to reclassify the repository to Python
 

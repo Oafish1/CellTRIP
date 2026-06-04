@@ -478,7 +478,10 @@ python -m pip freeze -r requirements.in | sed -e '/@/d' \
     -e '/ManimPango*/d' \
     -e '/mayavi*/d' \
     -e '/inmoose*/d' \
+    -e '/pyensembl*/d' \
+    -e '/gtfparse*/d' \
     > requirements.txt
+# `pyensembl` and dependency `gtfparse` commented for incompatibility with Ray pyarrow 19.0.1, since requires pyarrow 14.0.2
 # python -m pip freeze | grep -f requirements.in > requirements.txt
 # python -m pip freeze -q -r requirements.in | sed '/freeze/,$ d' > requirements.txt
 
@@ -511,6 +514,7 @@ export AWS_PROFILE=waisman-admin
 aws sso login --profile waisman-admin
 
 Ray cluster
+conda activate celltrip
 ray up -y aws_config.yaml && ray attach aws_config.yaml -p 10001
 ray dashboard aws_config.yaml
 ray down -y aws_config.yaml

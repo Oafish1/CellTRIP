@@ -1265,6 +1265,15 @@ def create_agent_from_state(state, pinning_spatial=False, **kwargs):
     return policy.load_checkpoint(state)
 
 
+def get_env_dim_from_state(state_or_fname):
+    if isinstance(state_or_fname, str):
+        with _utility.general.open_s3_or_local(state_or_fname, 'rb') as f:
+            state = torch.load(f, map_location='cpu')
+    else:
+        state = state_or_fname
+    return state['policy']['actor_critic.self_pos_embed.weight'].shape[1] // 2
+
+
 class PPO(nn.Module):
     def __init__(
             self,
