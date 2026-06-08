@@ -1,3 +1,9 @@
+### 1.0.0+2026.6.8
+- Add experimental `time_mapping` notebook for mapping biological time to simulation time
+- Add `include_vel` argument for `BasicManager.get_state` and `BasicManager.simulate` to include velocities in output
+- More runs
+- Small addition and correction to `tutorial_high_level`
+
 ### 1.0.0+2026.6.4
 - Add `utility.general.get_env_dim_from_state` helper function
 - Additional Dyngen benchmarking points

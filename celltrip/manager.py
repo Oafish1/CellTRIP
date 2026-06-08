@@ -77,6 +77,7 @@ class BasicManager:
 
     # Environment management
     def set_modalities(self, adatas, preprocess=True, chunk_size=2_000, suppress_warning=False, strict=False):
+        # A common environment argument would be `compute_rewards=False`, especially if missing output modalities
         # Create new env if numbers don't match, but preserve state
         # Preprocess if needed
         modalities = [
@@ -117,19 +118,19 @@ class BasicManager:
         self.flags['ready_to_perturb'], state = self.states[name]
         self.env.set_state(state)
 
-    def get_state(self, impute=True, **kwargs):
+    def get_state(self, impute=True, include_vel=False, **kwargs):
         # Get state
-        pos = self.env.get_positions()
+        state = self.env.get_state()
         num_pinning_modules = len(self.policy.pinning)
 
         # Only impute one
         if isinstance(impute, int) and not isinstance(impute, bool):
-            return self.environment_to_features(pos, **kwargs)
+            return self.environment_to_features(state[..., :self.dim], **kwargs)
         # Impute all
         elif impute:
-            return [self.environment_to_features(pos, i, **kwargs) for i in range(num_pinning_modules)]
+            return [self.environment_to_features(state[..., :self.dim], i, **kwargs) for i in range(num_pinning_modules)]
         # No imputation
-        return pos
+        return state[..., :self.dim] if not include_vel else state
     
     # Imputation
     def environment_to_features(self, pos, modality='all', *, target_state=None, inverse_preprocess=True, chunk_size=2_000):
@@ -174,6 +175,7 @@ class BasicManager:
         progress_bar=True,
         impute=True,
         impute_kwargs={},
+        include_vel=False,
         **kwargs):
         # Parameters
         skip_states = int(skip_time / self.env.delta)
@@ -183,7 +185,7 @@ class BasicManager:
         sim_pos = _train.simulate_until_completion(
             self.env, self.policy, skip_states=skip_states,
             store_states=store_states, progress_bar=progress_bar,
-            pbar_total=int(time/self.env.delta), **kwargs)[-1][..., :self.dim]
+            pbar_total=int(time/self.env.delta), **kwargs)[-1]
 
         # Get sim time
         sim_time = np.arange(0., time, skip_states*self.env.delta)
@@ -195,8 +197,8 @@ class BasicManager:
         
         # Impute
         if impute:
-            return sim_time, self.environment_to_features(sim_pos, **impute_kwargs)
-        return sim_time, sim_pos
+            return sim_time, self.environment_to_features(sim_pos[..., :self.dim], **impute_kwargs)
+        return sim_time, (sim_pos[..., :self.dim] if not include_vel else sim_pos)
 
     # Perturbations
     def simulate_perturbation(self, time=128., **kwargs):
