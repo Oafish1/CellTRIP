@@ -3,6 +3,7 @@ from . import distance
 from . import general
 from . import hooks
 from . import notebook
+from . import mapping
 from . import processing
 from . import state_manager
 from . import view

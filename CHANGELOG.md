@@ -1,3 +1,9 @@
+### 1.0.0+2026.6.10
+- Add `utility.mapping` module with `compute_sim_bio_mapping` and `find_target_bio_time` functions
+- Change `cortex_generate` notebook to use two-tailed significance test in layer score evaluation
+- Recompute Flysta interpolation
+- Revise time mapping strategy to be more resistant to simulation length
+
 ### 1.0.0+2026.6.8
 - Add experimental `time_mapping` notebook for mapping biological time to simulation time
 - Add `include_vel` argument for `BasicManager.get_state` and `BasicManager.simulate` to include velocities in output
