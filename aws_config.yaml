@@ -1,6 +1,6 @@
 # Cluster config
 cluster_name: celltrip
-max_workers: 6
+max_workers: 4
 upscaling_speed: 0.1  # Try to do one at a time
 docker:
     head_image: "rayproject/ray:2.43.0-py310"
@@ -40,7 +40,7 @@ available_node_types:
                 Arn: arn:aws:iam::245432013314:instance-profile/ray-head-v1
     ray.worker.default:
         min_workers: 0
-        max_workers: 5
+        max_workers: 4
         resources: {}
         node_config:
             InstanceType: g5.2xlarge  # 1 GPU; 16 Gb RAM

@@ -1,3 +1,12 @@
+### 1.0.0+2026.6.14
+- Change `utility.mapping.compute_sim_bio_mapping` initial parameters and returns to more accurately fit velocity density
+- More reproduction runs
+- Recompute `Flysta3D` and `DrugSeries` analyses with timepoint mapping and begin revised `Cortex` significance analysis
+
+### 1.0.0+2026.6.11
+- Change maximum concurrent workers
+- More hyperparameter and reproduction runs
+
 ### 1.0.0+2026.6.10
 - Add `utility.mapping` module with `compute_sim_bio_mapping` and `find_target_bio_time` functions
 - Change `cortex_generate` notebook to use two-tailed significance test in layer score evaluation

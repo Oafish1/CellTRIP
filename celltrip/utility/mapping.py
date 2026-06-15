@@ -2,8 +2,16 @@ import numpy as np
 import scipy.optimize
 import scipy.stats
 
+from . import general as _general
 
-def compute_sim_bio_mapping(vel_density, time, start_val=0, end_val=1):
+
+def compute_sim_bio_mapping(
+    vel_density,
+    time,
+    start_val=0,
+    end_val=1,
+    return_pdf=False,
+    return_params=False):
     "Compute mapping function from simulated to biological time based on environment velocity"
     # Get base mean cumulative density
     # vel_density = states[..., manager.dim:].mean(dim=-1)  # We take the mean since velocities in the env space are not normalized
@@ -11,11 +19,35 @@ def compute_sim_bio_mapping(vel_density, time, start_val=0, end_val=1):
     # vel_density = vel.abs().mean(dim=(-1, -2))
 
     # Gamma decay fit
-    def gamma_dist(x, k, theta, yscale):
-        return yscale * scipy.stats.gamma.pdf(x, k, scale=theta)
-    gamma_params, _ = scipy.optimize.curve_fit(gamma_dist, time, vel_density, p0=[2, 2, sum(vel_density)], bounds=([0, 0, 0], np.inf))
+    def gamma_dist(x, k, loc, xscale, yscale, cdf=False):
+        f = scipy.stats.gamma.cdf if cdf else scipy.stats.gamma.pdf
+        return yscale * f(x / xscale, k, loc=loc)
+    gamma_params, _ = scipy.optimize.curve_fit(
+        gamma_dist, time, vel_density, p0=[1, 0, 30, .1],
+        bounds=([0, 0, 0, 0], [np.inf, np.inf, np.inf, np.inf]))
     
-    return lambda x: (end_val - start_val) * scipy.stats.gamma.cdf(x, *gamma_params) + start_val
+    # Scaled CDF, omit yscale
+    ret = (lambda x: (end_val - start_val) * gamma_dist(x, *gamma_params[:-1], 1, cdf=True) + start_val,)
+    # PDF
+    if return_pdf:
+        ret += (lambda x: gamma_dist(x, *gamma_params),)
+    # Params
+    if return_params:
+        ret += (gamma_params,)
+
+    return _general.clean_return(ret)
+
+    # Log normal fit
+    # def lognorm_dist()
+
+    # Gamma decay fit
+    # def gamma_dist(x, k, theta, yscale):
+    #     return yscale * scipy.stats.gamma.pdf(x, k, scale=theta)
+    # gamma_params, _ = scipy.optimize.curve_fit(gamma_dist, time, vel_density, p0=[2, 2, sum(vel_density)], bounds=([0, 0, 0], np.inf))
+    
+    # return lambda x: (end_val - start_val) * scipy.stats.gamma.cdf(x, *gamma_params) + start_val
+
+
 
 
 def find_target_bio_time(map_func, target_time, max_iter=1000, tol=1e-5):
