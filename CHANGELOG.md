@@ -1,3 +1,9 @@
+### 1.0.0+2026.6.17
+- Add new ground truth analysis to `cortex_generate` and test on new models
+- Add `steps` argument to `utility.processing.Preprocessing.transform` and `utility.processing.Preprocessing.inverse_transform` to allow for more granular preprocessing adjustment
+- More reproduction and benchmarking runs
+- Revise and clean `drugseries_generate` notebook to avoid inverse normalization problems and test on new models
+
 ### 1.0.0+2026.6.14
 - Change `utility.mapping.compute_sim_bio_mapping` initial parameters and returns to more accurately fit velocity density
 - More reproduction runs
