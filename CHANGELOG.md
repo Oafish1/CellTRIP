@@ -1,3 +1,9 @@
+### 1.0.0+2026.6.19
+- Add square root to `compute_emd`
+- Add temporary `Comparison Statistics` script to `drugseries_generate` for later migration, providing consistent analysis across methods
+- Additional `DrugSeries` training masks for one-to-one perturbations
+- More reproduction and benchmarking runs
+
 ### 1.0.0+2026.6.17
 - Add new ground truth analysis to `cortex_generate` and test on new models
 - Add `steps` argument to `utility.processing.Preprocessing.transform` and `utility.processing.Preprocessing.inverse_transform` to allow for more granular preprocessing adjustment

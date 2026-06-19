@@ -282,9 +282,8 @@ def compute_discrete_ot_matrix(
 
     # Solve discrete EMD
     a, b = ot.utils.unif(X.shape[0]), ot.utils.unif(Y.shape[0])
-    M_raw = ot.dist(X, Y)
-    M = M_raw / M_raw.max()
-    OT_mat = ot.emd(a, b, M, numItermax=numItermax, **kwargs)
+    M_raw = ot.dist(X, Y, metric='sqeuclidean')  # Squared 2-norm for Wass-2
+    OT_mat = ot.emd(a, b, M_raw / M_raw.max(), numItermax=numItermax, **kwargs)
     # OT_mat = ot.solve(M, a, b)
     # OT_mat = ot.sinkhorn(a, b, M, 1e-1)
 

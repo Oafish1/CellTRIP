@@ -3448,7 +3448,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_8distance_2euclidean_distance(CYTHO
  * 
  * def compute_emd(X_pred, X_true):             # <<<<<<<<<<<<<<
  *     _, _, M_raw, OT_mat = _general.compute_discrete_ot_matrix(X_pred, X_true)
- *     return np.sum(M_raw * OT_mat)
+ *     return np.sqrt(np.sum(M_raw * OT_mat))
  */
 
 /* Python wrapper */
@@ -3585,7 +3585,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_8distance_4compute_emd(CYTHON_UNUSE
  * 
  * def compute_emd(X_pred, X_true):
  *     _, _, M_raw, OT_mat = _general.compute_discrete_ot_matrix(X_pred, X_true)             # <<<<<<<<<<<<<<
- *     return np.sum(M_raw * OT_mat)
+ *     return np.sqrt(np.sum(M_raw * OT_mat))
  * 
  */
   __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_general); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 27, __pyx_L1_error)
@@ -3686,26 +3686,54 @@ static PyObject *__pyx_pf_8celltrip_7utility_8distance_4compute_emd(CYTHON_UNUSE
   /* "celltrip/utility/distance.py":28
  * def compute_emd(X_pred, X_true):
  *     _, _, M_raw, OT_mat = _general.compute_discrete_ot_matrix(X_pred, X_true)
- *     return np.sum(M_raw * OT_mat)             # <<<<<<<<<<<<<<
+ *     return np.sqrt(np.sum(M_raw * OT_mat))             # <<<<<<<<<<<<<<
  * 
  * 
  */
   __Pyx_XDECREF(__pyx_r);
   __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_np); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 28, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
-  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_sum); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 28, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_sqrt); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 28, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-  __pyx_t_6 = PyNumber_Multiply(__pyx_v_M_raw, __pyx_v_OT_mat); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 28, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_6);
-  __pyx_t_2 = NULL;
+  __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_np); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 28, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_sum); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 28, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  __pyx_t_2 = PyNumber_Multiply(__pyx_v_M_raw, __pyx_v_OT_mat); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 28, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __pyx_t_7 = NULL;
+  __pyx_t_4 = 0;
+  #if CYTHON_UNPACK_METHODS
+  if (unlikely(PyMethod_Check(__pyx_t_3))) {
+    __pyx_t_7 = PyMethod_GET_SELF(__pyx_t_3);
+    if (likely(__pyx_t_7)) {
+      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_3);
+      __Pyx_INCREF(__pyx_t_7);
+      __Pyx_INCREF(function);
+      __Pyx_DECREF_SET(__pyx_t_3, function);
+      __pyx_t_4 = 1;
+    }
+  }
+  #endif
+  {
+    PyObject *__pyx_callargs[2] = {__pyx_t_7, __pyx_t_2};
+    __pyx_t_6 = __Pyx_PyObject_FastCall(__pyx_t_3, __pyx_callargs+1-__pyx_t_4, 1+__pyx_t_4);
+    __Pyx_XDECREF(__pyx_t_7); __pyx_t_7 = 0;
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 28, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  }
+  __pyx_t_3 = NULL;
   __pyx_t_4 = 0;
   #if CYTHON_UNPACK_METHODS
   if (unlikely(PyMethod_Check(__pyx_t_5))) {
-    __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_5);
-    if (likely(__pyx_t_2)) {
+    __pyx_t_3 = PyMethod_GET_SELF(__pyx_t_5);
+    if (likely(__pyx_t_3)) {
       PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_5);
-      __Pyx_INCREF(__pyx_t_2);
+      __Pyx_INCREF(__pyx_t_3);
       __Pyx_INCREF(function);
       __Pyx_DECREF_SET(__pyx_t_5, function);
       __pyx_t_4 = 1;
@@ -3713,9 +3741,9 @@ static PyObject *__pyx_pf_8celltrip_7utility_8distance_4compute_emd(CYTHON_UNUSE
   }
   #endif
   {
-    PyObject *__pyx_callargs[2] = {__pyx_t_2, __pyx_t_6};
+    PyObject *__pyx_callargs[2] = {__pyx_t_3, __pyx_t_6};
     __pyx_t_1 = __Pyx_PyObject_FastCall(__pyx_t_5, __pyx_callargs+1-__pyx_t_4, 1+__pyx_t_4);
-    __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 28, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
@@ -3730,7 +3758,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_8distance_4compute_emd(CYTHON_UNUSE
  * 
  * def compute_emd(X_pred, X_true):             # <<<<<<<<<<<<<<
  *     _, _, M_raw, OT_mat = _general.compute_discrete_ot_matrix(X_pred, X_true)
- *     return np.sum(M_raw * OT_mat)
+ *     return np.sqrt(np.sum(M_raw * OT_mat))
  */
 
   /* function exit code */
@@ -5981,7 +6009,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  * def compute_emd(X_pred, X_true):             # <<<<<<<<<<<<<<
  *     _, _, M_raw, OT_mat = _general.compute_discrete_ot_matrix(X_pred, X_true)
- *     return np.sum(M_raw * OT_mat)
+ *     return np.sqrt(np.sum(M_raw * OT_mat))
  */
   __pyx_tuple__19 = PyTuple_Pack(5, __pyx_n_s_X_pred, __pyx_n_s_X_true, __pyx_n_s__18, __pyx_n_s_M_raw, __pyx_n_s_OT_mat); if (unlikely(!__pyx_tuple__19)) __PYX_ERR(0, 26, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__19);
@@ -6486,7 +6514,7 @@ if (!__Pyx_RefNanny) {
  * 
  * def compute_emd(X_pred, X_true):             # <<<<<<<<<<<<<<
  *     _, _, M_raw, OT_mat = _general.compute_discrete_ot_matrix(X_pred, X_true)
- *     return np.sum(M_raw * OT_mat)
+ *     return np.sqrt(np.sum(M_raw * OT_mat))
  */
   __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_8distance_5compute_emd, 0, __pyx_n_s_compute_emd, NULL, __pyx_n_s_celltrip_utility_distance, __pyx_d, ((PyObject *)__pyx_codeobj__20)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 26, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);

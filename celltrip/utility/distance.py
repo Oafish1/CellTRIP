@@ -25,7 +25,7 @@ def euclidean_distance(a, scaled=False, norm=False):
 
 def compute_emd(X_pred, X_true):
     _, _, M_raw, OT_mat = _general.compute_discrete_ot_matrix(X_pred, X_true)
-    return np.sum(M_raw * OT_mat)
+    return np.sqrt(np.sum(M_raw * OT_mat))
 
 
 def partition_distance(data, partitions=None, func=euclidean_distance):
