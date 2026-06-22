@@ -1,3 +1,8 @@
+### 1.0.0+2026.6.22
+- Fix `Comparison Statistics` implementations and arguments, and run for data-limited CellTRIP models
+- More reproduction and benchmarking runs
+- Use JS distance rather than KL divergence for `cortex_generate` and flip evaluation on subclasses
+
 ### 1.0.0+2026.6.19
 - Add square root to `compute_emd`
 - Add temporary `Comparison Statistics` script to `drugseries_generate` for later migration, providing consistent analysis across methods
