@@ -1,3 +1,8 @@
+### 1.0.0+2026.6.24
+- More reproduction and benchmarking runs
+- New `DrugSeries` visualizations
+- New feature target strategy for testing
+
 ### 1.0.0+2026.6.22
 - Fix `Comparison Statistics` implementations and arguments, and run for data-limited CellTRIP models
 - More reproduction and benchmarking runs
