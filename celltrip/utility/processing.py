@@ -372,14 +372,14 @@ class Preprocessing:
         if adata_vars is not None: ret += (adata_vars,)
         return _utility.general.clean_return(ret)
     
-    def transform_select_features(self, feature_idx, feature_values, modality_idx):
+    def transform_select_features(self, feature_idx, feature_values, modality_idx, steps=['filter', 'pre_log', 'standardize']):
         # Parameters
         feature_values = np.array(feature_values)
         # Transform select features without PCA
         feature_values_mat = np.ones_like(self.standardize_mean[modality_idx])
         if feature_values.ndim == 2: feature_values_mat = feature_values_mat.repeat(feature_values.shape[0], axis=0)
         feature_values_mat[:, feature_idx] = feature_values
-        feature_values_mat, = self.transform(feature_values_mat, subset_modality=modality_idx, steps=['filter', 'pre_log', 'standardize'])
+        feature_values_mat, = self.transform(feature_values_mat, subset_modality=modality_idx, steps=steps)
         return feature_values_mat[:, feature_idx]
 
     def inverse_transform(

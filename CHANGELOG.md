@@ -1,3 +1,9 @@
+### 1.0.0+2026.6.25
+- Add experimental total targeting to `drugseries_generate` for fairness with benchmarking methods
+- Add `steps` argument to `clamp_input_features_hook` and `clamp_inverted_features_hook` to support normalized inputs
+- Fix feature target logic in `drugseries_generate`
+- Use log kernel on euclidean velocity in time mapping for `drugseries_generate`
+
 ### 1.0.0+2026.6.24
 - More reproduction and benchmarking runs
 - New `DrugSeries` visualizations

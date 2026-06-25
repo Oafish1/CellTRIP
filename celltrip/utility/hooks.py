@@ -79,9 +79,14 @@ def _clamp_input_features(env, feature_idx, feature_targets, pca_components=None
     env.modality_offsets[modality_idx] = env.modality_offsets[modality_idx] - transformed_diff
 
 
-def clamp_input_features_hook(feature_idx, preprocessing=None, feature_targets=0., modality_idx=0, device='cpu'):
+def clamp_input_features_hook(feature_idx, preprocessing=None, feature_targets=0., modality_idx=0, steps=['filter', 'pre_log', 'standardize'], device='cpu'):
     # Preprocess features
-    extra_kwargs = _filter_extract_preprocess(feature_idx, preprocessing=preprocessing, feature_targets=feature_targets, modality_idx=modality_idx)
+    extra_kwargs = _filter_extract_preprocess(
+        feature_idx,
+        preprocessing=preprocessing,
+        feature_targets=feature_targets,
+        modality_idx=modality_idx,
+        steps=steps)
     extra_kwargs['pca_components'] = torch.tensor(extra_kwargs['pca_components'], dtype=torch.get_default_dtype(), device=device)
     if 'pca_means' in extra_kwargs: extra_kwargs['pca_means'] = torch.tensor(extra_kwargs['pca_means'], dtype=torch.get_default_dtype(), device=device)
     extra_kwargs['feature_targets'] = torch.tensor(extra_kwargs['feature_targets'], dtype=torch.get_default_dtype(), device=device)
@@ -119,15 +124,20 @@ def _clamp_inverted_features(env, feature_idx, feature_targets, pca_components=N
     env.modality_offsets[modality_idx] = torch.tensor(Z_new, dtype=torch.get_default_dtype()).cuda() - env.modalities[0]
 
 
-def clamp_inverted_features_hook(feature_idx, preprocessing=None, feature_targets=0., modality_idx=0):
+def clamp_inverted_features_hook(feature_idx, preprocessing=None, feature_targets=0., modality_idx=0, steps=['filter', 'pre_log', 'standardize']):
     # Preprocess features
-    extra_kwargs = _filter_extract_preprocess(feature_idx, preprocessing=preprocessing, feature_targets=feature_targets, modality_idx=modality_idx)
+    extra_kwargs = _filter_extract_preprocess(
+        feature_idx,
+        preprocessing=preprocessing,
+        feature_targets=feature_targets,
+        modality_idx=modality_idx,
+        steps=steps)
 
     # Generate hook
     return lambda env: _clamp_inverted_features(env, **extra_kwargs)
 
 
-def _filter_extract_preprocess(feature_idx, preprocessing=None, feature_targets=0., modality_idx=0):
+def _filter_extract_preprocess(feature_idx, preprocessing=None, feature_targets=0., modality_idx=0, steps=['filter', 'pre_log', 'standardize']):
     # Parameters
     kwargs = {
         'feature_idx': feature_idx,
@@ -152,7 +162,7 @@ def _filter_extract_preprocess(feature_idx, preprocessing=None, feature_targets=
 
         # Preprocess targets
         if modality_idx is not None:
-            kwargs['feature_targets'] = preprocessing.transform_select_features(feature_idx, feature_targets, modality_idx)
+            kwargs['feature_targets'] = preprocessing.transform_select_features(feature_idx, feature_targets, modality_idx, steps=steps)
 
     return kwargs
 

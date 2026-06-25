@@ -11,7 +11,9 @@ def compute_sim_bio_mapping(
     start_val=0,
     end_val=1,
     return_pdf=False,
-    return_params=False):
+    return_params=False,
+    maxfev=10_000,
+):
     "Compute mapping function from simulated to biological time based on environment velocity"
     # Get base mean cumulative density
     # vel_density = states[..., manager.dim:].mean(dim=-1)  # We take the mean since velocities in the env space are not normalized
@@ -24,7 +26,8 @@ def compute_sim_bio_mapping(
         return yscale * f(x / xscale, k, loc=loc)
     gamma_params, _ = scipy.optimize.curve_fit(
         gamma_dist, time, vel_density, p0=[1, 0, 30, .1],
-        bounds=([0, 0, 0, 0], [np.inf, np.inf, np.inf, np.inf]))
+        bounds=([0, 0, 0, 0], [np.inf, np.inf, np.inf, np.inf]),
+        maxfev=maxfev)
     
     # Scaled CDF, omit yscale
     ret = (lambda x: (end_val - start_val) * gamma_dist(x, *gamma_params[:-1], 1, cdf=True) + start_val,)

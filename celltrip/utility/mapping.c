@@ -2193,6 +2193,7 @@ static const char __pyx_k_stats[] = "stats";
 static const char __pyx_k_bounds[] = "bounds";
 static const char __pyx_k_enable[] = "enable";
 static const char __pyx_k_import[] = "__import__";
+static const char __pyx_k_maxfev[] = "maxfev";
 static const char __pyx_k_xscale[] = "xscale";
 static const char __pyx_k_yscale[] = "yscale";
 static const char __pyx_k_disable[] = "disable";
@@ -2228,7 +2229,7 @@ static const char __pyx_k_compute_sim_bio_mapping_locals_l[] = "compute_sim_bio_
 static PyObject *__pyx_pf_8celltrip_7utility_7mapping_23compute_sim_bio_mapping_gamma_dist(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_x, PyObject *__pyx_v_k, PyObject *__pyx_v_loc, PyObject *__pyx_v_xscale, PyObject *__pyx_v_yscale, PyObject *__pyx_v_cdf); /* proto */
 static PyObject *__pyx_lambda_funcdef_lambda(PyObject *__pyx_self, PyObject *__pyx_v_x); /* proto */
 static PyObject *__pyx_lambda_funcdef_lambda1(PyObject *__pyx_self, PyObject *__pyx_v_x); /* proto */
-static PyObject *__pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_vel_density, PyObject *__pyx_v_time, PyObject *__pyx_v_start_val, PyObject *__pyx_v_end_val, PyObject *__pyx_v_return_pdf, PyObject *__pyx_v_return_params); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_vel_density, PyObject *__pyx_v_time, PyObject *__pyx_v_start_val, PyObject *__pyx_v_end_val, PyObject *__pyx_v_return_pdf, PyObject *__pyx_v_return_params, PyObject *__pyx_v_maxfev); /* proto */
 static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_map_func, PyObject *__pyx_v_target_time, PyObject *__pyx_v_max_iter, PyObject *__pyx_v_tol); /* proto */
 static PyObject *__pyx_tp_new_8celltrip_7utility_7mapping___pyx_scope_struct__compute_sim_bio_mapping(PyTypeObject *t, PyObject *a, PyObject *k); /*proto*/
 /* #### Code section: late_includes ### */
@@ -2301,6 +2302,7 @@ typedef struct {
   PyObject *__pyx_n_s_main;
   PyObject *__pyx_n_s_map_func;
   PyObject *__pyx_n_s_max_iter;
+  PyObject *__pyx_n_s_maxfev;
   PyObject *__pyx_n_s_mid;
   PyObject *__pyx_n_s_name;
   PyObject *__pyx_n_s_np;
@@ -2333,6 +2335,7 @@ typedef struct {
   PyObject *__pyx_int_2;
   PyObject *__pyx_int_30;
   PyObject *__pyx_int_1000;
+  PyObject *__pyx_int_10000;
   PyObject *__pyx_int_neg_1;
   PyObject *__pyx_slice_;
   PyObject *__pyx_tuple__2;
@@ -2430,6 +2433,7 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_n_s_main);
   Py_CLEAR(clear_module_state->__pyx_n_s_map_func);
   Py_CLEAR(clear_module_state->__pyx_n_s_max_iter);
+  Py_CLEAR(clear_module_state->__pyx_n_s_maxfev);
   Py_CLEAR(clear_module_state->__pyx_n_s_mid);
   Py_CLEAR(clear_module_state->__pyx_n_s_name);
   Py_CLEAR(clear_module_state->__pyx_n_s_np);
@@ -2462,6 +2466,7 @@ static int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_int_2);
   Py_CLEAR(clear_module_state->__pyx_int_30);
   Py_CLEAR(clear_module_state->__pyx_int_1000);
+  Py_CLEAR(clear_module_state->__pyx_int_10000);
   Py_CLEAR(clear_module_state->__pyx_int_neg_1);
   Py_CLEAR(clear_module_state->__pyx_slice_);
   Py_CLEAR(clear_module_state->__pyx_tuple__2);
@@ -2537,6 +2542,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_n_s_main);
   Py_VISIT(traverse_module_state->__pyx_n_s_map_func);
   Py_VISIT(traverse_module_state->__pyx_n_s_max_iter);
+  Py_VISIT(traverse_module_state->__pyx_n_s_maxfev);
   Py_VISIT(traverse_module_state->__pyx_n_s_mid);
   Py_VISIT(traverse_module_state->__pyx_n_s_name);
   Py_VISIT(traverse_module_state->__pyx_n_s_np);
@@ -2569,6 +2575,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
   Py_VISIT(traverse_module_state->__pyx_int_2);
   Py_VISIT(traverse_module_state->__pyx_int_30);
   Py_VISIT(traverse_module_state->__pyx_int_1000);
+  Py_VISIT(traverse_module_state->__pyx_int_10000);
   Py_VISIT(traverse_module_state->__pyx_int_neg_1);
   Py_VISIT(traverse_module_state->__pyx_slice_);
   Py_VISIT(traverse_module_state->__pyx_tuple__2);
@@ -2654,6 +2661,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_n_s_main __pyx_mstate_global->__pyx_n_s_main
 #define __pyx_n_s_map_func __pyx_mstate_global->__pyx_n_s_map_func
 #define __pyx_n_s_max_iter __pyx_mstate_global->__pyx_n_s_max_iter
+#define __pyx_n_s_maxfev __pyx_mstate_global->__pyx_n_s_maxfev
 #define __pyx_n_s_mid __pyx_mstate_global->__pyx_n_s_mid
 #define __pyx_n_s_name __pyx_mstate_global->__pyx_n_s_name
 #define __pyx_n_s_np __pyx_mstate_global->__pyx_n_s_np
@@ -2686,6 +2694,7 @@ static int __pyx_m_traverse(PyObject *m, visitproc visit, void *arg) {
 #define __pyx_int_2 __pyx_mstate_global->__pyx_int_2
 #define __pyx_int_30 __pyx_mstate_global->__pyx_int_30
 #define __pyx_int_1000 __pyx_mstate_global->__pyx_int_1000
+#define __pyx_int_10000 __pyx_mstate_global->__pyx_int_10000
 #define __pyx_int_neg_1 __pyx_mstate_global->__pyx_int_neg_1
 #define __pyx_slice_ __pyx_mstate_global->__pyx_slice_
 #define __pyx_tuple__2 __pyx_mstate_global->__pyx_tuple__2
@@ -2733,11 +2742,12 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   PyObject *__pyx_v_end_val = 0;
   PyObject *__pyx_v_return_pdf = 0;
   PyObject *__pyx_v_return_params = 0;
+  PyObject *__pyx_v_maxfev = 0;
   #if !CYTHON_METH_FASTCALL
   CYTHON_UNUSED Py_ssize_t __pyx_nargs;
   #endif
   CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
-  PyObject* values[6] = {0,0,0,0,0,0};
+  PyObject* values[7] = {0,0,0,0,0,0,0};
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
@@ -2753,7 +2763,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   #endif
   __pyx_kwvalues = __Pyx_KwValues_FASTCALL(__pyx_args, __pyx_nargs);
   {
-    PyObject **__pyx_pyargnames[] = {&__pyx_n_s_vel_density,&__pyx_n_s_time,&__pyx_n_s_start_val,&__pyx_n_s_end_val,&__pyx_n_s_return_pdf,&__pyx_n_s_return_params,0};
+    PyObject **__pyx_pyargnames[] = {&__pyx_n_s_vel_density,&__pyx_n_s_time,&__pyx_n_s_start_val,&__pyx_n_s_end_val,&__pyx_n_s_return_pdf,&__pyx_n_s_return_params,&__pyx_n_s_maxfev,0};
     values[2] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)__pyx_int_0)));
     values[3] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)__pyx_int_1)));
 
@@ -2761,22 +2771,25 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
  *     start_val=0,
  *     end_val=1,
  *     return_pdf=False,             # <<<<<<<<<<<<<<
- *     return_params=False):
- *     "Compute mapping function from simulated to biological time based on environment velocity"
+ *     return_params=False,
+ *     maxfev=10_000,
  */
     values[4] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)Py_False)));
 
     /* "celltrip/utility/mapping.py":14
  *     end_val=1,
  *     return_pdf=False,
- *     return_params=False):             # <<<<<<<<<<<<<<
- *     "Compute mapping function from simulated to biological time based on environment velocity"
- *     # Get base mean cumulative density
+ *     return_params=False,             # <<<<<<<<<<<<<<
+ *     maxfev=10_000,
+ * ):
  */
     values[5] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)Py_False)));
+    values[6] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)__pyx_int_10000)));
     if (__pyx_kwds) {
       Py_ssize_t kw_args;
       switch (__pyx_nargs) {
+        case  7: values[6] = __Pyx_Arg_FASTCALL(__pyx_args, 6);
+        CYTHON_FALLTHROUGH;
         case  6: values[5] = __Pyx_Arg_FASTCALL(__pyx_args, 5);
         CYTHON_FALLTHROUGH;
         case  5: values[4] = __Pyx_Arg_FASTCALL(__pyx_args, 4);
@@ -2809,7 +2822,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
         }
         else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 8, __pyx_L3_error)
         else {
-          __Pyx_RaiseArgtupleInvalid("compute_sim_bio_mapping", 0, 2, 6, 1); __PYX_ERR(0, 8, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("compute_sim_bio_mapping", 0, 2, 7, 1); __PYX_ERR(0, 8, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  2:
@@ -2839,6 +2852,13 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
           if (value) { values[5] = __Pyx_Arg_NewRef_FASTCALL(value); kw_args--; }
           else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 8, __pyx_L3_error)
         }
+        CYTHON_FALLTHROUGH;
+        case  6:
+        if (kw_args > 0) {
+          PyObject* value = __Pyx_GetKwValue_FASTCALL(__pyx_kwds, __pyx_kwvalues, __pyx_n_s_maxfev);
+          if (value) { values[6] = __Pyx_Arg_NewRef_FASTCALL(value); kw_args--; }
+          else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 8, __pyx_L3_error)
+        }
       }
       if (unlikely(kw_args > 0)) {
         const Py_ssize_t kwd_pos_args = __pyx_nargs;
@@ -2846,6 +2866,8 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       }
     } else {
       switch (__pyx_nargs) {
+        case  7: values[6] = __Pyx_Arg_FASTCALL(__pyx_args, 6);
+        CYTHON_FALLTHROUGH;
         case  6: values[5] = __Pyx_Arg_FASTCALL(__pyx_args, 5);
         CYTHON_FALLTHROUGH;
         case  5: values[4] = __Pyx_Arg_FASTCALL(__pyx_args, 4);
@@ -2866,10 +2888,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
     __pyx_v_end_val = values[3];
     __pyx_v_return_pdf = values[4];
     __pyx_v_return_params = values[5];
+    __pyx_v_maxfev = values[6];
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("compute_sim_bio_mapping", 0, 2, 6, __pyx_nargs); __PYX_ERR(0, 8, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("compute_sim_bio_mapping", 0, 2, 7, __pyx_nargs); __PYX_ERR(0, 8, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -2883,7 +2906,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(__pyx_self, __pyx_v_vel_density, __pyx_v_time, __pyx_v_start_val, __pyx_v_end_val, __pyx_v_return_pdf, __pyx_v_return_params);
+  __pyx_r = __pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(__pyx_self, __pyx_v_vel_density, __pyx_v_time, __pyx_v_start_val, __pyx_v_end_val, __pyx_v_return_pdf, __pyx_v_return_params, __pyx_v_maxfev);
 
   /* "celltrip/utility/mapping.py":8
  * 
@@ -2904,7 +2927,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-/* "celltrip/utility/mapping.py":22
+/* "celltrip/utility/mapping.py":24
  * 
  *     # Gamma decay fit
  *     def gamma_dist(x, k, loc, xscale, yscale, cdf=False):             # <<<<<<<<<<<<<<
@@ -2981,7 +3004,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
           (void)__Pyx_Arg_NewRef_FASTCALL(values[0]);
           kw_args--;
         }
-        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 22, __pyx_L3_error)
+        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 24, __pyx_L3_error)
         else goto __pyx_L5_argtuple_error;
         CYTHON_FALLTHROUGH;
         case  1:
@@ -2989,9 +3012,9 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
           (void)__Pyx_Arg_NewRef_FASTCALL(values[1]);
           kw_args--;
         }
-        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 22, __pyx_L3_error)
+        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 24, __pyx_L3_error)
         else {
-          __Pyx_RaiseArgtupleInvalid("gamma_dist", 0, 5, 6, 1); __PYX_ERR(0, 22, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("gamma_dist", 0, 5, 6, 1); __PYX_ERR(0, 24, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  2:
@@ -2999,9 +3022,9 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
           (void)__Pyx_Arg_NewRef_FASTCALL(values[2]);
           kw_args--;
         }
-        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 22, __pyx_L3_error)
+        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 24, __pyx_L3_error)
         else {
-          __Pyx_RaiseArgtupleInvalid("gamma_dist", 0, 5, 6, 2); __PYX_ERR(0, 22, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("gamma_dist", 0, 5, 6, 2); __PYX_ERR(0, 24, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  3:
@@ -3009,9 +3032,9 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
           (void)__Pyx_Arg_NewRef_FASTCALL(values[3]);
           kw_args--;
         }
-        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 22, __pyx_L3_error)
+        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 24, __pyx_L3_error)
         else {
-          __Pyx_RaiseArgtupleInvalid("gamma_dist", 0, 5, 6, 3); __PYX_ERR(0, 22, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("gamma_dist", 0, 5, 6, 3); __PYX_ERR(0, 24, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  4:
@@ -3019,21 +3042,21 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
           (void)__Pyx_Arg_NewRef_FASTCALL(values[4]);
           kw_args--;
         }
-        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 22, __pyx_L3_error)
+        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 24, __pyx_L3_error)
         else {
-          __Pyx_RaiseArgtupleInvalid("gamma_dist", 0, 5, 6, 4); __PYX_ERR(0, 22, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("gamma_dist", 0, 5, 6, 4); __PYX_ERR(0, 24, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  5:
         if (kw_args > 0) {
           PyObject* value = __Pyx_GetKwValue_FASTCALL(__pyx_kwds, __pyx_kwvalues, __pyx_n_s_cdf);
           if (value) { values[5] = __Pyx_Arg_NewRef_FASTCALL(value); kw_args--; }
-          else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 22, __pyx_L3_error)
+          else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 24, __pyx_L3_error)
         }
       }
       if (unlikely(kw_args > 0)) {
         const Py_ssize_t kwd_pos_args = __pyx_nargs;
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values + 0, kwd_pos_args, "gamma_dist") < 0)) __PYX_ERR(0, 22, __pyx_L3_error)
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values + 0, kwd_pos_args, "gamma_dist") < 0)) __PYX_ERR(0, 24, __pyx_L3_error)
       }
     } else {
       switch (__pyx_nargs) {
@@ -3057,7 +3080,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("gamma_dist", 0, 5, 6, __pyx_nargs); __PYX_ERR(0, 22, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("gamma_dist", 0, 5, 6, __pyx_nargs); __PYX_ERR(0, 24, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -3097,38 +3120,38 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_23compute_sim_bio_mapping_
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("gamma_dist", 1);
 
-  /* "celltrip/utility/mapping.py":23
+  /* "celltrip/utility/mapping.py":25
  *     # Gamma decay fit
  *     def gamma_dist(x, k, loc, xscale, yscale, cdf=False):
  *         f = scipy.stats.gamma.cdf if cdf else scipy.stats.gamma.pdf             # <<<<<<<<<<<<<<
  *         return yscale * f(x / xscale, k, loc=loc)
  *     gamma_params, _ = scipy.optimize.curve_fit(
  */
-  __pyx_t_2 = __Pyx_PyObject_IsTrue(__pyx_v_cdf); if (unlikely((__pyx_t_2 < 0))) __PYX_ERR(0, 23, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_IsTrue(__pyx_v_cdf); if (unlikely((__pyx_t_2 < 0))) __PYX_ERR(0, 25, __pyx_L1_error)
   if (__pyx_t_2) {
-    __Pyx_GetModuleGlobalName(__pyx_t_3, __pyx_n_s_scipy); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 23, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_3, __pyx_n_s_scipy); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 25, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
-    __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_n_s_stats); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 23, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_n_s_stats); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 25, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-    __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_gamma); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 23, __pyx_L1_error)
+    __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_gamma); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 25, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_n_s_cdf); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 23, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_n_s_cdf); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 25, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
     __pyx_t_1 = __pyx_t_4;
     __pyx_t_4 = 0;
   } else {
-    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_scipy); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 23, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_scipy); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 25, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_stats); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 23, __pyx_L1_error)
+    __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_stats); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 25, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_n_s_gamma); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 23, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_n_s_gamma); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 25, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-    __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_pdf); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 23, __pyx_L1_error)
+    __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_pdf); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 25, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     __pyx_t_1 = __pyx_t_3;
@@ -3137,7 +3160,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_23compute_sim_bio_mapping_
   __pyx_v_f = __pyx_t_1;
   __pyx_t_1 = 0;
 
-  /* "celltrip/utility/mapping.py":24
+  /* "celltrip/utility/mapping.py":26
  *     def gamma_dist(x, k, loc, xscale, yscale, cdf=False):
  *         f = scipy.stats.gamma.cdf if cdf else scipy.stats.gamma.pdf
  *         return yscale * f(x / xscale, k, loc=loc)             # <<<<<<<<<<<<<<
@@ -3145,31 +3168,31 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_23compute_sim_bio_mapping_
  *         gamma_dist, time, vel_density, p0=[1, 0, 30, .1],
  */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __Pyx_PyNumber_Divide(__pyx_v_x, __pyx_v_xscale); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 24, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyNumber_Divide(__pyx_v_x, __pyx_v_xscale); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 26, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_3 = PyTuple_New(2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 24, __pyx_L1_error)
+  __pyx_t_3 = PyTuple_New(2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 26, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_GIVEREF(__pyx_t_1);
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_t_1)) __PYX_ERR(0, 24, __pyx_L1_error);
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_t_1)) __PYX_ERR(0, 26, __pyx_L1_error);
   __Pyx_INCREF(__pyx_v_k);
   __Pyx_GIVEREF(__pyx_v_k);
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_3, 1, __pyx_v_k)) __PYX_ERR(0, 24, __pyx_L1_error);
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_3, 1, __pyx_v_k)) __PYX_ERR(0, 26, __pyx_L1_error);
   __pyx_t_1 = 0;
-  __pyx_t_1 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 24, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 26, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  if (PyDict_SetItem(__pyx_t_1, __pyx_n_s_loc, __pyx_v_loc) < 0) __PYX_ERR(0, 24, __pyx_L1_error)
-  __pyx_t_4 = __Pyx_PyObject_Call(__pyx_v_f, __pyx_t_3, __pyx_t_1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 24, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_1, __pyx_n_s_loc, __pyx_v_loc) < 0) __PYX_ERR(0, 26, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyObject_Call(__pyx_v_f, __pyx_t_3, __pyx_t_1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 26, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  __pyx_t_1 = PyNumber_Multiply(__pyx_v_yscale, __pyx_t_4); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 24, __pyx_L1_error)
+  __pyx_t_1 = PyNumber_Multiply(__pyx_v_yscale, __pyx_t_4); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 26, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "celltrip/utility/mapping.py":22
+  /* "celltrip/utility/mapping.py":24
  * 
  *     # Gamma decay fit
  *     def gamma_dist(x, k, loc, xscale, yscale, cdf=False):             # <<<<<<<<<<<<<<
@@ -3191,7 +3214,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_23compute_sim_bio_mapping_
   return __pyx_r;
 }
 
-/* "celltrip/utility/mapping.py":30
+/* "celltrip/utility/mapping.py":33
  * 
  *     # Scaled CDF, omit yscale
  *     ret = (lambda x: (end_val - start_val) * gamma_dist(x, *gamma_params[:-1], 1, cdf=True) + start_val,)             # <<<<<<<<<<<<<<
@@ -3252,12 +3275,12 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
           (void)__Pyx_Arg_NewRef_FASTCALL(values[0]);
           kw_args--;
         }
-        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 30, __pyx_L3_error)
+        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 33, __pyx_L3_error)
         else goto __pyx_L5_argtuple_error;
       }
       if (unlikely(kw_args > 0)) {
         const Py_ssize_t kwd_pos_args = __pyx_nargs;
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values + 0, kwd_pos_args, "lambda") < 0)) __PYX_ERR(0, 30, __pyx_L3_error)
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values + 0, kwd_pos_args, "lambda") < 0)) __PYX_ERR(0, 33, __pyx_L3_error)
       }
     } else if (unlikely(__pyx_nargs != 1)) {
       goto __pyx_L5_argtuple_error;
@@ -3268,7 +3291,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("lambda", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 30, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("lambda", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 33, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -3311,42 +3334,42 @@ static PyObject *__pyx_lambda_funcdef_lambda(PyObject *__pyx_self, PyObject *__p
   __pyx_outer_scope = (struct __pyx_obj_8celltrip_7utility_7mapping___pyx_scope_struct__compute_sim_bio_mapping *) __Pyx_CyFunction_GetClosure(__pyx_self);
   __pyx_cur_scope = __pyx_outer_scope;
   __Pyx_XDECREF(__pyx_r);
-  if (unlikely(!__pyx_cur_scope->__pyx_v_end_val)) { __Pyx_RaiseClosureNameError("end_val"); __PYX_ERR(0, 30, __pyx_L1_error) }
-  if (unlikely(!__pyx_cur_scope->__pyx_v_start_val)) { __Pyx_RaiseClosureNameError("start_val"); __PYX_ERR(0, 30, __pyx_L1_error) }
-  __pyx_t_1 = PyNumber_Subtract(__pyx_cur_scope->__pyx_v_end_val, __pyx_cur_scope->__pyx_v_start_val); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 30, __pyx_L1_error)
+  if (unlikely(!__pyx_cur_scope->__pyx_v_end_val)) { __Pyx_RaiseClosureNameError("end_val"); __PYX_ERR(0, 33, __pyx_L1_error) }
+  if (unlikely(!__pyx_cur_scope->__pyx_v_start_val)) { __Pyx_RaiseClosureNameError("start_val"); __PYX_ERR(0, 33, __pyx_L1_error) }
+  __pyx_t_1 = PyNumber_Subtract(__pyx_cur_scope->__pyx_v_end_val, __pyx_cur_scope->__pyx_v_start_val); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  if (unlikely(!__pyx_cur_scope->__pyx_v_gamma_dist)) { __Pyx_RaiseClosureNameError("gamma_dist"); __PYX_ERR(0, 30, __pyx_L1_error) }
-  __pyx_t_2 = PyTuple_New(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 30, __pyx_L1_error)
+  if (unlikely(!__pyx_cur_scope->__pyx_v_gamma_dist)) { __Pyx_RaiseClosureNameError("gamma_dist"); __PYX_ERR(0, 33, __pyx_L1_error) }
+  __pyx_t_2 = PyTuple_New(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_INCREF(__pyx_v_x);
   __Pyx_GIVEREF(__pyx_v_x);
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_v_x)) __PYX_ERR(0, 30, __pyx_L1_error);
-  if (unlikely(!__pyx_cur_scope->__pyx_v_gamma_params)) { __Pyx_RaiseClosureNameError("gamma_params"); __PYX_ERR(0, 30, __pyx_L1_error) }
-  __pyx_t_3 = __Pyx_PyObject_GetSlice(__pyx_cur_scope->__pyx_v_gamma_params, 0, -1L, NULL, NULL, &__pyx_slice_, 0, 1, 1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 30, __pyx_L1_error)
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_v_x)) __PYX_ERR(0, 33, __pyx_L1_error);
+  if (unlikely(!__pyx_cur_scope->__pyx_v_gamma_params)) { __Pyx_RaiseClosureNameError("gamma_params"); __PYX_ERR(0, 33, __pyx_L1_error) }
+  __pyx_t_3 = __Pyx_PyObject_GetSlice(__pyx_cur_scope->__pyx_v_gamma_params, 0, -1L, NULL, NULL, &__pyx_slice_, 0, 1, 1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_4 = __Pyx_PySequence_Tuple(__pyx_t_3); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PySequence_Tuple(__pyx_t_3); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-  __pyx_t_3 = PyNumber_Add(__pyx_t_2, __pyx_t_4); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_3 = PyNumber_Add(__pyx_t_2, __pyx_t_4); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  __pyx_t_4 = PyNumber_Add(__pyx_t_3, __pyx_tuple__2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_4 = PyNumber_Add(__pyx_t_3, __pyx_tuple__2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-  __pyx_t_3 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  if (PyDict_SetItem(__pyx_t_3, __pyx_n_s_cdf, Py_True) < 0) __PYX_ERR(0, 30, __pyx_L1_error)
-  __pyx_t_2 = __Pyx_PyObject_Call(__pyx_cur_scope->__pyx_v_gamma_dist, __pyx_t_4, __pyx_t_3); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 30, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_3, __pyx_n_s_cdf, Py_True) < 0) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_Call(__pyx_cur_scope->__pyx_v_gamma_dist, __pyx_t_4, __pyx_t_3); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-  __pyx_t_3 = PyNumber_Multiply(__pyx_t_1, __pyx_t_2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_3 = PyNumber_Multiply(__pyx_t_1, __pyx_t_2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  if (unlikely(!__pyx_cur_scope->__pyx_v_start_val)) { __Pyx_RaiseClosureNameError("start_val"); __PYX_ERR(0, 30, __pyx_L1_error) }
-  __pyx_t_2 = PyNumber_Add(__pyx_t_3, __pyx_cur_scope->__pyx_v_start_val); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 30, __pyx_L1_error)
+  if (unlikely(!__pyx_cur_scope->__pyx_v_start_val)) { __Pyx_RaiseClosureNameError("start_val"); __PYX_ERR(0, 33, __pyx_L1_error) }
+  __pyx_t_2 = PyNumber_Add(__pyx_t_3, __pyx_cur_scope->__pyx_v_start_val); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   __pyx_r = __pyx_t_2;
@@ -3367,7 +3390,7 @@ static PyObject *__pyx_lambda_funcdef_lambda(PyObject *__pyx_self, PyObject *__p
   return __pyx_r;
 }
 
-/* "celltrip/utility/mapping.py":33
+/* "celltrip/utility/mapping.py":36
  *     # PDF
  *     if return_pdf:
  *         ret += (lambda x: gamma_dist(x, *gamma_params),)             # <<<<<<<<<<<<<<
@@ -3428,12 +3451,12 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
           (void)__Pyx_Arg_NewRef_FASTCALL(values[0]);
           kw_args--;
         }
-        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 33, __pyx_L3_error)
+        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 36, __pyx_L3_error)
         else goto __pyx_L5_argtuple_error;
       }
       if (unlikely(kw_args > 0)) {
         const Py_ssize_t kwd_pos_args = __pyx_nargs;
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values + 0, kwd_pos_args, "lambda1") < 0)) __PYX_ERR(0, 33, __pyx_L3_error)
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values + 0, kwd_pos_args, "lambda1") < 0)) __PYX_ERR(0, 36, __pyx_L3_error)
       }
     } else if (unlikely(__pyx_nargs != 1)) {
       goto __pyx_L5_argtuple_error;
@@ -3444,7 +3467,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("lambda1", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 33, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("lambda1", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 36, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -3486,20 +3509,20 @@ static PyObject *__pyx_lambda_funcdef_lambda1(PyObject *__pyx_self, PyObject *__
   __pyx_outer_scope = (struct __pyx_obj_8celltrip_7utility_7mapping___pyx_scope_struct__compute_sim_bio_mapping *) __Pyx_CyFunction_GetClosure(__pyx_self);
   __pyx_cur_scope = __pyx_outer_scope;
   __Pyx_XDECREF(__pyx_r);
-  if (unlikely(!__pyx_cur_scope->__pyx_v_gamma_dist)) { __Pyx_RaiseClosureNameError("gamma_dist"); __PYX_ERR(0, 33, __pyx_L1_error) }
-  __pyx_t_1 = PyTuple_New(1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 33, __pyx_L1_error)
+  if (unlikely(!__pyx_cur_scope->__pyx_v_gamma_dist)) { __Pyx_RaiseClosureNameError("gamma_dist"); __PYX_ERR(0, 36, __pyx_L1_error) }
+  __pyx_t_1 = PyTuple_New(1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_INCREF(__pyx_v_x);
   __Pyx_GIVEREF(__pyx_v_x);
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 0, __pyx_v_x)) __PYX_ERR(0, 33, __pyx_L1_error);
-  if (unlikely(!__pyx_cur_scope->__pyx_v_gamma_params)) { __Pyx_RaiseClosureNameError("gamma_params"); __PYX_ERR(0, 33, __pyx_L1_error) }
-  __pyx_t_2 = __Pyx_PySequence_Tuple(__pyx_cur_scope->__pyx_v_gamma_params); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 33, __pyx_L1_error)
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_1, 0, __pyx_v_x)) __PYX_ERR(0, 36, __pyx_L1_error);
+  if (unlikely(!__pyx_cur_scope->__pyx_v_gamma_params)) { __Pyx_RaiseClosureNameError("gamma_params"); __PYX_ERR(0, 36, __pyx_L1_error) }
+  __pyx_t_2 = __Pyx_PySequence_Tuple(__pyx_cur_scope->__pyx_v_gamma_params); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  __pyx_t_3 = PyNumber_Add(__pyx_t_1, __pyx_t_2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_t_3 = PyNumber_Add(__pyx_t_1, __pyx_t_2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  __pyx_t_2 = __Pyx_PyObject_Call(__pyx_cur_scope->__pyx_v_gamma_dist, __pyx_t_3, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_Call(__pyx_cur_scope->__pyx_v_gamma_dist, __pyx_t_3, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   __pyx_r = __pyx_t_2;
@@ -3527,7 +3550,7 @@ static PyObject *__pyx_lambda_funcdef_lambda1(PyObject *__pyx_self, PyObject *__
  *     time,
  */
 
-static PyObject *__pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_vel_density, PyObject *__pyx_v_time, PyObject *__pyx_v_start_val, PyObject *__pyx_v_end_val, PyObject *__pyx_v_return_pdf, PyObject *__pyx_v_return_params) {
+static PyObject *__pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_vel_density, PyObject *__pyx_v_time, PyObject *__pyx_v_start_val, PyObject *__pyx_v_end_val, PyObject *__pyx_v_return_pdf, PyObject *__pyx_v_return_params, PyObject *__pyx_v_maxfev) {
   struct __pyx_obj_8celltrip_7utility_7mapping___pyx_scope_struct__compute_sim_bio_mapping *__pyx_cur_scope;
   CYTHON_UNUSED PyObject *__pyx_v__ = NULL;
   PyObject *__pyx_v_ret = NULL;
@@ -3564,147 +3587,156 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(CY
   __Pyx_INCREF(__pyx_cur_scope->__pyx_v_end_val);
   __Pyx_GIVEREF(__pyx_cur_scope->__pyx_v_end_val);
 
-  /* "celltrip/utility/mapping.py":22
+  /* "celltrip/utility/mapping.py":24
  * 
  *     # Gamma decay fit
  *     def gamma_dist(x, k, loc, xscale, yscale, cdf=False):             # <<<<<<<<<<<<<<
  *         f = scipy.stats.gamma.cdf if cdf else scipy.stats.gamma.pdf
  *         return yscale * f(x / xscale, k, loc=loc)
  */
-  __pyx_t_1 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_7mapping_23compute_sim_bio_mapping_1gamma_dist, 0, __pyx_n_s_compute_sim_bio_mapping_locals_g, NULL, __pyx_n_s_celltrip_utility_mapping, __pyx_d, ((PyObject *)__pyx_codeobj__4)); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 22, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_7mapping_23compute_sim_bio_mapping_1gamma_dist, 0, __pyx_n_s_compute_sim_bio_mapping_locals_g, NULL, __pyx_n_s_celltrip_utility_mapping, __pyx_d, ((PyObject *)__pyx_codeobj__4)); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 24, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_CyFunction_SetDefaultsTuple(__pyx_t_1, __pyx_tuple__5);
   __Pyx_GIVEREF(__pyx_t_1);
   __pyx_cur_scope->__pyx_v_gamma_dist = __pyx_t_1;
   __pyx_t_1 = 0;
 
-  /* "celltrip/utility/mapping.py":25
+  /* "celltrip/utility/mapping.py":27
  *         f = scipy.stats.gamma.cdf if cdf else scipy.stats.gamma.pdf
  *         return yscale * f(x / xscale, k, loc=loc)
  *     gamma_params, _ = scipy.optimize.curve_fit(             # <<<<<<<<<<<<<<
  *         gamma_dist, time, vel_density, p0=[1, 0, 30, .1],
- *         bounds=([0, 0, 0, 0], [np.inf, np.inf, np.inf, np.inf]))
+ *         bounds=([0, 0, 0, 0], [np.inf, np.inf, np.inf, np.inf]),
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_n_s_scipy); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 25, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_n_s_scipy); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 27, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_optimize); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 25, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_optimize); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 27, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_curve_fit); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 25, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_curve_fit); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 27, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "celltrip/utility/mapping.py":26
+  /* "celltrip/utility/mapping.py":28
  *         return yscale * f(x / xscale, k, loc=loc)
  *     gamma_params, _ = scipy.optimize.curve_fit(
  *         gamma_dist, time, vel_density, p0=[1, 0, 30, .1],             # <<<<<<<<<<<<<<
- *         bounds=([0, 0, 0, 0], [np.inf, np.inf, np.inf, np.inf]))
- * 
+ *         bounds=([0, 0, 0, 0], [np.inf, np.inf, np.inf, np.inf]),
+ *         maxfev=maxfev)
  */
-  __pyx_t_2 = PyTuple_New(3); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 25, __pyx_L1_error)
+  __pyx_t_2 = PyTuple_New(3); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 27, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_INCREF(__pyx_cur_scope->__pyx_v_gamma_dist);
   __Pyx_GIVEREF(__pyx_cur_scope->__pyx_v_gamma_dist);
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_cur_scope->__pyx_v_gamma_dist)) __PYX_ERR(0, 25, __pyx_L1_error);
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_cur_scope->__pyx_v_gamma_dist)) __PYX_ERR(0, 27, __pyx_L1_error);
   __Pyx_INCREF(__pyx_v_time);
   __Pyx_GIVEREF(__pyx_v_time);
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 1, __pyx_v_time)) __PYX_ERR(0, 25, __pyx_L1_error);
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 1, __pyx_v_time)) __PYX_ERR(0, 27, __pyx_L1_error);
   __Pyx_INCREF(__pyx_v_vel_density);
   __Pyx_GIVEREF(__pyx_v_vel_density);
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 2, __pyx_v_vel_density)) __PYX_ERR(0, 25, __pyx_L1_error);
-  __pyx_t_3 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 26, __pyx_L1_error)
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 2, __pyx_v_vel_density)) __PYX_ERR(0, 27, __pyx_L1_error);
+  __pyx_t_3 = __Pyx_PyDict_NewPresized(3); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 28, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_4 = PyList_New(4); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 26, __pyx_L1_error)
+  __pyx_t_4 = PyList_New(4); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 28, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_INCREF(__pyx_int_1);
   __Pyx_GIVEREF(__pyx_int_1);
-  if (__Pyx_PyList_SET_ITEM(__pyx_t_4, 0, __pyx_int_1)) __PYX_ERR(0, 26, __pyx_L1_error);
+  if (__Pyx_PyList_SET_ITEM(__pyx_t_4, 0, __pyx_int_1)) __PYX_ERR(0, 28, __pyx_L1_error);
   __Pyx_INCREF(__pyx_int_0);
   __Pyx_GIVEREF(__pyx_int_0);
-  if (__Pyx_PyList_SET_ITEM(__pyx_t_4, 1, __pyx_int_0)) __PYX_ERR(0, 26, __pyx_L1_error);
+  if (__Pyx_PyList_SET_ITEM(__pyx_t_4, 1, __pyx_int_0)) __PYX_ERR(0, 28, __pyx_L1_error);
   __Pyx_INCREF(__pyx_int_30);
   __Pyx_GIVEREF(__pyx_int_30);
-  if (__Pyx_PyList_SET_ITEM(__pyx_t_4, 2, __pyx_int_30)) __PYX_ERR(0, 26, __pyx_L1_error);
+  if (__Pyx_PyList_SET_ITEM(__pyx_t_4, 2, __pyx_int_30)) __PYX_ERR(0, 28, __pyx_L1_error);
   __Pyx_INCREF(__pyx_float__1);
   __Pyx_GIVEREF(__pyx_float__1);
-  if (__Pyx_PyList_SET_ITEM(__pyx_t_4, 3, __pyx_float__1)) __PYX_ERR(0, 26, __pyx_L1_error);
-  if (PyDict_SetItem(__pyx_t_3, __pyx_n_s_p0, __pyx_t_4) < 0) __PYX_ERR(0, 26, __pyx_L1_error)
+  if (__Pyx_PyList_SET_ITEM(__pyx_t_4, 3, __pyx_float__1)) __PYX_ERR(0, 28, __pyx_L1_error);
+  if (PyDict_SetItem(__pyx_t_3, __pyx_n_s_p0, __pyx_t_4) < 0) __PYX_ERR(0, 28, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-  /* "celltrip/utility/mapping.py":27
+  /* "celltrip/utility/mapping.py":29
  *     gamma_params, _ = scipy.optimize.curve_fit(
  *         gamma_dist, time, vel_density, p0=[1, 0, 30, .1],
- *         bounds=([0, 0, 0, 0], [np.inf, np.inf, np.inf, np.inf]))             # <<<<<<<<<<<<<<
+ *         bounds=([0, 0, 0, 0], [np.inf, np.inf, np.inf, np.inf]),             # <<<<<<<<<<<<<<
+ *         maxfev=maxfev)
  * 
- *     # Scaled CDF, omit yscale
  */
-  __pyx_t_4 = PyList_New(4); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 27, __pyx_L1_error)
+  __pyx_t_4 = PyList_New(4); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 29, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_INCREF(__pyx_int_0);
   __Pyx_GIVEREF(__pyx_int_0);
-  if (__Pyx_PyList_SET_ITEM(__pyx_t_4, 0, __pyx_int_0)) __PYX_ERR(0, 27, __pyx_L1_error);
+  if (__Pyx_PyList_SET_ITEM(__pyx_t_4, 0, __pyx_int_0)) __PYX_ERR(0, 29, __pyx_L1_error);
   __Pyx_INCREF(__pyx_int_0);
   __Pyx_GIVEREF(__pyx_int_0);
-  if (__Pyx_PyList_SET_ITEM(__pyx_t_4, 1, __pyx_int_0)) __PYX_ERR(0, 27, __pyx_L1_error);
+  if (__Pyx_PyList_SET_ITEM(__pyx_t_4, 1, __pyx_int_0)) __PYX_ERR(0, 29, __pyx_L1_error);
   __Pyx_INCREF(__pyx_int_0);
   __Pyx_GIVEREF(__pyx_int_0);
-  if (__Pyx_PyList_SET_ITEM(__pyx_t_4, 2, __pyx_int_0)) __PYX_ERR(0, 27, __pyx_L1_error);
+  if (__Pyx_PyList_SET_ITEM(__pyx_t_4, 2, __pyx_int_0)) __PYX_ERR(0, 29, __pyx_L1_error);
   __Pyx_INCREF(__pyx_int_0);
   __Pyx_GIVEREF(__pyx_int_0);
-  if (__Pyx_PyList_SET_ITEM(__pyx_t_4, 3, __pyx_int_0)) __PYX_ERR(0, 27, __pyx_L1_error);
-  __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_np); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 27, __pyx_L1_error)
+  if (__Pyx_PyList_SET_ITEM(__pyx_t_4, 3, __pyx_int_0)) __PYX_ERR(0, 29, __pyx_L1_error);
+  __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_np); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 29, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
-  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_5, __pyx_n_s_inf); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 27, __pyx_L1_error)
+  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_5, __pyx_n_s_inf); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 29, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-  __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_np); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 27, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_np); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 29, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
-  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_5, __pyx_n_s_inf); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 27, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_5, __pyx_n_s_inf); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 29, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-  __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_np); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 27, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_np); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 29, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
-  __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_t_5, __pyx_n_s_inf); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 27, __pyx_L1_error)
+  __pyx_t_8 = __Pyx_PyObject_GetAttrStr(__pyx_t_5, __pyx_n_s_inf); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 29, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_8);
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-  __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_np); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 27, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_5, __pyx_n_s_np); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 29, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
-  __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_5, __pyx_n_s_inf); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 27, __pyx_L1_error)
+  __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_5, __pyx_n_s_inf); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 29, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_9);
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-  __pyx_t_5 = PyList_New(4); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 27, __pyx_L1_error)
+  __pyx_t_5 = PyList_New(4); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 29, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_GIVEREF(__pyx_t_6);
-  if (__Pyx_PyList_SET_ITEM(__pyx_t_5, 0, __pyx_t_6)) __PYX_ERR(0, 27, __pyx_L1_error);
+  if (__Pyx_PyList_SET_ITEM(__pyx_t_5, 0, __pyx_t_6)) __PYX_ERR(0, 29, __pyx_L1_error);
   __Pyx_GIVEREF(__pyx_t_7);
-  if (__Pyx_PyList_SET_ITEM(__pyx_t_5, 1, __pyx_t_7)) __PYX_ERR(0, 27, __pyx_L1_error);
+  if (__Pyx_PyList_SET_ITEM(__pyx_t_5, 1, __pyx_t_7)) __PYX_ERR(0, 29, __pyx_L1_error);
   __Pyx_GIVEREF(__pyx_t_8);
-  if (__Pyx_PyList_SET_ITEM(__pyx_t_5, 2, __pyx_t_8)) __PYX_ERR(0, 27, __pyx_L1_error);
+  if (__Pyx_PyList_SET_ITEM(__pyx_t_5, 2, __pyx_t_8)) __PYX_ERR(0, 29, __pyx_L1_error);
   __Pyx_GIVEREF(__pyx_t_9);
-  if (__Pyx_PyList_SET_ITEM(__pyx_t_5, 3, __pyx_t_9)) __PYX_ERR(0, 27, __pyx_L1_error);
+  if (__Pyx_PyList_SET_ITEM(__pyx_t_5, 3, __pyx_t_9)) __PYX_ERR(0, 29, __pyx_L1_error);
   __pyx_t_6 = 0;
   __pyx_t_7 = 0;
   __pyx_t_8 = 0;
   __pyx_t_9 = 0;
-  __pyx_t_9 = PyTuple_New(2); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 27, __pyx_L1_error)
+  __pyx_t_9 = PyTuple_New(2); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 29, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_9);
   __Pyx_GIVEREF(__pyx_t_4);
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_9, 0, __pyx_t_4)) __PYX_ERR(0, 27, __pyx_L1_error);
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_9, 0, __pyx_t_4)) __PYX_ERR(0, 29, __pyx_L1_error);
   __Pyx_GIVEREF(__pyx_t_5);
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_9, 1, __pyx_t_5)) __PYX_ERR(0, 27, __pyx_L1_error);
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_9, 1, __pyx_t_5)) __PYX_ERR(0, 29, __pyx_L1_error);
   __pyx_t_4 = 0;
   __pyx_t_5 = 0;
-  if (PyDict_SetItem(__pyx_t_3, __pyx_n_s_bounds, __pyx_t_9) < 0) __PYX_ERR(0, 26, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_3, __pyx_n_s_bounds, __pyx_t_9) < 0) __PYX_ERR(0, 28, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
 
-  /* "celltrip/utility/mapping.py":25
+  /* "celltrip/utility/mapping.py":30
+ *         gamma_dist, time, vel_density, p0=[1, 0, 30, .1],
+ *         bounds=([0, 0, 0, 0], [np.inf, np.inf, np.inf, np.inf]),
+ *         maxfev=maxfev)             # <<<<<<<<<<<<<<
+ * 
+ *     # Scaled CDF, omit yscale
+ */
+  if (PyDict_SetItem(__pyx_t_3, __pyx_n_s_maxfev, __pyx_v_maxfev) < 0) __PYX_ERR(0, 28, __pyx_L1_error)
+
+  /* "celltrip/utility/mapping.py":27
  *         f = scipy.stats.gamma.cdf if cdf else scipy.stats.gamma.pdf
  *         return yscale * f(x / xscale, k, loc=loc)
  *     gamma_params, _ = scipy.optimize.curve_fit(             # <<<<<<<<<<<<<<
  *         gamma_dist, time, vel_density, p0=[1, 0, 30, .1],
- *         bounds=([0, 0, 0, 0], [np.inf, np.inf, np.inf, np.inf]))
+ *         bounds=([0, 0, 0, 0], [np.inf, np.inf, np.inf, np.inf]),
  */
-  __pyx_t_9 = __Pyx_PyObject_Call(__pyx_t_1, __pyx_t_2, __pyx_t_3); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 25, __pyx_L1_error)
+  __pyx_t_9 = __Pyx_PyObject_Call(__pyx_t_1, __pyx_t_2, __pyx_t_3); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 27, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_9);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
@@ -3715,7 +3747,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(CY
     if (unlikely(size != 2)) {
       if (size > 2) __Pyx_RaiseTooManyValuesError(2);
       else if (size >= 0) __Pyx_RaiseNeedMoreValuesError(size);
-      __PYX_ERR(0, 25, __pyx_L1_error)
+      __PYX_ERR(0, 27, __pyx_L1_error)
     }
     #if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
     if (likely(PyTuple_CheckExact(sequence))) {
@@ -3728,15 +3760,15 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(CY
     __Pyx_INCREF(__pyx_t_3);
     __Pyx_INCREF(__pyx_t_2);
     #else
-    __pyx_t_3 = PySequence_ITEM(sequence, 0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 25, __pyx_L1_error)
+    __pyx_t_3 = PySequence_ITEM(sequence, 0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 27, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
-    __pyx_t_2 = PySequence_ITEM(sequence, 1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 25, __pyx_L1_error)
+    __pyx_t_2 = PySequence_ITEM(sequence, 1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 27, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     #endif
     __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
   } else {
     Py_ssize_t index = -1;
-    __pyx_t_1 = PyObject_GetIter(__pyx_t_9); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 25, __pyx_L1_error)
+    __pyx_t_1 = PyObject_GetIter(__pyx_t_9); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 27, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
     __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
     __pyx_t_10 = __Pyx_PyObject_GetIterNextFunc(__pyx_t_1);
@@ -3744,7 +3776,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(CY
     __Pyx_GOTREF(__pyx_t_3);
     index = 1; __pyx_t_2 = __pyx_t_10(__pyx_t_1); if (unlikely(!__pyx_t_2)) goto __pyx_L3_unpacking_failed;
     __Pyx_GOTREF(__pyx_t_2);
-    if (__Pyx_IternextUnpackEndCheck(__pyx_t_10(__pyx_t_1), 2) < 0) __PYX_ERR(0, 25, __pyx_L1_error)
+    if (__Pyx_IternextUnpackEndCheck(__pyx_t_10(__pyx_t_1), 2) < 0) __PYX_ERR(0, 27, __pyx_L1_error)
     __pyx_t_10 = NULL;
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
     goto __pyx_L4_unpacking_done;
@@ -3752,7 +3784,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(CY
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
     __pyx_t_10 = NULL;
     if (__Pyx_IterFinish() == 0) __Pyx_RaiseNeedMoreValuesError(index);
-    __PYX_ERR(0, 25, __pyx_L1_error)
+    __PYX_ERR(0, 27, __pyx_L1_error)
     __pyx_L4_unpacking_done:;
   }
   __Pyx_GIVEREF(__pyx_t_3);
@@ -3761,54 +3793,54 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(CY
   __pyx_v__ = __pyx_t_2;
   __pyx_t_2 = 0;
 
-  /* "celltrip/utility/mapping.py":30
+  /* "celltrip/utility/mapping.py":33
  * 
  *     # Scaled CDF, omit yscale
  *     ret = (lambda x: (end_val - start_val) * gamma_dist(x, *gamma_params[:-1], 1, cdf=True) + start_val,)             # <<<<<<<<<<<<<<
  *     # PDF
  *     if return_pdf:
  */
-  __pyx_t_9 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_7mapping_23compute_sim_bio_mapping_2lambda, 0, __pyx_n_s_compute_sim_bio_mapping_locals_l, ((PyObject*)__pyx_cur_scope), __pyx_n_s_celltrip_utility_mapping, __pyx_d, NULL); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_9 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_7mapping_23compute_sim_bio_mapping_2lambda, 0, __pyx_n_s_compute_sim_bio_mapping_locals_l, ((PyObject*)__pyx_cur_scope), __pyx_n_s_celltrip_utility_mapping, __pyx_d, NULL); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_9);
-  __pyx_t_2 = PyTuple_New(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_2 = PyTuple_New(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_GIVEREF(__pyx_t_9);
-  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_t_9)) __PYX_ERR(0, 30, __pyx_L1_error);
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_t_9)) __PYX_ERR(0, 33, __pyx_L1_error);
   __pyx_t_9 = 0;
   __pyx_v_ret = ((PyObject*)__pyx_t_2);
   __pyx_t_2 = 0;
 
-  /* "celltrip/utility/mapping.py":32
+  /* "celltrip/utility/mapping.py":35
  *     ret = (lambda x: (end_val - start_val) * gamma_dist(x, *gamma_params[:-1], 1, cdf=True) + start_val,)
  *     # PDF
  *     if return_pdf:             # <<<<<<<<<<<<<<
  *         ret += (lambda x: gamma_dist(x, *gamma_params),)
  *     # Params
  */
-  __pyx_t_11 = __Pyx_PyObject_IsTrue(__pyx_v_return_pdf); if (unlikely((__pyx_t_11 < 0))) __PYX_ERR(0, 32, __pyx_L1_error)
+  __pyx_t_11 = __Pyx_PyObject_IsTrue(__pyx_v_return_pdf); if (unlikely((__pyx_t_11 < 0))) __PYX_ERR(0, 35, __pyx_L1_error)
   if (__pyx_t_11) {
 
-    /* "celltrip/utility/mapping.py":33
+    /* "celltrip/utility/mapping.py":36
  *     # PDF
  *     if return_pdf:
  *         ret += (lambda x: gamma_dist(x, *gamma_params),)             # <<<<<<<<<<<<<<
  *     # Params
  *     if return_params:
  */
-    __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_7mapping_23compute_sim_bio_mapping_3lambda1, 0, __pyx_n_s_compute_sim_bio_mapping_locals_l, ((PyObject*)__pyx_cur_scope), __pyx_n_s_celltrip_utility_mapping, __pyx_d, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 33, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_7mapping_23compute_sim_bio_mapping_3lambda1, 0, __pyx_n_s_compute_sim_bio_mapping_locals_l, ((PyObject*)__pyx_cur_scope), __pyx_n_s_celltrip_utility_mapping, __pyx_d, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 36, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_9 = PyTuple_New(1); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 33, __pyx_L1_error)
+    __pyx_t_9 = PyTuple_New(1); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 36, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_GIVEREF(__pyx_t_2);
-    if (__Pyx_PyTuple_SET_ITEM(__pyx_t_9, 0, __pyx_t_2)) __PYX_ERR(0, 33, __pyx_L1_error);
+    if (__Pyx_PyTuple_SET_ITEM(__pyx_t_9, 0, __pyx_t_2)) __PYX_ERR(0, 36, __pyx_L1_error);
     __pyx_t_2 = 0;
-    __pyx_t_2 = PyNumber_InPlaceAdd(__pyx_v_ret, __pyx_t_9); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 33, __pyx_L1_error)
+    __pyx_t_2 = PyNumber_InPlaceAdd(__pyx_v_ret, __pyx_t_9); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 36, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
     __Pyx_DECREF_SET(__pyx_v_ret, ((PyObject*)__pyx_t_2));
     __pyx_t_2 = 0;
 
-    /* "celltrip/utility/mapping.py":32
+    /* "celltrip/utility/mapping.py":35
  *     ret = (lambda x: (end_val - start_val) * gamma_dist(x, *gamma_params[:-1], 1, cdf=True) + start_val,)
  *     # PDF
  *     if return_pdf:             # <<<<<<<<<<<<<<
@@ -3817,35 +3849,35 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(CY
  */
   }
 
-  /* "celltrip/utility/mapping.py":35
+  /* "celltrip/utility/mapping.py":38
  *         ret += (lambda x: gamma_dist(x, *gamma_params),)
  *     # Params
  *     if return_params:             # <<<<<<<<<<<<<<
  *         ret += (gamma_params,)
  * 
  */
-  __pyx_t_11 = __Pyx_PyObject_IsTrue(__pyx_v_return_params); if (unlikely((__pyx_t_11 < 0))) __PYX_ERR(0, 35, __pyx_L1_error)
+  __pyx_t_11 = __Pyx_PyObject_IsTrue(__pyx_v_return_params); if (unlikely((__pyx_t_11 < 0))) __PYX_ERR(0, 38, __pyx_L1_error)
   if (__pyx_t_11) {
 
-    /* "celltrip/utility/mapping.py":36
+    /* "celltrip/utility/mapping.py":39
  *     # Params
  *     if return_params:
  *         ret += (gamma_params,)             # <<<<<<<<<<<<<<
  * 
  *     return _general.clean_return(ret)
  */
-    __pyx_t_2 = PyTuple_New(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 36, __pyx_L1_error)
+    __pyx_t_2 = PyTuple_New(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 39, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_INCREF(__pyx_cur_scope->__pyx_v_gamma_params);
     __Pyx_GIVEREF(__pyx_cur_scope->__pyx_v_gamma_params);
-    if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_cur_scope->__pyx_v_gamma_params)) __PYX_ERR(0, 36, __pyx_L1_error);
-    __pyx_t_9 = PyNumber_InPlaceAdd(__pyx_v_ret, __pyx_t_2); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 36, __pyx_L1_error)
+    if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_cur_scope->__pyx_v_gamma_params)) __PYX_ERR(0, 39, __pyx_L1_error);
+    __pyx_t_9 = PyNumber_InPlaceAdd(__pyx_v_ret, __pyx_t_2); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 39, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __Pyx_DECREF_SET(__pyx_v_ret, ((PyObject*)__pyx_t_9));
     __pyx_t_9 = 0;
 
-    /* "celltrip/utility/mapping.py":35
+    /* "celltrip/utility/mapping.py":38
  *         ret += (lambda x: gamma_dist(x, *gamma_params),)
  *     # Params
  *     if return_params:             # <<<<<<<<<<<<<<
@@ -3854,7 +3886,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(CY
  */
   }
 
-  /* "celltrip/utility/mapping.py":38
+  /* "celltrip/utility/mapping.py":41
  *         ret += (gamma_params,)
  * 
  *     return _general.clean_return(ret)             # <<<<<<<<<<<<<<
@@ -3862,9 +3894,9 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(CY
  *     # Log normal fit
  */
   __Pyx_XDECREF(__pyx_r);
-  __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_general); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 38, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_general); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 41, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_clean_return); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 38, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_clean_return); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 41, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
   __pyx_t_2 = NULL;
@@ -3885,7 +3917,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(CY
     PyObject *__pyx_callargs[2] = {__pyx_t_2, __pyx_v_ret};
     __pyx_t_9 = __Pyx_PyObject_FastCall(__pyx_t_3, __pyx_callargs+1-__pyx_t_12, 1+__pyx_t_12);
     __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
-    if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 38, __pyx_L1_error)
+    if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 41, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   }
@@ -3923,7 +3955,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_compute_sim_bio_mapping(CY
   return __pyx_r;
 }
 
-/* "celltrip/utility/mapping.py":53
+/* "celltrip/utility/mapping.py":56
  * 
  * 
  * def find_target_bio_time(map_func, target_time, max_iter=1000, tol=1e-5):             # <<<<<<<<<<<<<<
@@ -3996,7 +4028,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
           (void)__Pyx_Arg_NewRef_FASTCALL(values[0]);
           kw_args--;
         }
-        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 53, __pyx_L3_error)
+        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 56, __pyx_L3_error)
         else goto __pyx_L5_argtuple_error;
         CYTHON_FALLTHROUGH;
         case  1:
@@ -4004,28 +4036,28 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
           (void)__Pyx_Arg_NewRef_FASTCALL(values[1]);
           kw_args--;
         }
-        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 53, __pyx_L3_error)
+        else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 56, __pyx_L3_error)
         else {
-          __Pyx_RaiseArgtupleInvalid("find_target_bio_time", 0, 2, 4, 1); __PYX_ERR(0, 53, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("find_target_bio_time", 0, 2, 4, 1); __PYX_ERR(0, 56, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  2:
         if (kw_args > 0) {
           PyObject* value = __Pyx_GetKwValue_FASTCALL(__pyx_kwds, __pyx_kwvalues, __pyx_n_s_max_iter);
           if (value) { values[2] = __Pyx_Arg_NewRef_FASTCALL(value); kw_args--; }
-          else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 53, __pyx_L3_error)
+          else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 56, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  3:
         if (kw_args > 0) {
           PyObject* value = __Pyx_GetKwValue_FASTCALL(__pyx_kwds, __pyx_kwvalues, __pyx_n_s_tol);
           if (value) { values[3] = __Pyx_Arg_NewRef_FASTCALL(value); kw_args--; }
-          else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 53, __pyx_L3_error)
+          else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 56, __pyx_L3_error)
         }
       }
       if (unlikely(kw_args > 0)) {
         const Py_ssize_t kwd_pos_args = __pyx_nargs;
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values + 0, kwd_pos_args, "find_target_bio_time") < 0)) __PYX_ERR(0, 53, __pyx_L3_error)
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values + 0, kwd_pos_args, "find_target_bio_time") < 0)) __PYX_ERR(0, 56, __pyx_L3_error)
       }
     } else {
       switch (__pyx_nargs) {
@@ -4046,7 +4078,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("find_target_bio_time", 0, 2, 4, __pyx_nargs); __PYX_ERR(0, 53, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("find_target_bio_time", 0, 2, 4, __pyx_nargs); __PYX_ERR(0, 56, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -4094,7 +4126,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("find_target_bio_time", 1);
 
-  /* "celltrip/utility/mapping.py":56
+  /* "celltrip/utility/mapping.py":59
  *     "Find simulation time corresponding to a target biological time"
  *     # Use exponential search to find an upper bound
  *     low, high = 0, 1             # <<<<<<<<<<<<<<
@@ -4110,23 +4142,23 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
   __pyx_v_high = __pyx_t_2;
   __pyx_t_2 = 0;
 
-  /* "celltrip/utility/mapping.py":57
+  /* "celltrip/utility/mapping.py":60
  *     # Use exponential search to find an upper bound
  *     low, high = 0, 1
  *     for _ in range(max_iter):             # <<<<<<<<<<<<<<
  *         if map_func(high) >= target_time: break
  *         low, high = high, high * 2
  */
-  __pyx_t_2 = __Pyx_PyObject_CallOneArg(__pyx_builtin_range, __pyx_v_max_iter); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 57, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_CallOneArg(__pyx_builtin_range, __pyx_v_max_iter); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 60, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   if (likely(PyList_CheckExact(__pyx_t_2)) || PyTuple_CheckExact(__pyx_t_2)) {
     __pyx_t_1 = __pyx_t_2; __Pyx_INCREF(__pyx_t_1);
     __pyx_t_3 = 0;
     __pyx_t_4 = NULL;
   } else {
-    __pyx_t_3 = -1; __pyx_t_1 = PyObject_GetIter(__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 57, __pyx_L1_error)
+    __pyx_t_3 = -1; __pyx_t_1 = PyObject_GetIter(__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 60, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
-    __pyx_t_4 = __Pyx_PyObject_GetIterNextFunc(__pyx_t_1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 57, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyObject_GetIterNextFunc(__pyx_t_1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 60, __pyx_L1_error)
   }
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
   for (;;) {
@@ -4135,28 +4167,28 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
         {
           Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_t_1);
           #if !CYTHON_ASSUME_SAFE_MACROS
-          if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 57, __pyx_L1_error)
+          if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 60, __pyx_L1_error)
           #endif
           if (__pyx_t_3 >= __pyx_temp) break;
         }
         #if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
-        __pyx_t_2 = PyList_GET_ITEM(__pyx_t_1, __pyx_t_3); __Pyx_INCREF(__pyx_t_2); __pyx_t_3++; if (unlikely((0 < 0))) __PYX_ERR(0, 57, __pyx_L1_error)
+        __pyx_t_2 = PyList_GET_ITEM(__pyx_t_1, __pyx_t_3); __Pyx_INCREF(__pyx_t_2); __pyx_t_3++; if (unlikely((0 < 0))) __PYX_ERR(0, 60, __pyx_L1_error)
         #else
-        __pyx_t_2 = __Pyx_PySequence_ITEM(__pyx_t_1, __pyx_t_3); __pyx_t_3++; if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 57, __pyx_L1_error)
+        __pyx_t_2 = __Pyx_PySequence_ITEM(__pyx_t_1, __pyx_t_3); __pyx_t_3++; if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 60, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_2);
         #endif
       } else {
         {
           Py_ssize_t __pyx_temp = __Pyx_PyTuple_GET_SIZE(__pyx_t_1);
           #if !CYTHON_ASSUME_SAFE_MACROS
-          if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 57, __pyx_L1_error)
+          if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 60, __pyx_L1_error)
           #endif
           if (__pyx_t_3 >= __pyx_temp) break;
         }
         #if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
-        __pyx_t_2 = PyTuple_GET_ITEM(__pyx_t_1, __pyx_t_3); __Pyx_INCREF(__pyx_t_2); __pyx_t_3++; if (unlikely((0 < 0))) __PYX_ERR(0, 57, __pyx_L1_error)
+        __pyx_t_2 = PyTuple_GET_ITEM(__pyx_t_1, __pyx_t_3); __Pyx_INCREF(__pyx_t_2); __pyx_t_3++; if (unlikely((0 < 0))) __PYX_ERR(0, 60, __pyx_L1_error)
         #else
-        __pyx_t_2 = __Pyx_PySequence_ITEM(__pyx_t_1, __pyx_t_3); __pyx_t_3++; if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 57, __pyx_L1_error)
+        __pyx_t_2 = __Pyx_PySequence_ITEM(__pyx_t_1, __pyx_t_3); __pyx_t_3++; if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 60, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_2);
         #endif
       }
@@ -4166,7 +4198,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
         PyObject* exc_type = PyErr_Occurred();
         if (exc_type) {
           if (likely(__Pyx_PyErr_GivenExceptionMatches(exc_type, PyExc_StopIteration))) PyErr_Clear();
-          else __PYX_ERR(0, 57, __pyx_L1_error)
+          else __PYX_ERR(0, 60, __pyx_L1_error)
         }
         break;
       }
@@ -4175,7 +4207,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
     __Pyx_XDECREF_SET(__pyx_v__, __pyx_t_2);
     __pyx_t_2 = 0;
 
-    /* "celltrip/utility/mapping.py":58
+    /* "celltrip/utility/mapping.py":61
  *     low, high = 0, 1
  *     for _ in range(max_iter):
  *         if map_func(high) >= target_time: break             # <<<<<<<<<<<<<<
@@ -4201,19 +4233,19 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
       PyObject *__pyx_callargs[2] = {__pyx_t_6, __pyx_v_high};
       __pyx_t_2 = __Pyx_PyObject_FastCall(__pyx_t_5, __pyx_callargs+1-__pyx_t_7, 1+__pyx_t_7);
       __Pyx_XDECREF(__pyx_t_6); __pyx_t_6 = 0;
-      if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 58, __pyx_L1_error)
+      if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 61, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_2);
       __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
     }
-    __pyx_t_5 = PyObject_RichCompare(__pyx_t_2, __pyx_v_target_time, Py_GE); __Pyx_XGOTREF(__pyx_t_5); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 58, __pyx_L1_error)
+    __pyx_t_5 = PyObject_RichCompare(__pyx_t_2, __pyx_v_target_time, Py_GE); __Pyx_XGOTREF(__pyx_t_5); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 61, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    __pyx_t_8 = __Pyx_PyObject_IsTrue(__pyx_t_5); if (unlikely((__pyx_t_8 < 0))) __PYX_ERR(0, 58, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyObject_IsTrue(__pyx_t_5); if (unlikely((__pyx_t_8 < 0))) __PYX_ERR(0, 61, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
     if (__pyx_t_8) {
       goto __pyx_L4_break;
     }
 
-    /* "celltrip/utility/mapping.py":59
+    /* "celltrip/utility/mapping.py":62
  *     for _ in range(max_iter):
  *         if map_func(high) >= target_time: break
  *         low, high = high, high * 2             # <<<<<<<<<<<<<<
@@ -4222,14 +4254,14 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
  */
     __pyx_t_5 = __pyx_v_high;
     __Pyx_INCREF(__pyx_t_5);
-    __pyx_t_2 = __Pyx_PyInt_MultiplyObjC(__pyx_v_high, __pyx_int_2, 2, 0, 0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 59, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyInt_MultiplyObjC(__pyx_v_high, __pyx_int_2, 2, 0, 0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 62, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_DECREF_SET(__pyx_v_low, __pyx_t_5);
     __pyx_t_5 = 0;
     __Pyx_DECREF_SET(__pyx_v_high, __pyx_t_2);
     __pyx_t_2 = 0;
 
-    /* "celltrip/utility/mapping.py":57
+    /* "celltrip/utility/mapping.py":60
  *     # Use exponential search to find an upper bound
  *     low, high = 0, 1
  *     for _ in range(max_iter):             # <<<<<<<<<<<<<<
@@ -4244,23 +4276,23 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
   goto __pyx_L6_for_end;
   __pyx_L6_for_end:;
 
-  /* "celltrip/utility/mapping.py":62
+  /* "celltrip/utility/mapping.py":65
  * 
  *     # Use binary search on interval
  *     for _ in range(max_iter):             # <<<<<<<<<<<<<<
  *         mid = (low + high) / 2
  *         if abs(map_func(mid) - target_time) < tol or low >= high:
  */
-  __pyx_t_1 = __Pyx_PyObject_CallOneArg(__pyx_builtin_range, __pyx_v_max_iter); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 62, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_CallOneArg(__pyx_builtin_range, __pyx_v_max_iter); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 65, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   if (likely(PyList_CheckExact(__pyx_t_1)) || PyTuple_CheckExact(__pyx_t_1)) {
     __pyx_t_2 = __pyx_t_1; __Pyx_INCREF(__pyx_t_2);
     __pyx_t_3 = 0;
     __pyx_t_4 = NULL;
   } else {
-    __pyx_t_3 = -1; __pyx_t_2 = PyObject_GetIter(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 62, __pyx_L1_error)
+    __pyx_t_3 = -1; __pyx_t_2 = PyObject_GetIter(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 65, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_4 = __Pyx_PyObject_GetIterNextFunc(__pyx_t_2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 62, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyObject_GetIterNextFunc(__pyx_t_2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 65, __pyx_L1_error)
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   for (;;) {
@@ -4269,28 +4301,28 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
         {
           Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_t_2);
           #if !CYTHON_ASSUME_SAFE_MACROS
-          if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 62, __pyx_L1_error)
+          if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 65, __pyx_L1_error)
           #endif
           if (__pyx_t_3 >= __pyx_temp) break;
         }
         #if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
-        __pyx_t_1 = PyList_GET_ITEM(__pyx_t_2, __pyx_t_3); __Pyx_INCREF(__pyx_t_1); __pyx_t_3++; if (unlikely((0 < 0))) __PYX_ERR(0, 62, __pyx_L1_error)
+        __pyx_t_1 = PyList_GET_ITEM(__pyx_t_2, __pyx_t_3); __Pyx_INCREF(__pyx_t_1); __pyx_t_3++; if (unlikely((0 < 0))) __PYX_ERR(0, 65, __pyx_L1_error)
         #else
-        __pyx_t_1 = __Pyx_PySequence_ITEM(__pyx_t_2, __pyx_t_3); __pyx_t_3++; if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 62, __pyx_L1_error)
+        __pyx_t_1 = __Pyx_PySequence_ITEM(__pyx_t_2, __pyx_t_3); __pyx_t_3++; if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 65, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_1);
         #endif
       } else {
         {
           Py_ssize_t __pyx_temp = __Pyx_PyTuple_GET_SIZE(__pyx_t_2);
           #if !CYTHON_ASSUME_SAFE_MACROS
-          if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 62, __pyx_L1_error)
+          if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 65, __pyx_L1_error)
           #endif
           if (__pyx_t_3 >= __pyx_temp) break;
         }
         #if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
-        __pyx_t_1 = PyTuple_GET_ITEM(__pyx_t_2, __pyx_t_3); __Pyx_INCREF(__pyx_t_1); __pyx_t_3++; if (unlikely((0 < 0))) __PYX_ERR(0, 62, __pyx_L1_error)
+        __pyx_t_1 = PyTuple_GET_ITEM(__pyx_t_2, __pyx_t_3); __Pyx_INCREF(__pyx_t_1); __pyx_t_3++; if (unlikely((0 < 0))) __PYX_ERR(0, 65, __pyx_L1_error)
         #else
-        __pyx_t_1 = __Pyx_PySequence_ITEM(__pyx_t_2, __pyx_t_3); __pyx_t_3++; if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 62, __pyx_L1_error)
+        __pyx_t_1 = __Pyx_PySequence_ITEM(__pyx_t_2, __pyx_t_3); __pyx_t_3++; if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 65, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_1);
         #endif
       }
@@ -4300,7 +4332,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
         PyObject* exc_type = PyErr_Occurred();
         if (exc_type) {
           if (likely(__Pyx_PyErr_GivenExceptionMatches(exc_type, PyExc_StopIteration))) PyErr_Clear();
-          else __PYX_ERR(0, 62, __pyx_L1_error)
+          else __PYX_ERR(0, 65, __pyx_L1_error)
         }
         break;
       }
@@ -4309,22 +4341,22 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
     __Pyx_XDECREF_SET(__pyx_v__, __pyx_t_1);
     __pyx_t_1 = 0;
 
-    /* "celltrip/utility/mapping.py":63
+    /* "celltrip/utility/mapping.py":66
  *     # Use binary search on interval
  *     for _ in range(max_iter):
  *         mid = (low + high) / 2             # <<<<<<<<<<<<<<
  *         if abs(map_func(mid) - target_time) < tol or low >= high:
  *             return mid
  */
-    __pyx_t_1 = PyNumber_Add(__pyx_v_low, __pyx_v_high); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 63, __pyx_L1_error)
+    __pyx_t_1 = PyNumber_Add(__pyx_v_low, __pyx_v_high); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 66, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
-    __pyx_t_5 = __Pyx_PyInt_TrueDivideObjC(__pyx_t_1, __pyx_int_2, 2, 0, 0); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 63, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyInt_TrueDivideObjC(__pyx_t_1, __pyx_int_2, 2, 0, 0); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 66, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
     __Pyx_XDECREF_SET(__pyx_v_mid, __pyx_t_5);
     __pyx_t_5 = 0;
 
-    /* "celltrip/utility/mapping.py":64
+    /* "celltrip/utility/mapping.py":67
  *     for _ in range(max_iter):
  *         mid = (low + high) / 2
  *         if abs(map_func(mid) - target_time) < tol or low >= high:             # <<<<<<<<<<<<<<
@@ -4350,33 +4382,33 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
       PyObject *__pyx_callargs[2] = {__pyx_t_6, __pyx_v_mid};
       __pyx_t_5 = __Pyx_PyObject_FastCall(__pyx_t_1, __pyx_callargs+1-__pyx_t_7, 1+__pyx_t_7);
       __Pyx_XDECREF(__pyx_t_6); __pyx_t_6 = 0;
-      if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 64, __pyx_L1_error)
+      if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 67, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_5);
       __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
     }
-    __pyx_t_1 = PyNumber_Subtract(__pyx_t_5, __pyx_v_target_time); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 64, __pyx_L1_error)
+    __pyx_t_1 = PyNumber_Subtract(__pyx_t_5, __pyx_v_target_time); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 67, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-    __pyx_t_5 = __Pyx_PyNumber_Absolute(__pyx_t_1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 64, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyNumber_Absolute(__pyx_t_1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 67, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-    __pyx_t_1 = PyObject_RichCompare(__pyx_t_5, __pyx_v_tol, Py_LT); __Pyx_XGOTREF(__pyx_t_1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 64, __pyx_L1_error)
+    __pyx_t_1 = PyObject_RichCompare(__pyx_t_5, __pyx_v_tol, Py_LT); __Pyx_XGOTREF(__pyx_t_1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 67, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-    __pyx_t_9 = __Pyx_PyObject_IsTrue(__pyx_t_1); if (unlikely((__pyx_t_9 < 0))) __PYX_ERR(0, 64, __pyx_L1_error)
+    __pyx_t_9 = __Pyx_PyObject_IsTrue(__pyx_t_1); if (unlikely((__pyx_t_9 < 0))) __PYX_ERR(0, 67, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
     if (!__pyx_t_9) {
     } else {
       __pyx_t_8 = __pyx_t_9;
       goto __pyx_L10_bool_binop_done;
     }
-    __pyx_t_1 = PyObject_RichCompare(__pyx_v_low, __pyx_v_high, Py_GE); __Pyx_XGOTREF(__pyx_t_1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 64, __pyx_L1_error)
-    __pyx_t_9 = __Pyx_PyObject_IsTrue(__pyx_t_1); if (unlikely((__pyx_t_9 < 0))) __PYX_ERR(0, 64, __pyx_L1_error)
+    __pyx_t_1 = PyObject_RichCompare(__pyx_v_low, __pyx_v_high, Py_GE); __Pyx_XGOTREF(__pyx_t_1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 67, __pyx_L1_error)
+    __pyx_t_9 = __Pyx_PyObject_IsTrue(__pyx_t_1); if (unlikely((__pyx_t_9 < 0))) __PYX_ERR(0, 67, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
     __pyx_t_8 = __pyx_t_9;
     __pyx_L10_bool_binop_done:;
     if (__pyx_t_8) {
 
-      /* "celltrip/utility/mapping.py":65
+      /* "celltrip/utility/mapping.py":68
  *         mid = (low + high) / 2
  *         if abs(map_func(mid) - target_time) < tol or low >= high:
  *             return mid             # <<<<<<<<<<<<<<
@@ -4389,7 +4421,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       goto __pyx_L0;
 
-      /* "celltrip/utility/mapping.py":64
+      /* "celltrip/utility/mapping.py":67
  *     for _ in range(max_iter):
  *         mid = (low + high) / 2
  *         if abs(map_func(mid) - target_time) < tol or low >= high:             # <<<<<<<<<<<<<<
@@ -4398,7 +4430,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
  */
     }
 
-    /* "celltrip/utility/mapping.py":66
+    /* "celltrip/utility/mapping.py":69
  *         if abs(map_func(mid) - target_time) < tol or low >= high:
  *             return mid
  *         if map_func(mid) < target_time:             # <<<<<<<<<<<<<<
@@ -4424,17 +4456,17 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
       PyObject *__pyx_callargs[2] = {__pyx_t_6, __pyx_v_mid};
       __pyx_t_1 = __Pyx_PyObject_FastCall(__pyx_t_5, __pyx_callargs+1-__pyx_t_7, 1+__pyx_t_7);
       __Pyx_XDECREF(__pyx_t_6); __pyx_t_6 = 0;
-      if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 66, __pyx_L1_error)
+      if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 69, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
       __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
     }
-    __pyx_t_5 = PyObject_RichCompare(__pyx_t_1, __pyx_v_target_time, Py_LT); __Pyx_XGOTREF(__pyx_t_5); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 66, __pyx_L1_error)
+    __pyx_t_5 = PyObject_RichCompare(__pyx_t_1, __pyx_v_target_time, Py_LT); __Pyx_XGOTREF(__pyx_t_5); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 69, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-    __pyx_t_8 = __Pyx_PyObject_IsTrue(__pyx_t_5); if (unlikely((__pyx_t_8 < 0))) __PYX_ERR(0, 66, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyObject_IsTrue(__pyx_t_5); if (unlikely((__pyx_t_8 < 0))) __PYX_ERR(0, 69, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
     if (__pyx_t_8) {
 
-      /* "celltrip/utility/mapping.py":67
+      /* "celltrip/utility/mapping.py":70
  *             return mid
  *         if map_func(mid) < target_time:
  *             low = mid             # <<<<<<<<<<<<<<
@@ -4444,7 +4476,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
       __Pyx_INCREF(__pyx_v_mid);
       __Pyx_DECREF_SET(__pyx_v_low, __pyx_v_mid);
 
-      /* "celltrip/utility/mapping.py":66
+      /* "celltrip/utility/mapping.py":69
  *         if abs(map_func(mid) - target_time) < tol or low >= high:
  *             return mid
  *         if map_func(mid) < target_time:             # <<<<<<<<<<<<<<
@@ -4454,7 +4486,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
       goto __pyx_L12;
     }
 
-    /* "celltrip/utility/mapping.py":69
+    /* "celltrip/utility/mapping.py":72
  *             low = mid
  *         else:
  *             high = mid             # <<<<<<<<<<<<<<
@@ -4467,7 +4499,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
     }
     __pyx_L12:;
 
-    /* "celltrip/utility/mapping.py":62
+    /* "celltrip/utility/mapping.py":65
  * 
  *     # Use binary search on interval
  *     for _ in range(max_iter):             # <<<<<<<<<<<<<<
@@ -4477,18 +4509,18 @@ static PyObject *__pyx_pf_8celltrip_7utility_7mapping_2find_target_bio_time(CYTH
   }
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "celltrip/utility/mapping.py":71
+  /* "celltrip/utility/mapping.py":74
  *             high = mid
  * 
  *     return mid             # <<<<<<<<<<<<<<
  */
   __Pyx_XDECREF(__pyx_r);
-  if (unlikely(!__pyx_v_mid)) { __Pyx_RaiseUnboundLocalError("mid"); __PYX_ERR(0, 71, __pyx_L1_error) }
+  if (unlikely(!__pyx_v_mid)) { __Pyx_RaiseUnboundLocalError("mid"); __PYX_ERR(0, 74, __pyx_L1_error) }
   __Pyx_INCREF(__pyx_v_mid);
   __pyx_r = __pyx_v_mid;
   goto __pyx_L0;
 
-  /* "celltrip/utility/mapping.py":53
+  /* "celltrip/utility/mapping.py":56
  * 
  * 
  * def find_target_bio_time(map_func, target_time, max_iter=1000, tol=1e-5):             # <<<<<<<<<<<<<<
@@ -4764,6 +4796,7 @@ static int __Pyx_CreateStringTabAndInitStrings(void) {
     {&__pyx_n_s_main, __pyx_k_main, sizeof(__pyx_k_main), 0, 0, 1, 1},
     {&__pyx_n_s_map_func, __pyx_k_map_func, sizeof(__pyx_k_map_func), 0, 0, 1, 1},
     {&__pyx_n_s_max_iter, __pyx_k_max_iter, sizeof(__pyx_k_max_iter), 0, 0, 1, 1},
+    {&__pyx_n_s_maxfev, __pyx_k_maxfev, sizeof(__pyx_k_maxfev), 0, 0, 1, 1},
     {&__pyx_n_s_mid, __pyx_k_mid, sizeof(__pyx_k_mid), 0, 0, 1, 1},
     {&__pyx_n_s_name, __pyx_k_name, sizeof(__pyx_k_name), 0, 0, 1, 1},
     {&__pyx_n_s_np, __pyx_k_np, sizeof(__pyx_k_np), 0, 0, 1, 1},
@@ -4795,7 +4828,7 @@ static int __Pyx_CreateStringTabAndInitStrings(void) {
 }
 /* #### Code section: cached_builtins ### */
 static CYTHON_SMALL_CODE int __Pyx_InitCachedBuiltins(void) {
-  __pyx_builtin_range = __Pyx_GetBuiltinName(__pyx_n_s_range); if (!__pyx_builtin_range) __PYX_ERR(0, 57, __pyx_L1_error)
+  __pyx_builtin_range = __Pyx_GetBuiltinName(__pyx_n_s_range); if (!__pyx_builtin_range) __PYX_ERR(0, 60, __pyx_L1_error)
   return 0;
   __pyx_L1_error:;
   return -1;
@@ -4806,32 +4839,32 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__Pyx_InitCachedConstants", 0);
 
-  /* "celltrip/utility/mapping.py":30
+  /* "celltrip/utility/mapping.py":33
  * 
  *     # Scaled CDF, omit yscale
  *     ret = (lambda x: (end_val - start_val) * gamma_dist(x, *gamma_params[:-1], 1, cdf=True) + start_val,)             # <<<<<<<<<<<<<<
  *     # PDF
  *     if return_pdf:
  */
-  __pyx_slice_ = PySlice_New(Py_None, __pyx_int_neg_1, Py_None); if (unlikely(!__pyx_slice_)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_slice_ = PySlice_New(Py_None, __pyx_int_neg_1, Py_None); if (unlikely(!__pyx_slice_)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_slice_);
   __Pyx_GIVEREF(__pyx_slice_);
-  __pyx_tuple__2 = PyTuple_Pack(1, __pyx_int_1); if (unlikely(!__pyx_tuple__2)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_tuple__2 = PyTuple_Pack(1, __pyx_int_1); if (unlikely(!__pyx_tuple__2)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__2);
   __Pyx_GIVEREF(__pyx_tuple__2);
 
-  /* "celltrip/utility/mapping.py":22
+  /* "celltrip/utility/mapping.py":24
  * 
  *     # Gamma decay fit
  *     def gamma_dist(x, k, loc, xscale, yscale, cdf=False):             # <<<<<<<<<<<<<<
  *         f = scipy.stats.gamma.cdf if cdf else scipy.stats.gamma.pdf
  *         return yscale * f(x / xscale, k, loc=loc)
  */
-  __pyx_tuple__3 = PyTuple_Pack(7, __pyx_n_s_x, __pyx_n_s_k, __pyx_n_s_loc, __pyx_n_s_xscale, __pyx_n_s_yscale, __pyx_n_s_cdf, __pyx_n_s_f); if (unlikely(!__pyx_tuple__3)) __PYX_ERR(0, 22, __pyx_L1_error)
+  __pyx_tuple__3 = PyTuple_Pack(7, __pyx_n_s_x, __pyx_n_s_k, __pyx_n_s_loc, __pyx_n_s_xscale, __pyx_n_s_yscale, __pyx_n_s_cdf, __pyx_n_s_f); if (unlikely(!__pyx_tuple__3)) __PYX_ERR(0, 24, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__3);
   __Pyx_GIVEREF(__pyx_tuple__3);
-  __pyx_codeobj__4 = (PyObject*)__Pyx_PyCode_New(6, 0, 0, 7, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__3, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_mapping_py, __pyx_n_s_gamma_dist, 22, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__4)) __PYX_ERR(0, 22, __pyx_L1_error)
-  __pyx_tuple__5 = PyTuple_Pack(1, ((PyObject *)Py_False)); if (unlikely(!__pyx_tuple__5)) __PYX_ERR(0, 22, __pyx_L1_error)
+  __pyx_codeobj__4 = (PyObject*)__Pyx_PyCode_New(6, 0, 0, 7, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__3, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_mapping_py, __pyx_n_s_gamma_dist, 24, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__4)) __PYX_ERR(0, 24, __pyx_L1_error)
+  __pyx_tuple__5 = PyTuple_Pack(1, ((PyObject *)Py_False)); if (unlikely(!__pyx_tuple__5)) __PYX_ERR(0, 24, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__5);
   __Pyx_GIVEREF(__pyx_tuple__5);
 
@@ -4863,26 +4896,26 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  *     vel_density,
  *     time,
  */
-  __pyx_tuple__12 = PyTuple_Pack(11, __pyx_n_s_vel_density, __pyx_n_s_time, __pyx_n_s_start_val, __pyx_n_s_end_val, __pyx_n_s_return_pdf, __pyx_n_s_return_params, __pyx_n_s_gamma_dist, __pyx_n_s_gamma_dist, __pyx_n_s_gamma_params, __pyx_n_s__11, __pyx_n_s_ret); if (unlikely(!__pyx_tuple__12)) __PYX_ERR(0, 8, __pyx_L1_error)
+  __pyx_tuple__12 = PyTuple_Pack(12, __pyx_n_s_vel_density, __pyx_n_s_time, __pyx_n_s_start_val, __pyx_n_s_end_val, __pyx_n_s_return_pdf, __pyx_n_s_return_params, __pyx_n_s_maxfev, __pyx_n_s_gamma_dist, __pyx_n_s_gamma_dist, __pyx_n_s_gamma_params, __pyx_n_s__11, __pyx_n_s_ret); if (unlikely(!__pyx_tuple__12)) __PYX_ERR(0, 8, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__12);
   __Pyx_GIVEREF(__pyx_tuple__12);
-  __pyx_codeobj__13 = (PyObject*)__Pyx_PyCode_New(6, 0, 0, 11, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__12, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_mapping_py, __pyx_n_s_compute_sim_bio_mapping, 8, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__13)) __PYX_ERR(0, 8, __pyx_L1_error)
-  __pyx_tuple__14 = PyTuple_Pack(4, ((PyObject *)__pyx_int_0), ((PyObject *)__pyx_int_1), ((PyObject *)Py_False), ((PyObject *)Py_False)); if (unlikely(!__pyx_tuple__14)) __PYX_ERR(0, 8, __pyx_L1_error)
+  __pyx_codeobj__13 = (PyObject*)__Pyx_PyCode_New(7, 0, 0, 12, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__12, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_mapping_py, __pyx_n_s_compute_sim_bio_mapping, 8, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__13)) __PYX_ERR(0, 8, __pyx_L1_error)
+  __pyx_tuple__14 = PyTuple_Pack(5, ((PyObject *)__pyx_int_0), ((PyObject *)__pyx_int_1), ((PyObject *)Py_False), ((PyObject *)Py_False), ((PyObject *)__pyx_int_10000)); if (unlikely(!__pyx_tuple__14)) __PYX_ERR(0, 8, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__14);
   __Pyx_GIVEREF(__pyx_tuple__14);
 
-  /* "celltrip/utility/mapping.py":53
+  /* "celltrip/utility/mapping.py":56
  * 
  * 
  * def find_target_bio_time(map_func, target_time, max_iter=1000, tol=1e-5):             # <<<<<<<<<<<<<<
  *     "Find simulation time corresponding to a target biological time"
  *     # Use exponential search to find an upper bound
  */
-  __pyx_tuple__15 = PyTuple_Pack(8, __pyx_n_s_map_func, __pyx_n_s_target_time, __pyx_n_s_max_iter, __pyx_n_s_tol, __pyx_n_s_low, __pyx_n_s_high, __pyx_n_s__11, __pyx_n_s_mid); if (unlikely(!__pyx_tuple__15)) __PYX_ERR(0, 53, __pyx_L1_error)
+  __pyx_tuple__15 = PyTuple_Pack(8, __pyx_n_s_map_func, __pyx_n_s_target_time, __pyx_n_s_max_iter, __pyx_n_s_tol, __pyx_n_s_low, __pyx_n_s_high, __pyx_n_s__11, __pyx_n_s_mid); if (unlikely(!__pyx_tuple__15)) __PYX_ERR(0, 56, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__15);
   __Pyx_GIVEREF(__pyx_tuple__15);
-  __pyx_codeobj__16 = (PyObject*)__Pyx_PyCode_New(4, 0, 0, 8, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__15, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_mapping_py, __pyx_n_s_find_target_bio_time, 53, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__16)) __PYX_ERR(0, 53, __pyx_L1_error)
-  __pyx_tuple__17 = PyTuple_Pack(2, ((PyObject *)__pyx_int_1000), ((PyObject*)__pyx_float_1eneg_5)); if (unlikely(!__pyx_tuple__17)) __PYX_ERR(0, 53, __pyx_L1_error)
+  __pyx_codeobj__16 = (PyObject*)__Pyx_PyCode_New(4, 0, 0, 8, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__15, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_mapping_py, __pyx_n_s_find_target_bio_time, 56, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__16)) __PYX_ERR(0, 56, __pyx_L1_error)
+  __pyx_tuple__17 = PyTuple_Pack(2, ((PyObject *)__pyx_int_1000), ((PyObject*)__pyx_float_1eneg_5)); if (unlikely(!__pyx_tuple__17)) __PYX_ERR(0, 56, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__17);
   __Pyx_GIVEREF(__pyx_tuple__17);
   __Pyx_RefNannyFinishContext();
@@ -4902,6 +4935,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitConstants(void) {
   __pyx_int_2 = PyInt_FromLong(2); if (unlikely(!__pyx_int_2)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_30 = PyInt_FromLong(30); if (unlikely(!__pyx_int_30)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_1000 = PyInt_FromLong(1000); if (unlikely(!__pyx_int_1000)) __PYX_ERR(0, 1, __pyx_L1_error)
+  __pyx_int_10000 = PyInt_FromLong(10000L); if (unlikely(!__pyx_int_10000)) __PYX_ERR(0, 1, __pyx_L1_error)
   __pyx_int_neg_1 = PyInt_FromLong(-1); if (unlikely(!__pyx_int_neg_1)) __PYX_ERR(0, 1, __pyx_L1_error)
   return 0;
   __pyx_L1_error:;
@@ -5349,17 +5383,17 @@ if (!__Pyx_RefNanny) {
   if (PyDict_SetItem(__pyx_d, __pyx_n_s_compute_sim_bio_mapping, __pyx_t_3) < 0) __PYX_ERR(0, 8, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "celltrip/utility/mapping.py":53
+  /* "celltrip/utility/mapping.py":56
  * 
  * 
  * def find_target_bio_time(map_func, target_time, max_iter=1000, tol=1e-5):             # <<<<<<<<<<<<<<
  *     "Find simulation time corresponding to a target biological time"
  *     # Use exponential search to find an upper bound
  */
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_7mapping_3find_target_bio_time, 0, __pyx_n_s_find_target_bio_time, NULL, __pyx_n_s_celltrip_utility_mapping, __pyx_d, ((PyObject *)__pyx_codeobj__16)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 53, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_7mapping_3find_target_bio_time, 0, __pyx_n_s_find_target_bio_time, NULL, __pyx_n_s_celltrip_utility_mapping, __pyx_d, ((PyObject *)__pyx_codeobj__16)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 56, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_CyFunction_SetDefaultsTuple(__pyx_t_3, __pyx_tuple__17);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_find_target_bio_time, __pyx_t_3) < 0) __PYX_ERR(0, 53, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_find_target_bio_time, __pyx_t_3) < 0) __PYX_ERR(0, 56, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
   /* "celltrip/utility/mapping.py":1
