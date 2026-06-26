@@ -1,3 +1,7 @@
+### 1.0.0+2026.6.26
+- Mapped 24-hour recovery experiment figure
+- Revised labels from `drugseries_generate` for mapped times
+
 ### 1.0.0+2026.6.25
 - Add experimental total targeting to `drugseries_generate` for fairness with benchmarking methods
 - Add `steps` argument to `clamp_input_features_hook` and `clamp_inverted_features_hook` to support normalized inputs
