@@ -1,3 +1,8 @@
+### 1.0.0+2026.6.29
+- Additional benchmarking runs and validation masking in `drugseries_generate`
+- Better random state passing for `celltrip.utility.general.transform_and_center`
+- Update to euclidean velocity density in `flysta_analysis`
+
 ### 1.0.0+2026.6.26
 - Mapped 24-hour recovery experiment figure
 - Revised labels from `drugseries_generate` for mapped times

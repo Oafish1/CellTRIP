@@ -2681,7 +2681,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_25generate_pinning_functio
 static PyObject *__pyx_pf_8celltrip_7utility_7general_32generate_pinning_function(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_X, PyObject *__pyx_v_Y); /* proto */
 static PyObject *__pyx_pf_8celltrip_7utility_7general_34nan_substitution(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_x); /* proto */
 static PyObject *__pyx_pf_8celltrip_7utility_7general_36nan_error(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_x); /* proto */
-static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_X, PyObject *__pyx_v_pca, PyObject *__pyx_v_return_pca); /* proto */
+static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_X, PyObject *__pyx_v_pca, PyObject *__pyx_v_return_pca, PyObject *__pyx_v_random_state); /* proto */
 static PyObject *__pyx_pf_8celltrip_7utility_7general_40compute_discrete_ot_matrix(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_X, PyObject *__pyx_v_Y, PyObject *__pyx_v_numItermax, PyObject *__pyx_v_kwargs); /* proto */
 static PyObject *__pyx_tp_new_8celltrip_7utility_7general___pyx_scope_struct__generate_pinning_function(PyTypeObject *t, PyObject *a, PyObject *k); /*proto*/
 /* #### Code section: late_includes ### */
@@ -12698,8 +12698,8 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_36nan_error(CYTHON_UNUSED 
 /* "celltrip/utility/general.py":269
  * 
  * 
- * def transform_and_center(X, pca=None, return_pca=False):             # <<<<<<<<<<<<<<
- *     if pca is None: pca = sklearn.decomposition.PCA(random_state=42).fit(X)
+ * def transform_and_center(X, pca=None, return_pca=False, random_state=42):             # <<<<<<<<<<<<<<
+ *     if pca is None: pca = sklearn.decomposition.PCA(random_state=random_state).fit(X)
  *     trans_X = pca.transform(X)
  */
 
@@ -12722,11 +12722,12 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   PyObject *__pyx_v_X = 0;
   PyObject *__pyx_v_pca = 0;
   PyObject *__pyx_v_return_pca = 0;
+  PyObject *__pyx_v_random_state = 0;
   #if !CYTHON_METH_FASTCALL
   CYTHON_UNUSED Py_ssize_t __pyx_nargs;
   #endif
   CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
-  PyObject* values[3] = {0,0,0};
+  PyObject* values[4] = {0,0,0,0};
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
@@ -12742,12 +12743,15 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   #endif
   __pyx_kwvalues = __Pyx_KwValues_FASTCALL(__pyx_args, __pyx_nargs);
   {
-    PyObject **__pyx_pyargnames[] = {&__pyx_n_s_X,&__pyx_n_s_pca,&__pyx_n_s_return_pca,0};
+    PyObject **__pyx_pyargnames[] = {&__pyx_n_s_X,&__pyx_n_s_pca,&__pyx_n_s_return_pca,&__pyx_n_s_random_state,0};
     values[1] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)Py_None));
     values[2] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)Py_False)));
+    values[3] = __Pyx_Arg_NewRef_FASTCALL(((PyObject *)((PyObject *)__pyx_int_42)));
     if (__pyx_kwds) {
       Py_ssize_t kw_args;
       switch (__pyx_nargs) {
+        case  4: values[3] = __Pyx_Arg_FASTCALL(__pyx_args, 3);
+        CYTHON_FALLTHROUGH;
         case  3: values[2] = __Pyx_Arg_FASTCALL(__pyx_args, 2);
         CYTHON_FALLTHROUGH;
         case  2: values[1] = __Pyx_Arg_FASTCALL(__pyx_args, 1);
@@ -12780,6 +12784,13 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
           if (value) { values[2] = __Pyx_Arg_NewRef_FASTCALL(value); kw_args--; }
           else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 269, __pyx_L3_error)
         }
+        CYTHON_FALLTHROUGH;
+        case  3:
+        if (kw_args > 0) {
+          PyObject* value = __Pyx_GetKwValue_FASTCALL(__pyx_kwds, __pyx_kwvalues, __pyx_n_s_random_state);
+          if (value) { values[3] = __Pyx_Arg_NewRef_FASTCALL(value); kw_args--; }
+          else if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 269, __pyx_L3_error)
+        }
       }
       if (unlikely(kw_args > 0)) {
         const Py_ssize_t kwd_pos_args = __pyx_nargs;
@@ -12787,6 +12798,8 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
       }
     } else {
       switch (__pyx_nargs) {
+        case  4: values[3] = __Pyx_Arg_FASTCALL(__pyx_args, 3);
+        CYTHON_FALLTHROUGH;
         case  3: values[2] = __Pyx_Arg_FASTCALL(__pyx_args, 2);
         CYTHON_FALLTHROUGH;
         case  2: values[1] = __Pyx_Arg_FASTCALL(__pyx_args, 1);
@@ -12799,10 +12812,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
     __pyx_v_X = values[0];
     __pyx_v_pca = values[1];
     __pyx_v_return_pca = values[2];
+    __pyx_v_random_state = values[3];
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("transform_and_center", 0, 1, 3, __pyx_nargs); __PYX_ERR(0, 269, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("transform_and_center", 0, 1, 4, __pyx_nargs); __PYX_ERR(0, 269, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -12816,7 +12830,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_8celltrip_7utility_7general_38transform_and_center(__pyx_self, __pyx_v_X, __pyx_v_pca, __pyx_v_return_pca);
+  __pyx_r = __pyx_pf_8celltrip_7utility_7general_38transform_and_center(__pyx_self, __pyx_v_X, __pyx_v_pca, __pyx_v_return_pca, __pyx_v_random_state);
 
   /* function exit code */
   {
@@ -12829,7 +12843,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_X, PyObject *__pyx_v_pca, PyObject *__pyx_v_return_pca) {
+static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_X, PyObject *__pyx_v_pca, PyObject *__pyx_v_return_pca, PyObject *__pyx_v_random_state) {
   PyObject *__pyx_v_trans_X = NULL;
   PyObject *__pyx_v_trans_cent_X = NULL;
   PyObject *__pyx_r = NULL;
@@ -12848,8 +12862,8 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYT
 
   /* "celltrip/utility/general.py":270
  * 
- * def transform_and_center(X, pca=None, return_pca=False):
- *     if pca is None: pca = sklearn.decomposition.PCA(random_state=42).fit(X)             # <<<<<<<<<<<<<<
+ * def transform_and_center(X, pca=None, return_pca=False, random_state=42):
+ *     if pca is None: pca = sklearn.decomposition.PCA(random_state=random_state).fit(X)             # <<<<<<<<<<<<<<
  *     trans_X = pca.transform(X)
  *     trans_cent_X = trans_X - trans_X.mean(axis=0)
  */
@@ -12865,7 +12879,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYT
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     __pyx_t_4 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 270, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_random_state, __pyx_int_42) < 0) __PYX_ERR(0, 270, __pyx_L1_error)
+    if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_random_state, __pyx_v_random_state) < 0) __PYX_ERR(0, 270, __pyx_L1_error)
     __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_3, __pyx_empty_tuple, __pyx_t_4); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 270, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
@@ -12900,8 +12914,8 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYT
   }
 
   /* "celltrip/utility/general.py":271
- * def transform_and_center(X, pca=None, return_pca=False):
- *     if pca is None: pca = sklearn.decomposition.PCA(random_state=42).fit(X)
+ * def transform_and_center(X, pca=None, return_pca=False, random_state=42):
+ *     if pca is None: pca = sklearn.decomposition.PCA(random_state=random_state).fit(X)
  *     trans_X = pca.transform(X)             # <<<<<<<<<<<<<<
  *     trans_cent_X = trans_X - trans_X.mean(axis=0)
  *     if return_pca: return trans_cent_X, pca
@@ -12934,7 +12948,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYT
   __pyx_t_2 = 0;
 
   /* "celltrip/utility/general.py":272
- *     if pca is None: pca = sklearn.decomposition.PCA(random_state=42).fit(X)
+ *     if pca is None: pca = sklearn.decomposition.PCA(random_state=random_state).fit(X)
  *     trans_X = pca.transform(X)
  *     trans_cent_X = trans_X - trans_X.mean(axis=0)             # <<<<<<<<<<<<<<
  *     if return_pca: return trans_cent_X, pca
@@ -12993,8 +13007,8 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYT
   /* "celltrip/utility/general.py":269
  * 
  * 
- * def transform_and_center(X, pca=None, return_pca=False):             # <<<<<<<<<<<<<<
- *     if pca is None: pca = sklearn.decomposition.PCA(random_state=42).fit(X)
+ * def transform_and_center(X, pca=None, return_pca=False, random_state=42):             # <<<<<<<<<<<<<<
+ *     if pca is None: pca = sklearn.decomposition.PCA(random_state=random_state).fit(X)
  *     trans_X = pca.transform(X)
  */
 
@@ -14217,15 +14231,15 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   /* "celltrip/utility/general.py":269
  * 
  * 
- * def transform_and_center(X, pca=None, return_pca=False):             # <<<<<<<<<<<<<<
- *     if pca is None: pca = sklearn.decomposition.PCA(random_state=42).fit(X)
+ * def transform_and_center(X, pca=None, return_pca=False, random_state=42):             # <<<<<<<<<<<<<<
+ *     if pca is None: pca = sklearn.decomposition.PCA(random_state=random_state).fit(X)
  *     trans_X = pca.transform(X)
  */
-  __pyx_tuple__65 = PyTuple_Pack(5, __pyx_n_s_X, __pyx_n_s_pca, __pyx_n_s_return_pca, __pyx_n_s_trans_X, __pyx_n_s_trans_cent_X); if (unlikely(!__pyx_tuple__65)) __PYX_ERR(0, 269, __pyx_L1_error)
+  __pyx_tuple__65 = PyTuple_Pack(6, __pyx_n_s_X, __pyx_n_s_pca, __pyx_n_s_return_pca, __pyx_n_s_random_state, __pyx_n_s_trans_X, __pyx_n_s_trans_cent_X); if (unlikely(!__pyx_tuple__65)) __PYX_ERR(0, 269, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__65);
   __Pyx_GIVEREF(__pyx_tuple__65);
-  __pyx_codeobj__66 = (PyObject*)__Pyx_PyCode_New(3, 0, 0, 5, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__65, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_general_py, __pyx_n_s_transform_and_center, 269, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__66)) __PYX_ERR(0, 269, __pyx_L1_error)
-  __pyx_tuple__67 = PyTuple_Pack(2, Py_None, ((PyObject *)Py_False)); if (unlikely(!__pyx_tuple__67)) __PYX_ERR(0, 269, __pyx_L1_error)
+  __pyx_codeobj__66 = (PyObject*)__Pyx_PyCode_New(4, 0, 0, 6, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__65, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_celltrip_utility_general_py, __pyx_n_s_transform_and_center, 269, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__66)) __PYX_ERR(0, 269, __pyx_L1_error)
+  __pyx_tuple__67 = PyTuple_Pack(3, Py_None, ((PyObject *)Py_False), ((PyObject *)__pyx_int_42)); if (unlikely(!__pyx_tuple__67)) __PYX_ERR(0, 269, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__67);
   __Pyx_GIVEREF(__pyx_tuple__67);
 
@@ -15034,8 +15048,8 @@ if (!__Pyx_RefNanny) {
   /* "celltrip/utility/general.py":269
  * 
  * 
- * def transform_and_center(X, pca=None, return_pca=False):             # <<<<<<<<<<<<<<
- *     if pca is None: pca = sklearn.decomposition.PCA(random_state=42).fit(X)
+ * def transform_and_center(X, pca=None, return_pca=False, random_state=42):             # <<<<<<<<<<<<<<
+ *     if pca is None: pca = sklearn.decomposition.PCA(random_state=random_state).fit(X)
  *     trans_X = pca.transform(X)
  */
   __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_7general_39transform_and_center, 0, __pyx_n_s_transform_and_center, NULL, __pyx_n_s_celltrip_utility_general, __pyx_d, ((PyObject *)__pyx_codeobj__66)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 269, __pyx_L1_error)

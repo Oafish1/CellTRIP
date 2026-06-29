@@ -266,8 +266,8 @@ def nan_error(x):
     return x
 
 
-def transform_and_center(X, pca=None, return_pca=False):
-    if pca is None: pca = sklearn.decomposition.PCA(random_state=42).fit(X)
+def transform_and_center(X, pca=None, return_pca=False, random_state=42):
+    if pca is None: pca = sklearn.decomposition.PCA(random_state=random_state).fit(X)
     trans_X = pca.transform(X)
     trans_cent_X = trans_X - trans_X.mean(axis=0)
     if return_pca: return trans_cent_X, pca
