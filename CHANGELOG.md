@@ -1,3 +1,20 @@
+### 1.0.0+2026.7.9
+- Additional benchmarking and tuning runs, including confidence interval calculation and visualization where applicable
+- `Cortex` pairwise significance heatmap and layer score trend testing on excitatory neurons
+- `DrugSeries` new visualizations
+- Flysta minor computation fixes
+- Time mapping density computation and visualization changes
+
+### 1.0.0+2026.7.6
+- Add confidence interval and replication output for `Dyngen`, `Cortex`, `DrugSeries`, and `Flysta` datasets
+- More runs of `CPA` and `GEARS` for `drugseries_comparisons`
+
+### 1.0.0+2026.7.5
+- Multiple runs of `CPA` and `GEARS` for `drugseries_comparisons`
+
+### 1.0.0+2026.7.2
+- Additional scripts for multi-runs of CellTRIP in `drugseries_generate`
+
 ### 1.0.0+2026.6.29
 - Additional benchmarking runs and validation masking in `drugseries_generate`
 - Better random state passing for `celltrip.utility.general.transform_and_center`
