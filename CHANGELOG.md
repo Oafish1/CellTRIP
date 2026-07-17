@@ -1,3 +1,8 @@
+### 1.0.0+2026.7.17
+- Additional `DrugSeries` comparisons
+- Panel exporting for all applications and new evaluations
+- Many figure additions and changes
+
 ### 1.0.0+2026.7.9
 - Additional benchmarking and tuning runs, including confidence interval calculation and visualization where applicable
 - `Cortex` pairwise significance heatmap and layer score trend testing on excitatory neurons
