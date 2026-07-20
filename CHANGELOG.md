@@ -1,3 +1,10 @@
+### 1.0.0+2026.7.20
+- Add `num_attention_heads`, `num_attention_blocks`, `standardization_beta`, and `no_bootstrap` to training arguments
+- Add `use_bootstrapping` argument to `memory.AdvancedMemoryBuffer` initialization
+- Change default checkpoint name for training script
+- Change layer score trend test strategy
+- Revise `Cortex`, `DrugSeries`, and `Flysta` analyses
+
 ### 1.0.0+2026.7.17
 - Additional `DrugSeries` comparisons
 - Panel exporting for all applications and new evaluations
@@ -7,7 +14,7 @@
 - Additional benchmarking and tuning runs, including confidence interval calculation and visualization where applicable
 - `Cortex` pairwise significance heatmap and layer score trend testing on excitatory neurons
 - `DrugSeries` new visualizations
-- Flysta minor computation fixes
+- `Flysta` minor computation fixes
 - Time mapping density computation and visualization changes
 
 ### 1.0.0+2026.7.6

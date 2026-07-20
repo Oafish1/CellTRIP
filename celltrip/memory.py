@@ -21,6 +21,7 @@ class AdvancedMemoryBuffer:
         # Propagate
         gae_lambda=.95,
         gamma=.99,
+        use_bootstrapping=True,
         # Sampling
         replay_frac=0,
         max_samples_per_state=np.inf,
@@ -42,6 +43,7 @@ class AdvancedMemoryBuffer:
         self.flush_on_record = flush_on_record
         self.gae_lambda = gae_lambda
         self.gamma = gamma
+        self.use_bootstrapping = use_bootstrapping
         self.replay_frac = replay_frac
         self.max_samples_per_state = max_samples_per_state
         self.shuffle = shuffle
@@ -628,7 +630,7 @@ class AdvancedMemoryBuffer:
                 # Reset values and advantages if terminal
                 if is_truncated:
                     next_advantages = 0
-                    next_state_vals = terminal_state_vals  # 0 for terminal not truncated
+                    next_state_vals = terminal_state_vals if self.use_bootstrapping else 0  # Apply bootstrapping if desired
                 # Compute advantage
                 if normalize_rewards: rewards = (rewards - rewards_min) / (rewards_max - rewards_min + 1e-8)
                 if moving_standardization is not None: rewards = moving_standardization.apply(rewards.to(moving_standardization.mean.device)).to(self.device)

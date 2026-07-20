@@ -41,6 +41,10 @@ group.add_argument('--spatial', type=int, nargs='+', help='Which modalities are 
 # Algorithm
 group = parser.add_argument_group('Algorithm')
 group.add_argument('--dim', type=int, default=32, help='Dimensions in the output latent space')
+group.add_argument('--attention_heads', type=int, default=2, help='Number of attention heads in residual attention model')
+group.add_argument('--attention_blocks', type=int, default=1, help='Number of attention blocks in residual attention model')
+group.add_argument('--standardization_beta', type=float, default=3e-3, help='Adjustment rate for running mean and variance in PopArt and PipArt layers')
+group.add_argument('--no_bootstrap', action='store_true', help='Disable bootstrapping in advantage computation')
 group.add_argument('--discrete', action='store_true', help='Use the discrete model rather than continuous')
 group.add_argument('--train_mask', type=str, help='File or `obs` column containing boolean training mask')
 group.add_argument('--train_split', type=float, default=1., help='Fraction of input data to use as training. Overwritten by `train_mask`')
@@ -84,13 +88,13 @@ if not celltrip.utility.notebook.is_notebook():
     # ray job submit -- python train.py...
     config = parser.parse_args()
 else:
-    # experiment_name = 'Flysta-251026'
+    # experiment_name = 'Flysta-260707'  # Flysta-251026
     # experiment_name = 'MERFISH30k-153-250914'
-    experiment_name = 'Dyngen'  # Dyngen-260121-OnlyPinning
-    # experiment_name = 'Cortex-251024-2'
+    experiment_name = 'Dyngen-260720-noBootstrap'  # Dyngen-260121-OnlyPinning
+    # experiment_name = 'Cortex-260708-wspatial'  # Cortex-251024-2
     # experiment_name = 'CancerVel-250913'
     # experiment_name = 'PerturbMM-gex-250928'
-    # experiment_name = 'DrugSeries-251117-pip-nosampnorm'
+    # experiment_name = 'DrugSeries-260702'  # DrugSeries-251117-pip-nosampnorm
     # experiment_name = 'ExpVal-251121-nosampnorm'
     # experiment_name = 'NHP-260326-nosampnorm'
     # experiment_name = 'ExpVal-NHP-260330-Integration'
@@ -124,7 +128,7 @@ else:
         # f'--sample_counts 10_000 0 '
         # f'--log_modalities 0 '
         # f'--target_modalities 1 '
-        # # f'--spatial 1 '
+        # f'--spatial 1 '  # Normally unused
 
         # Flysta3D
         # f' '.join([f'--merge_files ' + ' ' .join([f's3://{bucket_name}/Flysta3D/{p}_{m}.h5ad' for p in ('E14-16h_a', 'E16-18h_a', 'L1_a', 'L2_a', 'L3_b')]) for m in ('expression', 'spatial')]) + ' '
@@ -148,7 +152,7 @@ else:
         # f'--partition_cols days '  # sgAssignNew
         # DrugSeries
         # f's3://{bucket_name}/DrugSeries/expression.h5ad '
-        # # f'--sample_counts 10_000 '
+        # f'--sample_counts 10_000 '  # Was commented
         # f'--log_modalities 0 '
         # # f'--partition_cols treatment '
 
@@ -181,12 +185,32 @@ else:
         f'--backed '
         # f'--dim 2 '
         # f'--dim 8 '
-        f'--dim 32 '
+        # f'--dim 16 '
+        # f'--dim 32 '
+        # f'--dim 48 '
         # f'--dim 64 '
+        # f'--pca_dim 64 '
+        # f'--pca_dim 128 '
+        # f'--pca_dim 256 '
         # f'--pca_dim 512 '
+        # f'--pca_dim 1024 '
         # f'--pca_dim 1024 0 '
         # f'--pca_dim 2048 0 '
         # f'--discrete '
+
+        # Attention heads and blocks
+        # f'--attention_heads 1 '
+        # f'--attention_heads 4 '
+        # f'--attention_blocks 2 '
+        # f'--attention_blocks 4 '
+
+        # Standardization and misc modifications
+        # f'--standardization_beta 0. '  # No PopArt or PipArt
+        # f'--no_bootstrap '  # Disable bootstrapping
+
+        # Batches
+        # f'--epoch_size 50_000 --batch_size 5_000 '  # Reduced epoch and batch size
+        # f'--epoch_size 25_000 --batch_size 2_500 '  # Reduced epoch and batch size
 
         # Weight modifications
         # f'--reward_pinning 0 '
@@ -198,11 +222,16 @@ else:
         # f'--train_mask known_not_d6 '  # CancerVel
         # f'--train_mask slice_bc1_train '  # PerturbMM
         # f'--train_mask train '  # DrugSeries
+        # f'--train_mask train_dmso_3hr '  # DrugSeries DMSO(-48) to TRAM_3
+        # f'--train_mask train_dmso_6hr '  # DrugSeries DMSO(-48) to TRAM_6
+        # f'--train_mask train_dmso_12hr '  # DrugSeries DMSO(-48) to TRAM_12
+        # f'--train_mask train_dmso_24hr '  # DrugSeries DMSO(-48) to TRAM_24
+        # f'--train_mask train_dmso_48hr '  # DrugSeries DMSO(-48) to TRAM_48
         # f'--train_mask Train '  # ExpVal/NHP
         # f'--train_mask training '  # VCC
-        # Sample split
+        # Sample split (Default)
         f'--train_split .8 '
-        # Partition split
+        # Partition split (Flysta)
         # f'--train_split .8 '
         # f'--train_partitions '
         # Single partition
@@ -214,12 +243,13 @@ else:
         f'--num_gpus 2 --num_learners 2 --num_runners 2 '
         f'--update_timesteps 1_000_000 '
         f'--max_timesteps 800_000_000 '
+        # f'--max_timesteps 1_600_000_000 '
         # f'--update_timesteps 100_000 '
         # f'--max_timesteps 100_000_000 '
         f'--dont_sync_across_nodes '
         f'--logfile s3://{bucket_name}/logs/{experiment_name}.log '
         f'--flush_iterations 1 '
-        # f'--checkpoint s3://nkalafut-celltrip/checkpoints/DrugSeries-251110-0800.weights '
+        # f'--checkpoint s3://nkalafut-celltrip/checkpoints/Dyngen-260622.weights '
         f'--checkpoint_iterations 50 '
         f'--checkpoint_dir s3://{bucket_name}/checkpoints '
         f'--checkpoint_name {experiment_name}')
@@ -228,7 +258,7 @@ else:
     
 # Defaults
 if config.checkpoint_name is None:
-    config.checkpoint_name = f'RUN_{random.randint(0, 2**32):0>10}'
+    config.checkpoint_name = f'CellTRIP_{random.randint(0, 2**32):0>10}'
     print(f'Run Name: {config.checkpoint_name}')
 # print(config)  # CLI
 
@@ -282,8 +312,16 @@ def train(config):
         'update_iterations': config.update_iterations,
         'epoch_size': config.epoch_size,
         'batch_size': config.batch_size,
-        'minibatch_memories': config.minibatch_memories}
-    memory_kwargs = {'device': 'cuda:0'}  # Skips casting, cutting time significantly for relatively small batch sizes
+        'minibatch_memories': config.minibatch_memories,
+        'standardization_beta': config.standardization_beta,
+        'actor_critic_kwargs': {
+            'heads': config.attention_heads,
+            'blocks': config.attention_blocks,
+        }}
+    memory_kwargs = {
+        'use_bootstrapping': not config.no_bootstrap,
+        'device': 'cuda:0',
+    }  # Skips casting, cutting time significantly for relatively small batch sizes
     initializers = celltrip.train.get_initializers(
         input_files=config.input_files, merge_files=config.merge_files,
         backed=config.backed, partition_cols=config.partition_cols,
