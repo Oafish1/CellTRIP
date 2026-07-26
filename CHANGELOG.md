@@ -1,3 +1,17 @@
+### 1.0.0+2026.7.24
+- Additional runs
+- Fix benchmark labels
+
+### 1.0.0+2026.7.23
+- Additional tuning benchmarks and corresponding formatting
+- Figure changes
+- Corrections for `LERP` and `DeST-OT` baselines
+- `GEARS` modifications for distribution prediction
+
+### 1.0.0+2026.7.22
+- Additional runs
+- Corrections for `drugseries_comparisons`
+
 ### 1.0.0+2026.7.20
 - Add `num_attention_heads`, `num_attention_blocks`, `standardization_beta`, and `no_bootstrap` to training arguments
 - Add `use_bootstrapping` argument to `memory.AdvancedMemoryBuffer` initialization

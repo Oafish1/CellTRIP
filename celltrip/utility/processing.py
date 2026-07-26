@@ -35,6 +35,7 @@ class Preprocessing:
         pre_log=False,
         # Standardize
         standardize=True,
+        total_statistics=False,
         # Filtering
         top_variant=int(1e6),  # Destructive
         # PCA
@@ -51,6 +52,7 @@ class Preprocessing:
         self.sample_count = sample_count
         self.pre_log = pre_log
         self.standardize = standardize
+        self.total_statistics = total_statistics
         self.top_variant = top_variant
         self.pca_dim = pca_dim
         self.num_nodes = num_nodes
@@ -68,6 +70,8 @@ class Preprocessing:
     def init_vars(self, num_modalities):
         if isinstance(self.top_variant, int): self.top_variant = num_modalities * [self.top_variant]
         if isinstance(self.pca_dim, int): self.pca_dim = num_modalities * [self.pca_dim]
+        
+        # Number-list to mask
         if isinstance(self.pre_log, bool): self.pre_log = num_modalities * [self.pre_log]
         elif (
             _utility.general.is_list_like(self.pre_log)
@@ -79,6 +83,19 @@ class Preprocessing:
         ))):
             true_idx = self.pre_log
             self.pre_log = [i in true_idx for i in range(num_modalities)]
+        if isinstance(self.total_statistics, bool): self.total_statistics = num_modalities * [self.total_statistics]
+        elif (
+            _utility.general.is_list_like(self.total_statistics)
+            and (
+                len(self.total_statistics)==0
+                or (
+                    isinstance(self.total_statistics[0], int)  # `bool` is a subclass of `int`
+                    and not isinstance(self.total_statistics[0], bool)
+        ))):
+            true_idx = self.total_statistics
+            self.total_statistics = [i in true_idx for i in range(num_modalities)]
+
+        # Required full lists
         if not _utility.general.is_list_like(self.sample_count):
             self.sample_count = num_modalities * [self.sample_count]
         assert len(self.sample_count) == num_modalities, (
@@ -92,6 +109,7 @@ class Preprocessing:
             'sample_count': self.sample_count,
             'pre_log': self.pre_log,
             'standardize': self.standardize,
+            'total_statistics': self.total_statistics,
             'top_variant': self.top_variant,
             'pca_dim': self.pca_dim,
             'num_nodes': self.num_nodes}
@@ -111,6 +129,7 @@ class Preprocessing:
         # Absorb
         if 'sample_count' in state: self.sample_count = state['sample_count']
         if 'pre_log' in state: self.pre_log = state['pre_log']
+        if 'total_statistics' in state: self.total_statistics = state['total_statistics']
         self.standardize = state['standardize']
         self.top_variant = state['top_variant']
         self.pca_dim = state['pca_dim']
@@ -172,23 +191,23 @@ class Preprocessing:
         # Standardize
         if self.standardize or self.top_variant is not None:
             self.standardize_mean = [
-                np.mean(m, axis=0 if not total_statistics else None, keepdims=True)
+                np.mean(m, axis=0 if not m_ts else None, keepdims=True)
                 if not m_sparse else
-                np.array(np.mean(m, axis=0 if not total_statistics else None).reshape((1, -1)))
-                for m, m_sparse in zip(modalities, self.is_sparse_transform)]
+                np.array(np.mean(m, axis=0 if not m_ts else None).reshape((1, -1)))
+                for m, m_sparse, m_ts in zip(modalities, self.is_sparse_transform, self.total_statistics)]
             get_standardize_std = lambda total_statistics: [
-                np.std(m, axis=0 if not total_statistics else None, keepdims=True)
+                np.std(m, axis=0 if not m_ts else None, keepdims=True)
                 if not m_sparse else
-                np.array(np.sqrt(m.power(2).mean(axis=0 if not total_statistics else None) - np.square(m.mean(axis=0 if not total_statistics else None))).reshape((1, -1)))
-                for m, m_sparse in zip(modalities, self.is_sparse_transform)]
-            self.standardize_std = get_standardize_std(total_statistics)
+                np.array(np.sqrt(m.power(2).mean(axis=0 if not m_ts else None) - np.square(m.mean(axis=0 if not m_ts else None))).reshape((1, -1)))
+                for m, m_sparse, m_ts in zip(modalities, self.is_sparse_transform, total_statistics)]
+            self.standardize_std = get_standardize_std(self.total_statistics)
 
         # Filtering
         # NOTE: Currently calculates even if not needed and `top_variant` is set
         # NOTE: Currently requires standardization
         if self.top_variant is not None:
             # Calculate per-feature variance if needed
-            st_std = self.standardize_std if not total_statistics else get_standardize_std(False)
+            st_std = self.standardize_std if not total_statistics else get_standardize_std(len(modalities) * [False])
 
             # Compute mask
             self.filter_mask = [

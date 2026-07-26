@@ -88,9 +88,9 @@ if not celltrip.utility.notebook.is_notebook():
     # ray job submit -- python train.py...
     config = parser.parse_args()
 else:
-    # experiment_name = 'Flysta-260707'  # Flysta-251026
+    experiment_name = 'Flysta-260722-NormFix'  # Flysta-251026
     # experiment_name = 'MERFISH30k-153-250914'
-    experiment_name = 'Dyngen-260720-noBootstrap'  # Dyngen-260121-OnlyPinning
+    # experiment_name = 'Dyngen-260720-noBootstrap'  # Dyngen-260121-OnlyPinning
     # experiment_name = 'Cortex-260708-wspatial'  # Cortex-251024-2
     # experiment_name = 'CancerVel-250913'
     # experiment_name = 'PerturbMM-gex-250928'
@@ -112,7 +112,7 @@ else:
         # scMultiSim
         # f's3://{bucket_name}/scMultiSim/expression.h5ad s3://{bucket_name}/scMultiSim/peaks.h5ad '
         # Dyngen
-        f's3://{bucket_name}/dyngen/logcounts.h5ad s3://{bucket_name}/dyngen/counts_protein.h5ad '
+        # f's3://{bucket_name}/dyngen/logcounts.h5ad s3://{bucket_name}/dyngen/counts_protein.h5ad '
 
         # MERFISH
         # f's3://{bucket_name}/MERFISH/expression.h5ad s3://{bucket_name}/MERFISH/spatial.h5ad --target_modalities 1 --spatial 1 '
@@ -131,9 +131,9 @@ else:
         # f'--spatial 1 '  # Normally unused
 
         # Flysta3D
-        # f' '.join([f'--merge_files ' + ' ' .join([f's3://{bucket_name}/Flysta3D/{p}_{m}.h5ad' for p in ('E14-16h_a', 'E16-18h_a', 'L1_a', 'L2_a', 'L3_b')]) for m in ('expression', 'spatial')]) + ' '
+        f' '.join([f'--merge_files ' + ' ' .join([f's3://{bucket_name}/Flysta3D/{p}_{m}.h5ad' for p in ('E14-16h_a', 'E16-18h_a', 'L1_a', 'L2_a', 'L3_b')]) for m in ('expression', 'spatial')]) + ' '
         # f'--target_modalities 1 --spatial 1 '
-        # f'--partition_cols development '
+        f'--partition_cols development '
         # Particular stage Flysta
         # f' '.join([f'--merge_files ' + ' ' .join([f's3://{bucket_name}/Flysta3D/{p}_{m}.h5ad' for p in ('L2_a',)]) for m in ('expression', 'spatial')]) + ' '
         # f'--target_modalities 1 --spatial 1 '
@@ -230,10 +230,10 @@ else:
         # f'--train_mask Train '  # ExpVal/NHP
         # f'--train_mask training '  # VCC
         # Sample split (Default)
-        f'--train_split .8 '
-        # Partition split (Flysta)
         # f'--train_split .8 '
-        # f'--train_partitions '
+        # Partition split (Flysta)
+        f'--train_split .8 '
+        f'--train_partitions '
         # Single partition
         # f'--train_split .0001 '
         # f'--train_partitions '
@@ -263,6 +263,9 @@ if config.checkpoint_name is None:
 # print(config)  # CLI
 
 
+# %%
+config.log_modalities
+
 # %% [markdown]
 # # Deploy Remotely
 
@@ -291,6 +294,7 @@ def train(config):
     # Initialization
     dataloader_kwargs = {
         'num_nodes': [config.num_cells_min, config.num_cells_max],
+        'total_statistics': config.spatial if config.spatial is not None else [],
         'pca_dim': config.pca_dim if len(config.pca_dim) > 1 else config.pca_dim[0],
         'sample_count': config.sample_counts,
         'pre_log': config.log_modalities,
