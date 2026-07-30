@@ -1,3 +1,17 @@
+### 1.0.0+2026.7.30
+- Fix computations in `Flysta` benchmarking, and change to preprocessed space
+- Fix initial centering for `celltrip.utility.general.transform_and_center`
+- Revise figures
+
+### 1.0.0+2026.7.29
+- Add `celltrip.utility.hooks.developing_input_features_hook` for changing expression over the course of a simulation
+- Additional runs
+- Benchmarking changes
+
+### 1.0.0+2026.7.28
+- Additional runs
+- Benchmarking changes, including `Flysta`
+
 ### 1.0.0+2026.7.24
 - Additional runs
 - Fix benchmark labels

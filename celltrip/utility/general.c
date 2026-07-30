@@ -12700,7 +12700,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_36nan_error(CYTHON_UNUSED 
  * 
  * def transform_and_center(X, pca=None, return_pca=False, random_state=42):             # <<<<<<<<<<<<<<
  *     if pca is None: pca = sklearn.decomposition.PCA(random_state=random_state).fit(X)
- *     trans_X = pca.transform(X)
+ *     trans_X = pca.transform((X - X.mean(keepdims=True, axis=0)))  #  / X.std(keepdims=True, axis=0)
  */
 
 /* Python wrapper */
@@ -12854,6 +12854,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYT
   PyObject *__pyx_t_4 = NULL;
   PyObject *__pyx_t_5 = NULL;
   unsigned int __pyx_t_6;
+  PyObject *__pyx_t_7 = NULL;
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
@@ -12864,8 +12865,8 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYT
  * 
  * def transform_and_center(X, pca=None, return_pca=False, random_state=42):
  *     if pca is None: pca = sklearn.decomposition.PCA(random_state=random_state).fit(X)             # <<<<<<<<<<<<<<
- *     trans_X = pca.transform(X)
- *     trans_cent_X = trans_X - trans_X.mean(axis=0)
+ *     trans_X = pca.transform((X - X.mean(keepdims=True, axis=0)))  #  / X.std(keepdims=True, axis=0)
+ *     trans_cent_X = trans_X  #  - trans_X.mean(keepdims=True, axis=0)
  */
   __pyx_t_1 = (__pyx_v_pca == Py_None);
   if (__pyx_t_1) {
@@ -12916,20 +12917,33 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYT
   /* "celltrip/utility/general.py":271
  * def transform_and_center(X, pca=None, return_pca=False, random_state=42):
  *     if pca is None: pca = sklearn.decomposition.PCA(random_state=random_state).fit(X)
- *     trans_X = pca.transform(X)             # <<<<<<<<<<<<<<
- *     trans_cent_X = trans_X - trans_X.mean(axis=0)
+ *     trans_X = pca.transform((X - X.mean(keepdims=True, axis=0)))  #  / X.std(keepdims=True, axis=0)             # <<<<<<<<<<<<<<
+ *     trans_cent_X = trans_X  #  - trans_X.mean(keepdims=True, axis=0)
  *     if return_pca: return trans_cent_X, pca
  */
   __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_v_pca, __pyx_n_s_transform); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 271, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_5 = NULL;
+  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_v_X, __pyx_n_s_mean); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 271, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_5);
+  __pyx_t_3 = __Pyx_PyDict_NewPresized(2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 271, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  if (PyDict_SetItem(__pyx_t_3, __pyx_n_s_keepdims, Py_True) < 0) __PYX_ERR(0, 271, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_3, __pyx_n_s_axis, __pyx_int_0) < 0) __PYX_ERR(0, 271, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_5, __pyx_empty_tuple, __pyx_t_3); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 271, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_7);
+  __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __pyx_t_3 = PyNumber_Subtract(__pyx_v_X, __pyx_t_7); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 271, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
+  __pyx_t_7 = NULL;
   __pyx_t_6 = 0;
   #if CYTHON_UNPACK_METHODS
   if (likely(PyMethod_Check(__pyx_t_4))) {
-    __pyx_t_5 = PyMethod_GET_SELF(__pyx_t_4);
-    if (likely(__pyx_t_5)) {
+    __pyx_t_7 = PyMethod_GET_SELF(__pyx_t_4);
+    if (likely(__pyx_t_7)) {
       PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_4);
-      __Pyx_INCREF(__pyx_t_5);
+      __Pyx_INCREF(__pyx_t_7);
       __Pyx_INCREF(function);
       __Pyx_DECREF_SET(__pyx_t_4, function);
       __pyx_t_6 = 1;
@@ -12937,9 +12951,10 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYT
   }
   #endif
   {
-    PyObject *__pyx_callargs[2] = {__pyx_t_5, __pyx_v_X};
+    PyObject *__pyx_callargs[2] = {__pyx_t_7, __pyx_t_3};
     __pyx_t_2 = __Pyx_PyObject_FastCall(__pyx_t_4, __pyx_callargs+1-__pyx_t_6, 1+__pyx_t_6);
-    __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
+    __Pyx_XDECREF(__pyx_t_7); __pyx_t_7 = 0;
+    __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
     if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 271, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
@@ -12949,29 +12964,17 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYT
 
   /* "celltrip/utility/general.py":272
  *     if pca is None: pca = sklearn.decomposition.PCA(random_state=random_state).fit(X)
- *     trans_X = pca.transform(X)
- *     trans_cent_X = trans_X - trans_X.mean(axis=0)             # <<<<<<<<<<<<<<
+ *     trans_X = pca.transform((X - X.mean(keepdims=True, axis=0)))  #  / X.std(keepdims=True, axis=0)
+ *     trans_cent_X = trans_X  #  - trans_X.mean(keepdims=True, axis=0)             # <<<<<<<<<<<<<<
  *     if return_pca: return trans_cent_X, pca
  *     return trans_cent_X
  */
-  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_v_trans_X, __pyx_n_s_mean); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 272, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_2);
-  __pyx_t_4 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 272, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_4);
-  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_axis, __pyx_int_0) < 0) __PYX_ERR(0, 272, __pyx_L1_error)
-  __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_2, __pyx_empty_tuple, __pyx_t_4); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 272, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_5);
-  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  __pyx_t_4 = PyNumber_Subtract(__pyx_v_trans_X, __pyx_t_5); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 272, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_4);
-  __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-  __pyx_v_trans_cent_X = __pyx_t_4;
-  __pyx_t_4 = 0;
+  __Pyx_INCREF(__pyx_v_trans_X);
+  __pyx_v_trans_cent_X = __pyx_v_trans_X;
 
   /* "celltrip/utility/general.py":273
- *     trans_X = pca.transform(X)
- *     trans_cent_X = trans_X - trans_X.mean(axis=0)
+ *     trans_X = pca.transform((X - X.mean(keepdims=True, axis=0)))  #  / X.std(keepdims=True, axis=0)
+ *     trans_cent_X = trans_X  #  - trans_X.mean(keepdims=True, axis=0)
  *     if return_pca: return trans_cent_X, pca             # <<<<<<<<<<<<<<
  *     return trans_cent_X
  * 
@@ -12979,21 +12982,21 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYT
   __pyx_t_1 = __Pyx_PyObject_IsTrue(__pyx_v_return_pca); if (unlikely((__pyx_t_1 < 0))) __PYX_ERR(0, 273, __pyx_L1_error)
   if (__pyx_t_1) {
     __Pyx_XDECREF(__pyx_r);
-    __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 273, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_4);
+    __pyx_t_2 = PyTuple_New(2); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 273, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_2);
     __Pyx_INCREF(__pyx_v_trans_cent_X);
     __Pyx_GIVEREF(__pyx_v_trans_cent_X);
-    if (__Pyx_PyTuple_SET_ITEM(__pyx_t_4, 0, __pyx_v_trans_cent_X)) __PYX_ERR(0, 273, __pyx_L1_error);
+    if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_v_trans_cent_X)) __PYX_ERR(0, 273, __pyx_L1_error);
     __Pyx_INCREF(__pyx_v_pca);
     __Pyx_GIVEREF(__pyx_v_pca);
-    if (__Pyx_PyTuple_SET_ITEM(__pyx_t_4, 1, __pyx_v_pca)) __PYX_ERR(0, 273, __pyx_L1_error);
-    __pyx_r = __pyx_t_4;
-    __pyx_t_4 = 0;
+    if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 1, __pyx_v_pca)) __PYX_ERR(0, 273, __pyx_L1_error);
+    __pyx_r = __pyx_t_2;
+    __pyx_t_2 = 0;
     goto __pyx_L0;
   }
 
   /* "celltrip/utility/general.py":274
- *     trans_cent_X = trans_X - trans_X.mean(axis=0)
+ *     trans_cent_X = trans_X  #  - trans_X.mean(keepdims=True, axis=0)
  *     if return_pca: return trans_cent_X, pca
  *     return trans_cent_X             # <<<<<<<<<<<<<<
  * 
@@ -13009,7 +13012,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYT
  * 
  * def transform_and_center(X, pca=None, return_pca=False, random_state=42):             # <<<<<<<<<<<<<<
  *     if pca is None: pca = sklearn.decomposition.PCA(random_state=random_state).fit(X)
- *     trans_X = pca.transform(X)
+ *     trans_X = pca.transform((X - X.mean(keepdims=True, axis=0)))  #  / X.std(keepdims=True, axis=0)
  */
 
   /* function exit code */
@@ -13018,6 +13021,7 @@ static PyObject *__pyx_pf_8celltrip_7utility_7general_38transform_and_center(CYT
   __Pyx_XDECREF(__pyx_t_3);
   __Pyx_XDECREF(__pyx_t_4);
   __Pyx_XDECREF(__pyx_t_5);
+  __Pyx_XDECREF(__pyx_t_7);
   __Pyx_AddTraceback("celltrip.utility.general.transform_and_center", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
@@ -14233,7 +14237,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  * def transform_and_center(X, pca=None, return_pca=False, random_state=42):             # <<<<<<<<<<<<<<
  *     if pca is None: pca = sklearn.decomposition.PCA(random_state=random_state).fit(X)
- *     trans_X = pca.transform(X)
+ *     trans_X = pca.transform((X - X.mean(keepdims=True, axis=0)))  #  / X.std(keepdims=True, axis=0)
  */
   __pyx_tuple__65 = PyTuple_Pack(6, __pyx_n_s_X, __pyx_n_s_pca, __pyx_n_s_return_pca, __pyx_n_s_random_state, __pyx_n_s_trans_X, __pyx_n_s_trans_cent_X); if (unlikely(!__pyx_tuple__65)) __PYX_ERR(0, 269, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__65);
@@ -15050,7 +15054,7 @@ if (!__Pyx_RefNanny) {
  * 
  * def transform_and_center(X, pca=None, return_pca=False, random_state=42):             # <<<<<<<<<<<<<<
  *     if pca is None: pca = sklearn.decomposition.PCA(random_state=random_state).fit(X)
- *     trans_X = pca.transform(X)
+ *     trans_X = pca.transform((X - X.mean(keepdims=True, axis=0)))  #  / X.std(keepdims=True, axis=0)
  */
   __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_8celltrip_7utility_7general_39transform_and_center, 0, __pyx_n_s_transform_and_center, NULL, __pyx_n_s_celltrip_utility_general, __pyx_d, ((PyObject *)__pyx_codeobj__66)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 269, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);

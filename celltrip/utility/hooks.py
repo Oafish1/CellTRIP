@@ -43,9 +43,9 @@ def _move_toward_targets(env, actions, pinning, feature_idx, feature_targets=0.,
     return new_actions
     
 
-def move_toward_targets_hook(feature_idx, preprocessing=None, feature_targets=0., modality_idx=0, device='cpu', **kwargs):
+def move_toward_targets_hook(feature_idx, preprocessing=None, feature_targets=0., modality_idx=0, steps=['filter', 'pre_log', 'standardize'], device='cpu', **kwargs):
     # Preprocessing
-    extra_kwargs = _filter_extract_preprocess(feature_idx, preprocessing=preprocessing, feature_targets=feature_targets, modality_idx=modality_idx)
+    extra_kwargs = _filter_extract_preprocess(feature_idx, preprocessing=preprocessing, feature_targets=feature_targets, modality_idx=modality_idx, steps=steps)
     extra_kwargs['pca_components'] = torch.tensor(extra_kwargs['pca_components'], dtype=torch.get_default_dtype(), device=device)
     if 'pca_means' in extra_kwargs: extra_kwargs['pca_means'] = torch.tensor(extra_kwargs['pca_means'], dtype=torch.get_default_dtype(), device=device)
     extra_kwargs['feature_targets'] = torch.tensor(extra_kwargs['feature_targets'], dtype=torch.get_default_dtype(), device=device)
@@ -53,6 +53,29 @@ def move_toward_targets_hook(feature_idx, preprocessing=None, feature_targets=0.
 
     # Generate hook
     return lambda env, actions: _move_toward_targets(env, actions, **extra_kwargs, **kwargs)
+
+
+def _developing_input_features(env, pinning, modality_idx=0, iterative=False):
+    # Get previous position
+    prev_pos = env.pos.clone().detach() - env.vel * env.delta
+
+    # Get pinned positions
+    with torch.no_grad():
+        imputed_pos = pinning(env.pos)
+
+        # Replace if not iterative
+        if not iterative:
+            env.modality_offsets[modality_idx] = imputed_pos
+            return
+
+        # Otherwise, offset based on previous position
+        imputed_prev_pos = pinning(prev_pos)
+        env.modality_offsets[modality_idx] = env.modality_offsets[modality_idx] + (imputed_pos - imputed_prev_pos)
+
+
+def developing_input_features_hook(modality_idx=0, **kwargs):
+    # Replace input with feature reconstruction each step to simulate development
+    return lambda env: _developing_input_features(env, modality_idx=modality_idx, **kwargs)
 
 
 def _clamp_input_features(env, feature_idx, feature_targets, pca_components=None, pca_means=None, modality_idx=0):
