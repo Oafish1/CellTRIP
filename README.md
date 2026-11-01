@@ -435,6 +435,9 @@ intermediate_pcells = [s[5] for s in states]  # Modalities at 5s
 <img src="./images/example_dyngen_interpolation.png" alt="Example dyngen interpolation plot" style="width: auto; height: 300px"/>
 </p>
 
+> [!NOTE]
+> We include ZIP files containing main figure files, allowing for reproduction by running `dyngen_generate`, `cortex_generate`, `drugseries_generate`, and `flysta_generate` notebooks.
+
 
 
 <!--

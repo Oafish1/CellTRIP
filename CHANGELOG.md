@@ -1,3 +1,18 @@
+### 1.0.0+2026.10.31
+- Add `README` note on reproduction
+- Refine data exporting and table formatting across all main applications
+
+### 1.0.0+2026.10.30
+- Add excel and result exporting from `Flysta`
+- Add significance printout for `Cortex` layer score comparison
+- Fix normalization ordering issue for `DrugSeries` interpolation application
+
+### 1.0.0+2026.10.29
+- Add result exporting from `Dyngen` and `Cortex`
+
+### 1.0.0+2026.10.25
+- Sample count and sparse CT individual datapoint display for `Cortex` layer score comparison panels
+
 ### 1.0.0+2026.7.30
 - Fix computations in `Flysta` benchmarking, and change to preprocessed space
 - Fix initial centering for `celltrip.utility.general.transform_and_center`

@@ -11,6 +11,7 @@ memory-profiler
 memray
 nbconvert
 numpy
+openpyxl
 pandas
 pip-tools
 POT
