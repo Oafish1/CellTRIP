@@ -1,3 +1,6 @@
+### 1.0.0+2026.11.1
+- Figure updates and small fixes
+
 ### 1.0.0+2026.10.31
 - Add `README` note on reproduction
 - Refine data exporting and table formatting across all main applications
