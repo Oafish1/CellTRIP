@@ -1,3 +1,6 @@
+### 1.0.0+2026.11.2
+- Figure updates for `Dyngen`
+
 ### 1.0.0+2026.11.1
 - Figure updates and small fixes
 
