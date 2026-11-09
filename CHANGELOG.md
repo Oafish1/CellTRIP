@@ -1,3 +1,6 @@
+### 1.0.0+2026.11.9.1
+- Legibility update for `Cortex` figure
+
 ### 1.0.0+2026.11.9
 - Figure updates for `Cortex`
 
