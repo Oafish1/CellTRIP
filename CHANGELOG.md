@@ -1,3 +1,6 @@
+### 1.0.0+2026.11.9
+- Figure updates for `Cortex`
+
 ### 1.0.0+2026.11.2
 - Figure updates for `Dyngen`
 
